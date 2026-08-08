@@ -1,0 +1,1 @@
+"""T01 Self-KV Replay (design.md §29 / H0 / Gate 0)。"""

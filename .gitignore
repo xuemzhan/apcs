@@ -1,0 +1,77 @@
+# =========================================================
+# APCS 项目 .gitignore
+# 对应 design.md §54 KV 存储策略 + §63 run 产物规范
+# =========================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# 运行产物（§63 reports/runs/）
+# 排除实际跑出来的数据，但保留 .gitkeep 让目录存在
+reports/runs/*/t*/cache_bytes.bin
+reports/runs/**/__pycache__/
+reports/runs/**/*.pyc
+# 注意：reports/runs/*/PREREGISTRATION.md 是 §70 必须保留的，不忽略
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+!reports/runs/*/t*/*.log  # Run 内 stdout.log 必须保留（§63）
+
+# 大文件（KV cache、模型权重）
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.h5
+*.pkl
+*.pkl.gz

@@ -1,0 +1,19 @@
+# reports/runs/ — 运行时产物目录
+
+每个 Run 写入：
+
+```
+reports/runs/<run_id>/
+├── PREREGISTRATION.md        # t07 后自动生成（design.md §70）
+├── <task>/                   # 每个 task 一个子目录
+│   ├── config.json           # 完整 cfg
+│   ├── metadata.json         # §64/§65 schema 校验
+│   ├── metrics.json
+│   ├── system.json           # 仅 T10
+│   ├── geometry.json         # 仅 T12
+│   ├── summary.md
+│   ├── stdout.log            # §63 捕获
+│   └── task_report.md        # §73 12 字段
+```
+
+目录在 git 中保留，但具体 Run 数据通过 `.gitignore` 排除。

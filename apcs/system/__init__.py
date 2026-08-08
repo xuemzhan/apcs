@@ -1,0 +1,1 @@
+"""T10 System Cost 子包：Scenario A / B / C (design.md §4)。"""

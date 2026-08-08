@@ -1,0 +1,1 @@
+"""T03 Layer Alignment (design.md §31)。"""

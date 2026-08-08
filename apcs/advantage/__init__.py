@@ -1,0 +1,1 @@
+"""APCS 子包：优势残差 + Source-Layer Mixer + bounded α。"""

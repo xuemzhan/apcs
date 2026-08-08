@@ -1,0 +1,1 @@
+"""T02 RoPE Round-trip (design.md §30)。"""
