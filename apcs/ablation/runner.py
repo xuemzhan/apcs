@@ -21,12 +21,15 @@
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from ..alignment.runner import proportional_mapping
 from ..io.runs import write_json
 from ..mapper.math import LowRankMapper, RidgePerHeadMapper
-from ..mapper.runner import _score_kv, _synth_calibration_kv
+from ..mapper.runner import _score_kv, _shared_model_weights, _synth_calibration_set
+from ..mapper.aggregate import concat_kv_samples
 
 
 def _eval_pair(
@@ -61,18 +64,24 @@ def run_ablation(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     )
     layer_map = proportional_mapping(n_t, n_s)
     seq = 1024
-    # 校准 64 样本
-    calib = [_synth_calibration_kv(n_t, n_s, seq, H, D, seed=i) for i in range(64)]
-    # 测试 20 样本
-    test = [_synth_calibration_kv(n_t, n_s, seq, H, D, seed=10_000 + i) for i in range(20)]
+    # 校准 64 样本 + 测试 20 样本：◆ bug-3 修复 —— 校准/测试共享同一组
+    # W_t/W_s（同一 Teacher/Student 模型对不同 prompt，§32 语义），否则每个
+    # 样本都是"不同模型"，聚合训练没有意义。
+    w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
+    calib = _synth_calibration_set(n_t, n_s, seq, H, D, 64, master_seed=0, noise=0.05, w_t=w_t, w_s=w_s)
+    test = _synth_calibration_set(n_t, n_s, seq, H, D, 20, master_seed=1, noise=0.05, w_t=w_t, w_s=w_s)
 
     results = []
 
     # ---- A1 Rank ablation ----
     for rank in [8, 16, 32]:
         mapper = LowRankMapper(rank=rank)
-        for kv_t, kv_s in calib:
-            mapper.fit(kv_t, kv_s, layer_map)
+        # ◆ bug-3 修复（与 runner.py T06 一致）：ALS 无法 Gram 聚合 → 把校准
+        #   样本沿 S 维 concat 成一个大 KV 后只 fit 一次（方案 A，§32）。
+        #   旧实现 `for kv_t, kv_s in calib: mapper.fit(...)` 每次覆盖 W，
+        #   最终只留最后一组样本的影响。
+        kv_t_big, kv_s_big = concat_kv_samples(calib)
+        mapper.fit(kv_t_big, kv_s_big, layer_map)
         rets = [
             _eval_pair(kv_t, kv_s, layer_map, LowRankMapper(rank=rank), True, D)
             for kv_t, kv_s in test

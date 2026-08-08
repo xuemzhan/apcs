@@ -15,9 +15,15 @@ bug-5 修复：旧实现对 3 个 seed-均值做 bootstrap（n=3），CI 几乎�
 bug-6 修复：删除 main.py 中未使用的 dead import jcr → 改为真实使用 JCR。
         JCR = handoff 决策 vs Student self-prefill 决策的一致率。
 bug-9 修复：从 cfg 读取 teacher/student 层数与 head 配置。
+bug-9（科学诚实性）修复：移除全部内置 hash（PYTHONHASHSEED 加盐，跨进程不可复现），
+        RNG 种子统一经 _stable_seed（zlib.crc32）跨进程稳定派生；每 seed 通过
+        独立偏移改变得分，使不同 cfg seeds 得不同 CHG / CI / p；T09 结果自标注
+        offline demo（合成数据），真实能力迁移须以 design.md §75 真实 Test 为准。
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
+
+import zlib
 
 import numpy as np
 
@@ -26,9 +32,36 @@ from ..io.runs import write_json
 from ..metrics import bootstrap_ci, chg, jcr, retention, tgrr
 
 
+# 每个 kind 的 per-seed 偏移幅度（seed 决定的真实偏移，见 _simulate_scores）
+_OFFSET_SPAN = {
+    "student": 0.01,
+    "teacher": 0.05,
+    "text": 0.01,
+    "ridge": 0.01,
+    "base_only": 0.01,
+    "base_plus_adv": 0.02,
+    "full_apcs": 0.02,
+}
+
+
+def _stable_seed(seed: int, kind: str, sample_id: str = "") -> int:
+    """跨进程稳定的种子派生：zlib.crc32(f"{seed}:{kind}:{sample_id}") & 0x7FFFFFFF。
+
+    禁止使用 Python 内置 hash 函数：其受 PYTHONHASHSEED 加盐，同一字符串在
+    不同进程/解释器运行中哈希值不同，导致结果不可复现。所有 RNG 种子必须
+    经本函数派生（crc32 与字符串编码无关，跨进程确定性一致）。
+    """
+    return zlib.crc32(f"{seed}:{kind}:{sample_id}".encode("utf-8")) & 0x7FFFFFFF
+
+
 def _simulate_scores(seed: int, kind: str) -> float:
-    """离线合成各方法得分（teacher > base+adv > base > student）。"""
-    rng = np.random.default_rng(seed)
+    """离线合成各方法得分（teacher > base+adv > base > student）。
+
+    offline demo：得分为合成数据，不是真实实验测量值。
+    每个 seed 通过 _stable_seed 派生独立偏移（span 见 _OFFSET_SPAN），叠加
+    sample noise（σ≈0.05），因此不同 seed 得不同 CHG / CI / p；固定 cfg seeds
+    重复运行结果完全一致（跨进程可复现）。
+    """
     base = {
         "student": 0.50,
         "teacher": 0.80,
@@ -38,7 +71,10 @@ def _simulate_scores(seed: int, kind: str) -> float:
         "base_plus_adv": 0.66,
         "full_apcs": 0.70,
     }[kind]
-    return float(np.clip(base + rng.normal(0, 0.03), 0, 1))
+    offset_rng = np.random.default_rng(_stable_seed(seed, f"offset:{kind}"))
+    offset = (offset_rng.random() * 2 - 1) * _OFFSET_SPAN[kind]
+    noise_rng = np.random.default_rng(_stable_seed(seed, f"noise:{kind}"))
+    return float(np.clip(base + offset + noise_rng.normal(0, 0.05), 0, 1))
 
 
 def _simulate_decision(seed: int, kind: str, sample_id: str) -> int:
@@ -49,7 +85,7 @@ def _simulate_decision(seed: int, kind: str, sample_id: str) -> int:
         - ranker: top-1 candidate index
         - multi-choice: option index
     """
-    rng = np.random.default_rng(hash((seed, kind, sample_id)) & 0xFFFF)
+    rng = np.random.default_rng(_stable_seed(seed, kind, sample_id))
     base_p = {
         "student": 0.55,
         "teacher": 0.85,
@@ -107,7 +143,7 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         for m in methods:
             score_row, dec_row = [], []
             for s in samples:
-                seed_for_sample = seed + (hash(s.sample_id) % 1000)
+                seed_for_sample = _stable_seed(seed, m, s.sample_id)
                 score_row.append(_simulate_scores(seed_for_sample, m))
                 dec_row.append(_simulate_decision(seed, m, s.sample_id))
             scores[m].append(score_row)
@@ -174,10 +210,18 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "seeds": seeds,
         "n_samples_per_seed": n_samples,
         "gap_strata": gap_strata_report,  # §48
+        # offline demo 自标注（科学诚实性）：得分是合成数据，不是真实测量
+        "offline_demo": True,
+        "note": (
+            "T09 得分为合成数据（offline demo），不可作为真实能力迁移的证据；"
+            "design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer"
+        ),
     }
     write_json(run_dir / "metrics.json", metrics)
     md = (
         "# T09 Main Capability\n\n"
+        "> ⚠️ **offline demo**：T09 得分为合成数据，不可作为真实能力迁移的证据；"
+        "design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer。\n\n"
         f"- Student: {s_self:.4f}\n"
         f"- Teacher: {s_teach:.4f}\n"
         f"- Teacher gap: {s_teach - s_self:.4f}\n\n"

@@ -290,8 +290,14 @@ class MismatchedHeadMapper:
             self.inner = LowRankMapper(rank=rank)
         else:
             raise ValueError(f"未知 use_inner: {use_inner}")
+        # ◆ bug-8 修复：kv_t_proj 已经过 _project_teacher 的 de-RoPE（Teacher K
+        #   已在 unrotated 空间），inner mapper 不得再 de-RoPE —— 传 None 避免
+        #   双重 de-RoPE 在 unrotated 表示上叠加位置相关旋转、破坏值。
+        #   RoPE 对齐约定（与 math._apply_or_skip 注释一致）：Teacher RoPE →
+        #   de-RoPE → P_d/P_H 投射 → 输出保持 unrotated 空间；Student 端的
+        #   re-RoPE 由注入侧（Student attention）完成，此处不再 re-RoPE。
         self.inner.fit(kv_t_proj, kv_s, layer_map,
-                       positions=positions, de_rope_fn=de_rope_fn)
+                       positions=positions, de_rope_fn=None)
 
     def _project_teacher(
         self,
@@ -328,5 +334,6 @@ class MismatchedHeadMapper:
     ) -> np.ndarray:
         assert self.inner is not None, "必须先 fit()"
         kv_t_proj = self._project_teacher(kv_t, positions, de_rope_fn)
+        # ◆ bug-8 修复：与 fit 一致 —— 投射已 de-RoPE，inner transform 不再 de-RoPE
         return self.inner.transform(kv_t_proj, layer_map,
-                                   positions=positions, de_rope_fn=de_rope_fn)
+                                    positions=positions, de_rope_fn=None)

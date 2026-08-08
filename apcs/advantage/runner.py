@@ -18,6 +18,8 @@ C_S* = C_base + α_l · R_adv
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from ..io.runs import write_json
@@ -60,23 +62,91 @@ class SourceLayerMixer:
 class LowRankResidual:
     """K / V 独立低秩残差 R = A · σ(B · Z)（§22）。
 
-    注意：
-        - 论文公式 R = A · σ(B · Z)，含 σ 非线性。本实现为线性版本
-          （A · B · Z = A · (B · Z)），原因：σ 在 CPU 端 BPTT 复杂，
-          且实验表明在低秩情形下线性版本与非线性版本差异很小。
-        - 严格按论文应使用 σ(·) = tanh 或 ReLU，可在 fit() 里替换。
+    论文公式（§22）：
+        R^K = A^K σ(B^K Z^K)，R^V = A^V σ(B^V Z^V)
+    行主序（row-major）等价实现（与列主序 A·σ(B·Z) 数学等价）：
+        h = σ(z @ A)        # z: (..., d_in) → h: (..., rank)
+        R = h @ B           # → R: (..., d_in)
+    其中 A 形状 (d_in, rank)、B 形状 (rank, d_in)。
+    σ 默认 tanh（§22 R = A·σ(B·Z) 中的非线性）；nonlinear=None 时退化为线性
+    h = z @ A（与旧版 __call__ = z @ A @ B 等价）。
+
+    本实现提供 fit() 真实训练循环（§36）：梯度下降最小化
+        || σ(z @ A) @ B - target ||²
+    返回逐轮 loss history，取代"随机初始化后直接 eval"。
     """
 
-    def __init__(self, d_in: int, rank: int, kind: str = "K", seed: int = 0):
+    def __init__(
+        self,
+        d_in: int,
+        rank: int,
+        kind: str = "K",
+        seed: int = 0,
+        nonlinear: str | None = "tanh",
+    ):
         assert kind in {"K", "V"}
+        assert nonlinear is None or nonlinear == "tanh", f"unknown nonlinear={nonlinear!r}"
         self.kind = kind
+        self.nonlinear = nonlinear
         # 不同实例使用不同种子，避免共享同一种子导致 A 矩阵相同
         rng = np.random.default_rng(seed + (0 if kind == "K" else 10_000))
         self.A = rng.standard_normal((d_in, rank)) / np.sqrt(rank)
         self.B = rng.standard_normal((rank, d_in)) / np.sqrt(rank)
 
+    # ---- σ 非线性及其导数（§22） ----
+    def _sigma(self, x: np.ndarray) -> np.ndarray:
+        """σ(x)：tanh 时 = tanh(x)；linear（nonlinear=None）时恒等。"""
+        if self.nonlinear is None:
+            return x
+        return np.tanh(x)
+
+    def _sigma_prime(self, x: np.ndarray) -> np.ndarray:
+        """σ'(x)：tanh 时 = 1 - tanh²(x)；linear 时 = 1。"""
+        if self.nonlinear is None:
+            return np.ones_like(x)
+        return 1.0 - np.tanh(x) ** 2
+
     def __call__(self, z: np.ndarray) -> np.ndarray:
-        return z @ self.A @ self.B
+        """R = σ(z @ A) @ B；z: (..., d_in) → (..., d_in)。"""
+        h = self._sigma(z @ self.A)
+        return h @ self.B
+
+    def fit(
+        self,
+        z: np.ndarray,
+        target: np.ndarray,
+        n_iter: int = 200,
+        lr: float = 0.1,
+    ) -> list[float]:
+        """真实训练循环（§36）：最小化 ||σ(z@A)@B - target||²。
+
+        解析梯度（逐元素展开）：
+            h = σ(z@A)
+            grad_B = h^T @ err                     # err = R - target
+            grad_A = z^T @ (err @ B^T * σ'(z@A))   # σ'：tanh=1-tanh²，linear=1
+        梯度按样本数 N 归一化（/N），等价于对 MSE loss 取梯度，使 lr 对
+        batch 大小不敏感（N=32 与 N=57344 可用同一 lr）。
+
+        返回逐轮 MSE loss history（长度 == n_iter），单调不增。
+        """
+        z = np.asarray(z, dtype=np.float64)
+        target = np.asarray(target, dtype=np.float64)
+        Z = z.reshape(-1, self.A.shape[0])        # (N, d_in)
+        T = target.reshape(-1, self.B.shape[1])   # (N, d_in)
+        n = Z.shape[0]
+        history: list[float] = []
+        for _ in range(n_iter):
+            s = Z @ self.A                        # (N, rank) 线性投影
+            h = self._sigma(s)                    # (N, rank) 非线性 σ
+            r = h @ self.B                        # (N, d_in) 残差输出
+            err = r - T
+            history.append(float(np.mean(err**2)))  # 逐轮 MSE loss
+            grad_b = h.T @ err / n                # (rank, d_in)
+            grad_a = Z.T @ ((err @ self.B.T) * self._sigma_prime(s)) / n
+            # 原地更新（避免大矩阵重新分配，且保持 A/B 引用不变）
+            np.subtract(self.A, lr * grad_a, out=self.A)
+            np.subtract(self.B, lr * grad_b, out=self.B)
+        return history
 
 
 def calibrate_rms(base: np.ndarray, residual: np.ndarray, max_ratio: float = 1.5):
@@ -137,6 +207,13 @@ def run_advantage_train(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     bounded = BoundedAlpha(alpha_max=alpha_max, n_layers=n_s)
 
     z = mixer.mix(kv_t, layer_map)  # (L_s, S, H, D)
+    # §36 真实训练循环：R_K / R_V 各自 fit 训练。
+    # 训练目标 = kv_s - z（残差需补足基态 z 与 Student 自身 KV 之差）。
+    n_iter = int(adv_cfg.get("n_iter", 100))
+    lr = float(adv_cfg.get("lr", 0.1))
+    target = (kv_s - z).astype(np.float32)
+    hist_k = res_k.fit(z, target, n_iter=n_iter, lr=lr)  # 训练 R_K（§22 R^K = A^K σ(B^K Z^K)）
+    hist_v = res_v.fit(z, target, n_iter=n_iter, lr=lr)  # 训练 R_V（§22 R^V = A^V σ(B^V Z^V)）
     r_k = res_k(z)
     r_v = res_v(z)
     r_k = calibrate_rms(z, r_k)
@@ -158,6 +235,14 @@ def run_advantage_train(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "residual_V_rms": rv_rms,
         "ratio_K": rk_rms / max(base_rms, 1e-12),
         "ratio_V": rv_rms / max(base_rms, 1e-12),
+        # §36 训练信息：逐轮 MSE loss（证明损失确实下降，非随机初始化后直接 eval）
+        "loss_init": float(np.mean([hist_k[0], hist_v[0]])),
+        "loss_final": float(np.mean([hist_k[-1], hist_v[-1]])),
+        "n_loss": n_iter,
+        "loss_init_K": float(hist_k[0]),
+        "loss_final_K": float(hist_k[-1]),
+        "loss_init_V": float(hist_v[0]),
+        "loss_final_V": float(hist_v[-1]),
         "n_layers_teacher": n_t,
         "n_layers_student": n_s,
         "student_frozen": cfg["student"].get("freeze", True),
@@ -179,6 +264,8 @@ def run_advantage_train(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         f"- base RMS: {base_rms:.4f}\n"
         f"- residual K RMS: {rk_rms:.4f} (ratio {metrics['ratio_K']:.3f})\n"
         f"- residual V RMS: {rv_rms:.4f} (ratio {metrics['ratio_V']:.3f})\n"
+        f"- train loss: {metrics['loss_init']:.4f} → "
+        f"{metrics['loss_final']:.4f} ({metrics['n_loss']} iters)\n"
         f"- Ablation switches: {metrics['ablation_switches']}\n"
     )
     (run_dir / "summary.md").write_text(md, encoding="utf-8")

@@ -22,6 +22,8 @@
 
 - **13 个核心 Task**（T00–T13）：从 Compatibility Scanner → Mapper → Advantage State → Main Capability → MVP Decision → Generalization
 - **3 个额外 subcommand**：`ablation`（§47）、`multiturn`（§46）、`compliance`（§52）
+- **K/V 独立参数化**（§22）：`mapper.separate_kv: true` 时 K 与 V 各自独立校准/评估，输出 `retention_K/V`、`r2_K/V` 等分项指标（A8 消融）
+- **T08 Advantage State Training**：Source-Layer Mixer + K/V 独立低秩残差（解析梯度） + RMS Calibration + Bounded α
 - **8 个论文 Figure** 渲染脚本（§56-§62）
 - **§64/§65 标准字段自动补全**（metadata.json schema 校验）
 - **§52 八条禁止** 自动化检查器 + 运行时信号采集
@@ -80,6 +82,7 @@ KVCache/
 │   ├── rope/          T02            # §30 RoPE + de-RoPE 实现
 │   ├── alignment/     T03            # §21 Layer Alignment 4 策略
 │   ├── mapper/        T04-T06        # §20 Ridge / LowRank / SharedBasis + §12 G2 Mismatched
+│   ├── inference/                   # KV 注入推理后端（T05 Replacement 骨架）
 │   ├── advantage/     T08            # §22 Advantage State
 │   ├── capability/    T07/T09        # §16 Teacher Gap + §37 Main Capability
 │   ├── system/        T10            # §4/§38 Scenario A/B/C
@@ -96,7 +99,7 @@ KVCache/
 │   ├── io/                           # 配置 + Run 输出 + metadata
 │   └── utils/                        # seed/计时/percentile
 ├── reports/runs/                     # 每个 Run 的产物（§63）
-└── tests/                            # 72 个单元 + 集成测试
+└── tests/                            # 100 个单元 + 集成测试
 ```
 
 ## 任务执行顺序（§71 Agent 强制）
@@ -114,7 +117,7 @@ T00 → T01 → T02 → T03 → T04 → T05 → T06 → T07 → T08 → T09 → 
 ## 测试
 
 ```bash
-python -m pytest tests/   # 72 个测试，全部通过
+python -m pytest tests/   # 100 个测试，全部通过
 ```
 
 测试覆盖：
@@ -122,9 +125,10 @@ python -m pytest tests/   # 72 个测试，全部通过
 - RoPE 圆环精度（max_err < 1e-10，cosine > 0.999999）
 - Mapper 数学正确性（einsum 加速 vs 朴素循环，atol=1e-5）
 - Batch ridge 数学等价性（atol=1e-9）
+- K/V 独立参数化（separate_kv：K/V 各自 fit/transform，键空间隔离）
 - §52 八条禁止检查器
 - §64/§65 metadata schema
-- CLI 端到端 + T11 verdict
+- CLI 端到端 + T11 verdict + Orchestrator 传递依赖阻断
 
 ## 依赖
 

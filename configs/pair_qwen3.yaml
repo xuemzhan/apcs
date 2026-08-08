@@ -17,6 +17,10 @@ teacher:
   dtype: bfloat16
   attention_implementation: sdpa   # eager | sdpa | flash_attention_2
   device_map: cuda:0
+  # 显式架构字段（_cfg_layers 不再依赖 model_id 字符串启发式）
+  num_layers: 36
+  num_kv_heads: 8          # GQA
+  head_dim: 128
 
 student:
   model_id: Qwen/Qwen3-1.7B
@@ -25,6 +29,10 @@ student:
   attention_implementation: sdpa
   device_map: cuda:0
   freeze: true                     # T08 强制：Student 全冻结
+  # 显式架构字段（_cfg_layers 不再依赖 model_id 字符串启发式）
+  num_layers: 28
+  num_kv_heads: 8          # GQA
+  head_dim: 128
 
 # ---- 数据集分层 (design.md §14-§18) ----
 datasets:
@@ -57,6 +65,7 @@ mapper:
   alpha_max: 0.5                    # design.md §25  bounded injection (validation freeze)
   rms_calibration: true             # A9
   shared_basis: false               # A2
+  t06_aggregate_samples: 16         # §32 bug-3: ALS 类 mapper 拼接校准样本数上限（内存控制）
 
 # ---- Advantage state (design.md §22) ----
 advantage:

@@ -48,11 +48,13 @@ student:
   vocab_size: 49152
 
 # 注意：Teacher 与 Student head 数不同（8 vs 3）→ 必须启用 G2 P_H 路径
-# head_dim 一致（都是 64）→ 不需要 P_d
+# head_dim 一致（都是 64）→ P_d 不会被调用
 g2:
   enabled: true
   p_h_strategy: mean       # 8 → 3 用均值池化
-  p_d_strategy: identity   # 64 → 64 无需投影
+  # DimensionProjection 合法值为 truncate/pad/linear；head_dim 一致（64==64）时
+  # P_d 不会被调用，truncate 仅为占位（identity 不是合法值）
+  p_d_strategy: truncate
 
 # ---- 数据集分层 ----
 datasets:
@@ -72,6 +74,8 @@ datasets:
 context_lengths: [512, 1024, 2048, 4096]
 
 # ---- Mapper ----
+# source_top_k: 2 意味着每 Student 层聚合 k=2 个 Teacher 层
+# （对 24 层→30 层映射同样适用：层多的 Student 每层取最近的 2 个 Teacher 层）
 mapper:
   type: ridge
   rank: 16
@@ -82,6 +86,7 @@ mapper:
   alpha_max: 0.5
   rms_calibration: true
   shared_basis: false
+  t06_aggregate_samples: 16         # §32 bug-3: ALS 类 mapper 拼接校准样本数上限（内存控制）
 
 # ---- Advantage ----
 advantage:

@@ -1,13 +1,27 @@
 """Ridge / Low-rank / Shared-Basis Mapper 数学实现。
 
 ═══════════════════════════════════════════════════════════════════════════════
-本模块对应 design.md §20 (Compatibility Base) 与 §23 (de-RoPE 强制)。
+本模块对应 design.md §20 (Compatibility Base)、§22 (K/V 独立参数化) 与
+§23 (de-RoPE 强制)。
 
 设计要点（中文注释）：
 1. **Per-(layer, head) 独立训练**：每个 Student (s, h) 都学一个独立的映射矩阵。
    这样可以最大化每个头的表达自由度，但代价是参数量大。
 
-2. **de-RoPE 必须前置（§23 强制）**：
+2. **K / V 独立参数化（§22 强制）**：
+   Teacher K 与 Teacher V 是两个**独立**的缓存张量（不同随机过程、不同内容），
+   Student K/V 的适配自然要求两套独立参数。因此本模块全部 4 个 mapper 的
+   fit() / transform() 都接受 `kv_kind: str = "K"` 参数：
+   - 参数存储键加 kind 维度：W 键 `(s, 0)` → `(kv_kind, s, 0)`、
+     `(s, h)` → `(kv_kind, s, h)`；SharedBasisMapper 的共享基从单个矩阵
+     `A_shared` 改为 `dict[str, np.ndarray]`（键为 kv_kind）。
+   - `n_params` 对 dict 全部 value 求和 → 只 fit 一个 kind 时数值与旧实现
+     一致，fit K/V 两个 kind 时自动翻倍（PCR 口径随之翻倍，§3.4）。
+   - transform() 必须用与 fit 相同的 kv_kind 取参；未 fit 的 kind 直接
+     raise KeyError（中文提示），**禁止静默回退**到其他 kind —— 用 V 的参数
+     变换 K 是错误语义，静默回退只会掩盖 bug。
+
+2a. **de-RoPE 必须前置（§23 强制）**：
    Teacher K 是 Teacher RoPE 空间里的向量，Student K 是 Student RoPE 空间里的向量。
    如果直接做线性映射，需要隐式学会"先 de-RoPE 再 re-RoPE"，这对线性模型极难。
    因此强制流程：Teacher K → de-RoPE → Mapper → Student RoPE。
@@ -18,8 +32,11 @@
    其中 L_t = Teacher 层数；S = 序列长度；H = kv-head 数；D = head_dim。
    训练时 src = Teacher tokens (k*S, D)，tgt = Student tokens (S, D)。
 
-4. **bug-3 修复**：旧实现用 `min(src, tgt)` 静默截断，新实现改为显式断言。
-   真实使用时 Teacher 与 Student 序列长度必须一致（APCS 设计就是零 X-Prefill）。
+4. **bug-3/bug-4a 修复**：旧实现用 `min(src, tgt)` 静默截断。现在 S/H/D
+   不一致会显式 raise ValueError；Teacher/Student **层数可以不等**（SmolLM2
+   教师 24 层 → 学生 30 层），层对齐由 layer_map / G2 处理（§12/§13），
+   不是几何层错误。layer_map 里 top_k>1 时，所有教师层样本全部参与 fit
+   （tgt 复制 k 份对齐，见 `_stack_topk`），训练与 transform 的 k 层平均一致。
 
 ═══════════════════════════════════════════════════════════════════════════════
 """
@@ -203,9 +220,13 @@ def _apply_or_skip(
 def _check_shape(kv_t: np.ndarray, kv_s: np.ndarray) -> None:
     """断言 Teacher 与 Student KV 的形状兼容（bug-3 修复：不再静默截断）。
 
-    要求：
-        kv_t.shape[1:] == kv_s.shape[1:]   即 S, H, D 都相同
-        kv_t.shape[0] >= kv_s.shape[0]     Teacher 层数不小于 Student
+    要求（仅 S/H/D 必须一致）：
+        kv_t.shape[1:] == kv_s.shape[1:]    即 S, H, D 都相同
+
+    ◆ bug-4a 修复：**不再**要求 kv_t.shape[0] >= kv_s.shape[0]。
+      Teacher 层数少于 Student 层数（如 SmolLM2-1.7B: 24 → 135M: 30）是
+      合法场景，层数对齐由 layer_map / G2 MismatchedHeadMapper（§12/§13）
+      在层对齐阶段处理，不是几何错误，不在本层报错。
 
     副作用：
         - §52.8 silent_re_prefill_on_failure: 形状不兼容时不再 silent re-prefill，
@@ -225,16 +246,64 @@ def _check_shape(kv_t: np.ndarray, kv_s: np.ndarray) -> None:
             f"teacher={kv_t.shape}, student={kv_s.shape}。"
             f"APCS 设计要求 S/H/D 一致；如不一致属于 G2/G3 范畴 (§12/§13)。"
         )
-    if kv_t.shape[0] < kv_s.shape[0]:
-        try:
-            from ..compliance.runtime import track_runtime
 
-            track_runtime("silent_re_prefill_on_failure", False)
-        except ImportError:
-            pass
-        raise ValueError(
-            f"Teacher 层数 ({kv_t.shape[0]}) 小于 Student 层数 ({kv_s.shape[0]})。"
+
+def _require_kv_kind(kv_kind: str, fitted: set[str], what: str) -> None:
+    """design.md §22 强制：K 与 V 必须独立参数化 —— 未 fit 的 kind 禁止静默回退。
+
+    参数：
+        kv_kind: transform 请求的 kind（"K" 或 "V"）
+        fitted: 已 fit 的 kind 集合（从参数 dict 的键首元素提取）
+        what: 出错上下文（如 "RidgeMapper.transform"），用于中文报错
+    抛出：
+        KeyError：kv_kind 尚未 fit 时给出中文提示；调用方不得捕获后回退。
+    """
+    if kv_kind not in fitted:
+        raise KeyError(
+            f"{what}: kv_kind='{kv_kind}' 尚未 fit。"
+            f"K 与 V 必须独立参数化（design.md §22 强制），"
+            f"禁止静默回退到其他 kind。当前已 fit: {sorted(fitted) or '无'}。"
         )
+
+
+def _stack_topk(
+    src_layers: np.ndarray, tgt_layer: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """top_k 教师层与 Student 层对齐（bug-2 修复的核心 helper）。
+
+    背景：layer_map[s] 含 k 个教师层时，src 有 k 组行、tgt 只有 1 组。
+    旧实现 `n = min(src.shape[0], tgt.shape[0])` 把 src 截成第 1 个教师层
+    的行 → 训练只用第 1 层，而 transform 端平均 k 个教师层 → **训练/推理
+    不一致**（§19 B3）。
+
+    本 helper 保留全部 k 层 src 行，tgt 行复制 k 份对齐，返回两种视图：
+        flat:  (k*S*H, D) —— 层外循环（layer-major），供 RidgeMapper /
+               SharedBasis 等扁平（把 head 并进样本）求解使用
+        batch: (H, k*S, D) —— head 外循环、position 内循环（position-major），
+               供 RidgePerHead / LowRank 的批量闭式解（_*_batch）使用
+    两种视图下 src 与 tgt 逐行对齐：教师层 l、position s（、head h）的向量
+    与 Student 同 position（、同 head）的目标成对，闭式解目标等价于"预测
+    k 个教师层表征的均值"，与 transform 端 mean over k 层的语义一致。
+
+    参数：
+        src_layers: (k, S, H, D) 已 de-RoPE 的 k 个教师层
+        tgt_layer:  (S, H, D) 对应 Student 层
+    返回：
+        (src_flat, tgt_flat, src_batch, tgt_batch)
+    """
+    k = src_layers.shape[0]
+    D = src_layers.shape[-1]
+    S = tgt_layer.shape[0]
+    H = tgt_layer.shape[1]
+    # 扁平视图：src (k, S, H, D) → (k*S*H, D)；tgt (S*H, D) 用 np.tile 复制 k 份
+    src_flat = src_layers.reshape(-1, D)
+    tgt_flat = np.tile(tgt_layer.reshape(-1, D), (k, 1))
+    # per-head 批量视图：src (H, S, k, D) → (H, k*S, D)，第 p=s*k+t 行是
+    # 教师层 t 在 position s 的向量；tgt 用 np.repeat 把 position s 复制 k 份
+    # 对齐（repeat = 逐位置 tile，与 src_batch 的行序一一对应）。
+    src_batch = src_layers.transpose(2, 1, 0, 3).reshape(H, k * S, D)
+    tgt_batch = np.repeat(tgt_layer.transpose(1, 0, 2), k, axis=1)
+    return src_flat, tgt_flat, src_batch, tgt_batch
 
 
 # ---------------------------------------------------------------------------
@@ -243,22 +312,34 @@ def _check_shape(kv_t: np.ndarray, kv_s: np.ndarray) -> None:
 
 
 class RidgeMapper:
-    """Per-(layer, head) 全量 Ridge mapper（设计文档 §20 Stage 1）。
+    """Per-layer 全量 Ridge mapper（设计文档 §20 Stage 1）。
 
-    训练目标：对每个 Student 层 s 的 head h，学一个 D × D 矩阵 W_{s,h}，
-    使得 src @ W_{s,h} ≈ tgt。其中 src 来自 layer_map[s] 指定的 Teacher 层。
+    训练目标：对每个 Student 层 s，学一个 D × D 矩阵 W_s，
+    使得 src @ W_s ≈ tgt。其中 src 来自 layer_map[s] 指定的 Teacher 层。
 
-    参数量：L_s × H × D × D（Qwen3-1.7B: 28 × 8 × 128 × 128 ≈ 3.7M，
-    对应 PCR = 1.0 即 base line）。
+    ◆ bug-1 修复（per-layer 语义）：旧实现按 (s, h) 双层循环求 H 次**相同**
+      矩阵（src/tgt 与 h 无关），W[(s,h)] 全部相同，transform 只用 W[(s,0)]，
+      n_params 虚高 H 倍。现改为 per-layer：每层只学一个 W_s，与 transform
+      的 per-layer 应用一致（§3.4 PCR 计算不再虚高）。
+      更细粒度的 per-(s,h) 独立映射见 RidgePerHeadMapper（§19 B3 per-head）：
+      本类是 per-layer 基准（PCR 分母），RidgePerHead 才是 per-head。
+
+    参数量：L_s × D × D（Qwen3-1.7B: 28 × 128 × 128 ≈ 0.46M，
+    对应 PCR = 1/8 of per-head base line）。
     """
 
     def __init__(self, lam: float = 1e-3):
         self.lam = lam
-        self.W: dict[tuple[int, int], np.ndarray] = {}
+        # design.md §22：键含 kv_kind 维度 —— (kv_kind, s, 0)，K/V 各一套独立参数
+        self.W: dict[tuple[str, int, int], np.ndarray] = {}
 
     @property
     def n_params(self) -> int:
-        """总参数量，用于 PCR 计算（§3.4）。"""
+        """总参数量，用于 PCR 计算（§3.4）。per-layer 语义下 = L_s × D × D。
+
+        design.md §22：对 dict 全部 value 求和 —— 只 fit 一个 kind（K）时
+        数值与旧实现一致；K/V 各 fit 一次时自动翻倍（K、V 独立适配器）。
+        """
         return int(sum(w.size for w in self.W.values()))
 
     def fit(
@@ -266,10 +347,11 @@ class RidgeMapper:
         kv_t: np.ndarray,
         kv_s: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ):
-        """训练所有 (s, h) 的 Ridge 矩阵。
+        """训练所有 s 的 per-layer Ridge 矩阵。
 
         参数：
             kv_t: (L_t, S, H, D) Teacher KV
@@ -277,6 +359,8 @@ class RidgeMapper:
                   真实 inference 时 Student 不重新 prefill X，但训练阶段需要
                   一组 teacher→student 对应样本学 mapper）
             layer_map: 长度 L_s 的 list，每个元素是 Student 层对应的 Teacher 层索引
+            kv_kind: design.md §22 —— K/V 独立参数化；为 "K" 时 fit K 的参数，
+                为 "V" 时 fit V 的参数。K/V 各自持有独立参数矩阵，互不覆盖。
             positions: (S,) 位置索引；若提供且 de_rope_fn 非空，则先 de-RoPE
             de_rope_fn: callable(k, positions) → k_unrotated；§23 强制
         """
@@ -299,37 +383,36 @@ class RidgeMapper:
                 src_layers.append(
                     _apply_or_skip(de_rope_fn, k, positions)
                 )
-            src = np.stack(src_layers, axis=0).reshape(-1, D)  # (k*S, D)
-            tgt = kv_s[s].reshape(-1, D)                       # (S, D)
-            # 真实使用中 k=1（top_k=1）或 k=2 时需要对齐 token 数；
-            # 这里因为 bug-3 修复已要求形状一致，所以直接对齐前 S 个 token。
-            n = min(src.shape[0], tgt.shape[0])
-            src, tgt = src[:n], tgt[:n]
-            for h in range(H):
-                # _ridge_closed_form(x=target, y=source)，求 W 使 y@W≈x
-                # 这里 y=src（输入），x=tgt（输出目标）
-                self.W[(s, h)] = _ridge_closed_form(
-                    tgt[:, h] if tgt.shape[1] == 1 else tgt,
-                    src[:, h] if src.shape[1] == 1 else src,
-                    self.lam,
-                )
-                # 上面简化处理：Ridge 对整 (n, D) 操作，per-head 拆分只用于
-                # §19 B3 "per-head" 显式区分；这里实际是 per-(s, h) 独立矩阵
-                # 实现：把 head 当作样本维度的扩展，得到更稳定的 W。
-        # 注：上面的简化把 H 维平均到样本里。完整 per-(s, h) 实现见
-        # RidgePerHeadMapper。
+            src_all = np.stack(src_layers, axis=0)  # (k, S, H, D)
+            # ◆ bug-2 修复（top_k 对齐）：layer_map[s] 里 k>1（如 top_k=2）时，
+            #   所有教师层样本全部保留，tgt 复制 k 份对齐后一起闭环求解 ——
+            #   fit 目标等价于"预测 k 个教师层表征的均值"，与 transform 端
+            #   平均 k 层的行为一致。旧实现 `n = min(src, tgt)` 只用第 1 个
+            #   教师层 → 训练/推理不一致。
+            src, tgt, _, _ = _stack_topk(src_all, kv_s[s])
+            # ◆ bug-1 修复（per-layer）：每层 s 只算一次，存 W[(s, 0)]；
+            #   旧实现按 (s, h) 循环 H 次求完全相同矩阵 → n_params 虚高 H 倍。
+            #   _ridge_closed_form(x=target, y=source)，求 W 使 y@W≈x
+            # design.md §22：键含 kv_kind —— K 与 V 各存一套，互不覆盖。
+            self.W[(kv_kind, s, 0)] = _ridge_closed_form(tgt, src, self.lam)
 
     def transform(
         self,
         kv_t: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ) -> np.ndarray:
         """将 Teacher KV 映射到 Student KV。
 
         不重新 Prefill X —— 直接对已捕获的 Teacher KV 做线性变换。
+
+        design.md §22：按 kv_kind 取对应参数矩阵（K/V 独立）；
+        未 fit 该 kind 时 raise KeyError（禁止静默回退）。
         """
+        # §22：先校验该 kind 是否已 fit，未 fit 直接报错（中文提示）
+        _require_kv_kind(kv_kind, {key[0] for key in self.W}, "RidgeMapper.transform")
         _check_shape(kv_t, np.zeros((len(layer_map),) + kv_t.shape[1:], dtype=kv_t.dtype))
         L_s = len(layer_map)
         L_t, S, H, D = kv_t.shape
@@ -342,7 +425,7 @@ class RidgeMapper:
             for t in teachers:
                 k = kv_t[t, :, :, :]
                 k_unrot = _apply_or_skip(de_rope_fn, k, positions)
-                w = self.W[(s, 0)]  # 当前简化用 h=0 的 W（per-layer 而非 per-head）
+                w = self.W[(kv_kind, s, 0)]  # §22：按 kv_kind 取对应 kind 的 W
                 mapped_layers.append(k_unrot @ w)
             stacked = np.stack(mapped_layers, axis=0)  # (k, S, H, D)
             out[s] = stacked.mean(0)
@@ -359,14 +442,18 @@ class RidgePerHeadMapper:
 
     每个 (s, h) 学独立 D × D 矩阵。参数量与 RidgeMapper 相同，
     但每个头都学自己的映射，语义更清晰。
+
+    design.md §22：W 键为 `(kv_kind, s, h)` —— K 与 V 各持有独立参数。
     """
 
     def __init__(self, lam: float = 1e-3):
         self.lam = lam
-        self.W: dict[tuple[int, int], np.ndarray] = {}
+        # design.md §22：键含 kv_kind 维度 —— (kv_kind, s, h)
+        self.W: dict[tuple[str, int, int], np.ndarray] = {}
 
     @property
     def n_params(self) -> int:
+        # §22：对 dict 全部 value 求和 —— fit 一个 kind 与旧实现一致，K/V 翻倍
         return int(sum(w.size for w in self.W.values()))
 
     def fit(
@@ -374,9 +461,15 @@ class RidgePerHeadMapper:
         kv_t: np.ndarray,
         kv_s: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ):
+        """训练 per-(layer, head) 的 Ridge 矩阵。
+
+        kv_kind（design.md §22）：K/V 独立参数化 —— 指定本次 fit 属于 K 还是 V，
+        K 与 V 各自持有独立的 `(kv_kind, s, h)` 参数矩阵，互不覆盖。
+        """
         _check_shape(kv_t, kv_s)
         L_s, S, H, D = kv_s.shape
         L_t = kv_t.shape[0]
@@ -394,22 +487,25 @@ class RidgePerHeadMapper:
             for t in teachers:
                 k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)  # (S, H, D)
                 src_per_head.append(k_unrot)
-            # (k, S, H, D) → (k * S, D)
-            src_all = np.stack(src_per_head, axis=0)
-            tgt_all = kv_s[s]  # (S, H, D)
-            # 用 batch 求解：把 (H, n, D) 一次性喂给 _ridge_closed_form_batch
-            n = min(src_all.shape[0] * S, S)
-            src_h = src_all.transpose(2, 1, 0, 3).reshape(H, -1, D)[:, :n, :]   # (H, n, D)
-            tgt_h = tgt_all.transpose(1, 0, 2)[:, :n, :]                          # (H, n, D)
+            src_all = np.stack(src_per_head, axis=0)  # (k, S, H, D)
+            tgt_all = kv_s[s]                          # (S, H, D)
+            # ◆ bug-2 修复（top_k 对齐，per-head batch 形态）：
+            #   src 保留全部 k 层样本 → (H, k*S, D)，tgt 用 np.repeat 把每个
+            #   position 复制 k 份对齐（tgt_h 也成 (H, k*S, D)）→ 批量闭式解
+            #   目标与 transform 端 k 层平均一致。旧实现 `n = min(k*S, S)`
+            #   只用第 1 个教师层 → 训练/推理不一致。
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)  # (H, k*S, D)
             # _ridge_closed_form_batch(x=tgt, y=src)：批量解 (H, n, D) → (H, D, D)
             W_batch = _ridge_closed_form_batch(tgt_h, src_h, self.lam)
             for h in range(H):
-                self.W[(s, h)] = W_batch[h]
+                # design.md §22：键含 kv_kind —— K 与 V 各存一套，互不覆盖
+                self.W[(kv_kind, s, h)] = W_batch[h]
 
     def transform(
         self,
         kv_t: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ) -> np.ndarray:
@@ -420,7 +516,11 @@ class RidgePerHeadMapper:
             2. W_stack = (H, D, D) 一次 stack。
             3. einsum 把 (S, H, D) @ (H, D, D) → (S, H, D) 一次算完所有 head。
         数学上完全等价（per-head 独立），性能 3-10× 提升。
+
+        design.md §22：按 kv_kind 取对应参数；未 fit 该 kind 时 raise KeyError。
         """
+        # §22：先校验该 kind 是否已 fit，未 fit 直接报错（中文提示）
+        _require_kv_kind(kv_kind, {key[0] for key in self.W}, "RidgePerHeadMapper.transform")
         L_s = len(layer_map)
         L_t, S, H, D = kv_t.shape
         if positions is None:
@@ -436,8 +536,8 @@ class RidgePerHeadMapper:
                     k_unrot = kv_t[t]
                 # W_stack (H, D, D)，einsum 同时乘所有 head
                 W_stack = np.stack(
-                    [self.W[(s, h)] for h in range(H)], axis=0
-                )  # (H, D, D)
+                    [self.W[(kv_kind, s, h)] for h in range(H)], axis=0
+                )  # (H, D, D)  # §22：按 kv_kind 取对应 kind 的 W
                 # out[s, i, h, d] = sum_k W_stack[h, d, k] * k_unrot[i, h, k]
                 mapped = np.einsum("shd,hdk->shk", k_unrot, W_stack)
                 out[s] += mapped
@@ -462,11 +562,13 @@ class LowRankMapper:
         """默认 n_iter=10（ALS 经验上 5-10 次已收敛）。"""
         self.rank = rank
         self.n_iter = n_iter
-        self.A: dict[tuple[int, int], np.ndarray] = {}
-        self.B: dict[tuple[int, int], np.ndarray] = {}
+        # design.md §22：键含 kv_kind 维度 —— (kv_kind, s, h)，K/V 各一套独立参数
+        self.A: dict[tuple[str, int, int], np.ndarray] = {}
+        self.B: dict[tuple[str, int, int], np.ndarray] = {}
 
     @property
     def n_params(self) -> int:
+        # §22：对 dict 全部 value 求和 —— fit 一个 kind 与旧实现一致，K/V 翻倍
         return int(sum(a.size + b.size for a, b in zip(self.A.values(), self.B.values())))
 
     def fit(
@@ -474,9 +576,15 @@ class LowRankMapper:
         kv_t: np.ndarray,
         kv_s: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ):
+        """训练 per-(layer, head) 的低秩因子 A/B。
+
+        kv_kind（design.md §22）：K/V 独立参数化 —— K 与 V 各自持有独立的
+        `(kv_kind, s, h)` 的 A/B 因子矩阵，互不覆盖。
+        """
         _check_shape(kv_t, kv_s)
         L_s, S, H, D = kv_s.shape
         if positions is None:
@@ -490,29 +598,36 @@ class LowRankMapper:
                 src_per_head.append(k_unrot)
             src_all = np.stack(src_per_head, axis=0)  # (k, S, H, D)
             tgt_all = kv_s[s]                          # (S, H, D)
-            # 准备 (H, n, D_out) 与 (H, n, D_in)
-            n = min(src_all.shape[0] * S, S)
-            src_h = src_all.transpose(2, 1, 0, 3).reshape(H, -1, D)[:, :n, :]   # (H, n, D)
-            tgt_h = tgt_all.transpose(1, 0, 2)[:, :n, :]                          # (H, n, D)
+            # ◆ bug-2 修复（top_k 对齐，per-head batch 形态）：与
+            #   RidgePerHeadMapper 相同 —— src 保留全部 k 层 → (H, k*S, D)，
+            #   tgt_h 用 np.repeat 复制 k 份对齐，fit 与 transform 的 k 层
+            #   平均语义一致；旧实现 `n = min(k*S, S)` 训练只用第 1 个教师层。
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)  # (H, k*S, D)
             # _lowrank_factor_batch(x=tgt, y=src)：批量 ALS 解 (H, n, D) → (H, D, r)+(H, r, D)
             A_batch, B_batch = _lowrank_factor_batch(
                 tgt_h, src_h, self.rank, self.n_iter
             )
             for h in range(H):
-                self.A[(s, h)] = A_batch[h]
-                self.B[(s, h)] = B_batch[h]
+                # design.md §22：键含 kv_kind —— K 与 V 各存一套，互不覆盖
+                self.A[(kv_kind, s, h)] = A_batch[h]
+                self.B[(kv_kind, s, h)] = B_batch[h]
 
     def transform(
         self,
         kv_t: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ) -> np.ndarray:
         """将 Teacher KV 经低秩映射到 Student KV。
 
         优化：把 A/B stack 成 (H, D, r)/(H, r, D) 后 einsum 一次算完所有 head。
+
+        design.md §22：按 kv_kind 取对应参数；未 fit 该 kind 时 raise KeyError。
         """
+        # §22：先校验该 kind 是否已 fit，未 fit 直接报错（中文提示）
+        _require_kv_kind(kv_kind, {key[0] for key in self.A}, "LowRankMapper.transform")
         L_s = len(layer_map)
         L_t, S, H, D = kv_t.shape
         if positions is None:
@@ -522,8 +637,8 @@ class LowRankMapper:
             teachers = layer_map[s]
             # Stack A, B：形状 (H, D, r), (H, r, D)
             r = self.rank
-            A_stack = np.stack([self.A[(s, h)] for h in range(H)], axis=0)  # (H, D, r)
-            B_stack = np.stack([self.B[(s, h)] for h in range(H)], axis=0)  # (H, r, D)
+            A_stack = np.stack([self.A[(kv_kind, s, h)] for h in range(H)], axis=0)  # (H, D, r)
+            B_stack = np.stack([self.B[(kv_kind, s, h)] for h in range(H)], axis=0)  # (H, r, D)
             for t in teachers:
                 if de_rope_fn is not None:
                     k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)  # (S, H, D)
@@ -560,25 +675,33 @@ class SharedBasisMapper:
     def __init__(self, rank: int = 16, n_iter: int = 25):
         self.rank = rank
         self.n_iter = n_iter
-        # 共享基底：所有 (s, h) 复用
-        self.A_shared: np.ndarray | None = None
-        # 每 (s, h) 的升维矩阵
-        self.B: dict[tuple[int, int], np.ndarray] = {}
+        # design.md §22：共享基底改为 dict[kv_kind] —— K/V 各持有一套共享基，
+        # 不再共享同一个矩阵（K 与 V 是独立缓存，共享基必须独立）。
+        self.A_shared: dict[str, np.ndarray] = {}
+        # 每 (s, h) 的升维矩阵，键含 kv_kind —— (kv_kind, s, h)
+        self.B: dict[tuple[str, int, int], np.ndarray] = {}
 
     @property
     def n_params(self) -> int:
-        shared = self.A_shared.size if self.A_shared is not None else 0
+        # §22：对 dict 全部 value 求和 —— fit 一个 kind 与旧实现一致，K/V 翻倍
+        shared = sum(a.size for a in self.A_shared.values())
         per = int(sum(b.size for b in self.B.values()))
-        return shared + per
+        return int(shared + per)
 
     def fit(
         self,
         kv_t: np.ndarray,
         kv_s: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ):
+        """训练共享基底 A_shared[kv_kind] 与每 (s, h) 的 B[(kv_kind, s, h)]。
+
+        kv_kind（design.md §22）：K/V 独立参数化 —— K 与 V 各自持有一套
+        `A_shared[kv_kind]` 共享基与 `B[(kv_kind, s, h)]` 升维矩阵，互不覆盖。
+        """
         _check_shape(kv_t, kv_s)
         L_s, S, H, D = kv_s.shape
         if positions is None:
@@ -595,20 +718,22 @@ class SharedBasisMapper:
                 src_per_head.append(k_unrot)
             src_all = np.stack(src_per_head, axis=0)  # (k, S, H, D)
             tgt_all = kv_s[s]
+            # ◆ bug-2 修复（top_k 对齐）：每 (s, h) 保留全部 k 层 src 行
+            #   （batch 视图 (H, k*S, D)），tgt_h 复制 k 份对齐后拼接进共享
+            #   A 的数据集 —— 共享基底同样覆盖全部教师层样本。
+            _, _, src_batch, tgt_batch = _stack_topk(src_all, tgt_all)
             for h in range(H):
-                src_h = src_all[:, :, h, :].reshape(-1, D)
-                tgt_h = tgt_all[:, h, :]
-                n = min(src_h.shape[0], tgt_h.shape[0])
-                all_src.append(src_h[:n])
-                all_tgt.append(tgt_h[:n])
+                all_src.append(src_batch[h])   # (k*S, D)
+                all_tgt.append(tgt_batch[h])   # (k*S, D)
         all_src = np.concatenate(all_src, axis=0)
         all_tgt = np.concatenate(all_tgt, axis=0)
         # 学一个共享 A：等价于把所有 (s, h) 当成一个数据集做一次低秩分解
         # _lowrank_factor(x=target, y=source)，学 (A, B) 使 y@B@A≈x
         # 这里 y=src（输入），x=tgt（输出目标）；A_shared ∈ R^{D×r} 把 src 从 D 维降到 r 维
-        self.A_shared, _ = _lowrank_factor(all_tgt, all_src, self.rank, self.n_iter)
+        # design.md §22：存入 dict[kv_kind] —— K 与 V 各持有一套共享基
+        self.A_shared[kv_kind], _ = _lowrank_factor(all_tgt, all_src, self.rank, self.n_iter)
 
-        # 第二步：固定 A_shared，每个 (s, h) 单独学 B
+        # 第二步：固定 A_shared[kv_kind]，每个 (s, h) 单独学 B
         for s in range(L_s):
             teachers = layer_map[s]
             src_per_head = []
@@ -617,22 +742,30 @@ class SharedBasisMapper:
                 src_per_head.append(k_unrot)
             src_all = np.stack(src_per_head, axis=0)
             tgt_all = kv_s[s]
+            # ◆ bug-2 修复（top_k 对齐）：与第一步相同，B 也用全部 k 层样本
+            #   学习（src_batch[h] 保留 k*S 行，tgt_batch[h] 已复制对齐）。
+            _, _, src_batch, tgt_batch = _stack_topk(src_all, tgt_all)
             for h in range(H):
-                src_h = src_all[:, :, h, :].reshape(-1, D)
-                tgt_h = tgt_all[:, h, :]
-                n = min(src_h.shape[0], tgt_h.shape[0])
                 # B = lstsq(A_shared^T src, tgt)
-                proj = src_h[:n] @ self.A_shared  # (n, r)
-                self.B[(s, h)] = np.linalg.lstsq(proj, tgt_h[:n], rcond=None)[0]
+                proj = src_batch[h] @ self.A_shared[kv_kind]  # (k*S, r)
+                # design.md §22：键含 kv_kind —— K 与 V 各存一套，互不覆盖
+                self.B[(kv_kind, s, h)] = np.linalg.lstsq(proj, tgt_batch[h], rcond=None)[0]
 
     def transform(
         self,
         kv_t: np.ndarray,
         layer_map: list[list[int]],
+        kv_kind: str = "K",
         positions: np.ndarray | None = None,
         de_rope_fn: Callable | None = None,
     ) -> np.ndarray:
-        assert self.A_shared is not None, "必须先 fit"
+        """将 Teacher KV 经共享基映射到 Student KV。
+
+        design.md §22：按 kv_kind 取对应 `A_shared[kv_kind]` 与 `B[(kv_kind, s, h)]`；
+        未 fit 该 kind 时 raise KeyError（禁止静默回退到其他 kind 的共享基）。
+        """
+        # §22：先校验该 kind 是否已 fit（A_shared dict 含该键），未 fit 直接报错
+        _require_kv_kind(kv_kind, set(self.A_shared), "SharedBasisMapper.transform")
         L_s = len(layer_map)
         L_t, S, H, D = kv_t.shape
         if positions is None:
@@ -641,10 +774,10 @@ class SharedBasisMapper:
         for s in range(L_s):
             teachers = layer_map[s]
             for h in range(H):
-                b = self.B[(s, h)]
+                b = self.B[(kv_kind, s, h)]  # §22：按 kv_kind 取对应 kind 的 B
                 mapped = []
                 for t in teachers:
                     k_unrot = _apply_or_skip(de_rope_fn, kv_t[t, :, h, :], positions)
-                    mapped.append((k_unrot @ self.A_shared) @ b)
+                    mapped.append((k_unrot @ self.A_shared[kv_kind]) @ b)  # §22：取本 kind 共享基
                 out[s, :, h, :] = np.stack(mapped, axis=0).mean(0)
         return out

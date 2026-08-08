@@ -252,8 +252,8 @@ def test_ridge_transform_correctness():
     layer_map = [[s] for s in range(n_s)]
 
     m = RidgePerHeadMapper(lam=1e-5)
-    m.fit(kv_t, kv_s, layer_map)
-    pred = m.transform(kv_t, layer_map)
+    m.fit(kv_t, kv_s, layer_map, kv_kind="K")
+    pred = m.transform(kv_t, layer_map, kv_kind="K")
     assert pred.shape == kv_s.shape
 
     # 与朴素实现对比（per-head per-token matrix multiply）
@@ -261,7 +261,7 @@ def test_ridge_transform_correctness():
     for s in range(n_s):
         for t in layer_map[s]:
             for h in range(H):
-                W = m.W[(s, h)]
+                W = m.W[("K", s, h)]
                 naive[s, :, h, :] = kv_t[t, :, h, :] @ W
     naive /= np.mean([len(layer_map[s]) for s in range(n_s)])
     np.testing.assert_allclose(pred, naive, atol=1e-5)
@@ -278,8 +278,8 @@ def test_lowrank_transform_correctness():
     layer_map = [[s] for s in range(n_s)]
 
     m = LowRankMapper(rank=R)
-    m.fit(kv_t, kv_s, layer_map)
-    pred = m.transform(kv_t, layer_map)
+    m.fit(kv_t, kv_s, layer_map, kv_kind="K")
+    pred = m.transform(kv_t, layer_map, kv_kind="K")
     assert pred.shape == kv_s.shape
 
     # 朴素版
@@ -287,7 +287,7 @@ def test_lowrank_transform_correctness():
     for s in range(n_s):
         for t in layer_map[s]:
             for h in range(H):
-                naive[s, :, h, :] = ((kv_t[t, :, h, :] @ m.A[(s, h)]) @ m.B[(s, h)])
+                naive[s, :, h, :] = ((kv_t[t, :, h, :] @ m.A[("K", s, h)]) @ m.B[("K", s, h)])
     naive /= np.mean([len(layer_map[s]) for s in range(n_s)])
     np.testing.assert_allclose(pred, naive, atol=1e-5)
 
@@ -370,3 +370,38 @@ def test_compliance_metadata_integration(tmp_path):
     assert rep["passed"] is True or all(
         vv.rule_id != "§52.2" for vv in v
     ), "cfg.freeze=True 时不应有 §52.2 违反"
+
+
+# ---- §62 Figure 7 数据流（bug-7 修复 B7）----
+
+
+def test_t12_metrics_carries_geometry_and_fig7_renders(tmp_path):
+    """§62 Figure 7 数据流：T12 的 metrics 必须携带 "geometry" 键，fig7 才能渲染。
+
+    Given: 最小 T12 配置跑 run_geometry_diagnostics（真实数据流，含 geometry.json/metrics.json 写出）
+    When:  fig7a_cka_heatmap 用 T12 返回的 metrics 渲染
+    Then:  ① metrics.json（run_dir）含 "geometry" 键（与 geometry.json 一致）
+           ② fig7a.png 生成且 > 1KB（修复前 geometry 缺 → 空 rows → 提前 return → 无图 → RED）
+    """
+    from apcs.figures import fig7a_cka_heatmap
+    from apcs.geometry.runner import run_geometry_diagnostics
+
+    cfg = {
+        "teacher": {"num_layers": 4},
+        "student": {"num_layers": 3},
+        "hidden_dim": 16,
+        "geometry_rank": 4,
+    }
+    res = run_geometry_diagnostics(cfg, tmp_path)
+    assert res["status"] == "OK"
+
+    # ① 落盘的 metrics.json 必须带 geometry（§62 Figure 7 数据流契约）
+    disk_metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert "geometry" in disk_metrics, "metrics.json 缺 geometry 键 → fig7 拿到空 dict"
+    assert disk_metrics["geometry"]["per_layer"] == res["geometry"]["per_layer"]
+
+    # ② 渲染 fig7a 必须产出有效 png（> 1KB），而不是空图/无文件
+    out = tmp_path / "fig7a.png"
+    fig7a_cka_heatmap(res["metrics"], out)
+    assert out.exists(), "fig7a.png 未生成 → geometry 键缺失导致提前 return"
+    assert out.stat().st_size > 1024, f"fig7a.png 过小（{out.stat().st_size} B）→ 渲染异常"

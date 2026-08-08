@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 from ..io.runs import write_json, write_text
 
@@ -88,8 +89,24 @@ def decide(retention: float, chg: float, tgrr: float, psr_a: float) -> str:
 
 def run_mvp_decision(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     base = Path(cfg["output"]["base_dir"])
-    match = re.match(r"^(.+)-\d{8}-\d{6}$", run_dir.name)
-    shared_run_id = match.group(1) if match else None
+    # 命名约定（本文件 docstring L16-18 / design.md §39）：run_id 形如
+    # `<name>-<timestamp>`；一个 experiment 内所有 task 共享同一 run_id，
+    # 报告根为 `<base>/<run_id>/`。CLI（apcs/cli.py L133-135）把每个 task 的
+    # run_dir 建为 `<base>/<run_id>/<task>/`，因此 run_id 就是
+    # run_dir.parent.name。
+    # bug-6 修复：原来误用 run_dir.name（即 "t11"）做正则匹配，恒不匹配 →
+    # shared_run_id 恒 None → 落入 _read_metrics 的 mtime fallback，
+    # 多实验并存时可能读到另一个 run 的数据。正则在此仅作 run_id 形状校验，
+    # shared_run_id 取完整目录名（_read_metrics 用其拼路径，
+    # 取 group(1) 的 `<name>` 前缀将无法解析到 `<base>/<run_id>/`）。
+    parent_name = run_dir.parent.name
+    if re.match(r"^(.+)-\d{8}-\d{6}$", parent_name):
+        shared_run_id = parent_name
+    elif re.match(r"^(.+)-\d{8}-\d{6}$", run_dir.name):
+        # 兼容 run_dir 直接是 run_id 根目录（无 task 子目录）的情形
+        shared_run_id = run_dir.name
+    else:
+        shared_run_id = None
 
     t05 = _read_metrics(base, "t05", shared_run_id)
     t09 = _read_metrics(base, "t09", shared_run_id)

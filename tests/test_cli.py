@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from apcs.cli import main as cli_main
+from apcs.decision.runner import run_mvp_decision
 
 CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pair_qwen3.yaml"
 
@@ -124,3 +125,100 @@ def test_cli_t11_finds_shared_run_id(tmp_path):
             assert payload["sources"]["t10_found"]
             return
     pytest.fail("T11 未产出 metrics.json")
+
+
+# ── bug-6 修复：T11 的 run_id 应从 run_dir.parent.name（run_id 根目录）提取 ──
+# 命名约定（design.md §39 / runner.py docstring §69 L16-18）：run_id 形如
+# `<name>-<timestamp>`，一个 experiment 内所有 task 共享同一 run_id，报告根为
+# `<base>/<run_id>/`。CLI 把 run_dir 建为 `<base>/<run_id>/<task>/`，因此
+# run_id 是 run_dir.parent.name，而不是 run_dir.name（即 "t11"）。
+
+
+def _write_t11_stub_run(
+    base: Path,
+    run_id: str,
+    *,
+    retention: float,
+    chg: float,
+    tgrr: float,
+    psr_a: float,
+) -> None:
+    """在 base/<run_id>/ 下写入 T05/T09/T10 stub 数据（T11 判定所需）。"""
+    run_root = base / run_id
+    (run_root / "t05").mkdir(parents=True, exist_ok=True)
+    (run_root / "t05" / "metrics.json").write_text(
+        json.dumps({"mean_retention": retention}), encoding="utf-8"
+    )
+    (run_root / "t09").mkdir(parents=True, exist_ok=True)
+    (run_root / "t09" / "metrics.json").write_text(
+        json.dumps(
+            {
+                "per_method": [
+                    {"method": "base_plus_adv", "chg": chg, "tgrr": tgrr}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_root / "t10").mkdir(parents=True, exist_ok=True)
+    (run_root / "t10" / "system.json").write_text(
+        json.dumps({"per_context": [{"psr_a_p50": psr_a}]}), encoding="utf-8"
+    )
+
+
+def test_cli_t11_reads_exact_run_id_single_run(tmp_path):
+    """T11 的 run_dir 是 <base>/<run_id>/t11/：应精确读到该 run_id 的产物。"""
+    base = tmp_path / "base"
+    run_id = "myexp-20260101-000000"
+    _write_t11_stub_run(base, run_id, retention=0.95, chg=0.2, tgrr=0.1, psr_a=0.5)
+    run_dir = base / run_id / "t11"
+    run_dir.mkdir(parents=True)
+    res = run_mvp_decision({"output": {"base_dir": str(base)}}, run_dir)
+    m = res["metrics"]
+    assert m["sources"]["t05_found"] is True
+    assert m["sources"]["t09_found"] is True
+    assert m["sources"]["t10_found"] is True
+    assert m["retention"] == 0.95
+    assert m["verdict"] == "A_RUNTIME_CAPABILITY_TRANSFER"
+
+
+def test_cli_t11_uses_exact_run_id_not_mtime_fallback(tmp_path):
+    """多 run 时必须按 run_id 精确查找，不能因 mtime fallback 读到别的 run。
+
+    Given: 两个 run，旧 run retention=0.95（A），新 run retention=0.2（D）
+    When:  对旧 run 的 t11 目录执行 run_mvp_decision
+    Then:  读到的是旧 run 的数据（retention=0.95, verdict=A）
+    """
+    import os
+    import time
+
+    base = tmp_path / "base"
+    old_id = "myexp-20260101-000000"
+    new_id = "myexp-20260202-000000"
+    _write_t11_stub_run(base, old_id, retention=0.95, chg=0.2, tgrr=0.1, psr_a=0.5)
+    _write_t11_stub_run(base, new_id, retention=0.2, chg=0.0, tgrr=0.0, psr_a=0.0)
+    # 强制让新 run 目录 mtime 更新：若代码走 mtime fallback 一定会先选它
+    t = time.time()
+    os.utime(base / old_id, (t, t))
+    os.utime(base / new_id, (t + 10, t + 10))
+
+    run_dir = base / old_id / "t11"
+    run_dir.mkdir(parents=True)
+    res = run_mvp_decision({"output": {"base_dir": str(base)}}, run_dir)
+    m = res["metrics"]
+    assert m["sources"]["t05_found"] is True
+    # 精确按 run_id 定位 → 读到旧 run（A）；mtime fallback 会读到新 run → D_STOP
+    assert m["retention"] == 0.95
+    assert m["verdict"] == "A_RUNTIME_CAPABILITY_TRANSFER"
+
+
+def test_cli_t11_fallback_to_run_dir_name_without_task_subdir(tmp_path):
+    """run_dir 直接是 run_id 根目录（无 task 子目录）时，从 run_dir.name 提取。"""
+    base = tmp_path / "base"
+    run_id = "myexp-20260101-000000"
+    _write_t11_stub_run(base, run_id, retention=0.95, chg=0.2, tgrr=0.1, psr_a=0.5)
+    run_dir = base / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    res = run_mvp_decision({"output": {"base_dir": str(base)}}, run_dir)
+    assert res["metrics"]["sources"]["t05_found"] is True
+    assert res["metrics"]["retention"] == 0.95

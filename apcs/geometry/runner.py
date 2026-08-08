@@ -58,10 +58,15 @@ def _attn_output_cosine(q: np.ndarray, kt: np.ndarray, kp: np.ndarray) -> float:
     attn_logits_ref = Q · K_ref^T / sqrt(d)
     attn_logits_pred = Q · K_pred^T / sqrt(d)
     cosine(attn_logits_ref, attn_logits_pred)
+
+    bug-7 修复：实际输入是 2D 子空间 (rank, dim)，原 einsum "ihd,jhd->ijh"
+    假设 3D 输入（(I,H,D)），运行即抛 ValueError，T12 从未能产出任何 metrics。
+    改为 2D 形式 "id,jd->ij"（即 Q·K^T/sqrt(d)，与 docstring 公式一致），
+    只修输入形状假设，不改变算法数值语义。
     """
     d = np.sqrt(kt.shape[-1])
-    a = np.einsum("ihd,jhd->ijh", q, kt) / d
-    b = np.einsum("ihd,jhd->ijh", q, kp) / d
+    a = np.einsum("id,jd->ij", q, kt) / d
+    b = np.einsum("id,jd->ij", q, kp) / d
     return float(np.dot(a.reshape(-1), b.reshape(-1)) / (
         np.linalg.norm(a) * np.linalg.norm(b) + 1e-12
     ))
@@ -151,6 +156,12 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "mean_principal_angle": geo["mean_principal_angle"],
         "mean_attn_output_cosine": geo["mean_attn_output_cosine"],
         "mean_head_correlation": geo["mean_head_correlation"],
+        # §62 Figure 7 数据流（bug-7 修复 B7）：figures/__init__.py 的
+        # fig7a_cka_heatmap / fig7bcd_scatter 用 t12_metrics.get("geometry", {}) 读取，
+        # 修复前 metrics.json 缺 "geometry" 键 → fig7 拿到空 dict → 画不出图。
+        # 此处把完整 geo（per_layer / mean_* / fig7_axes）合并进 metrics，
+        # 与 geometry.json 保持一致（双重保障），fig7 即可直接从 metrics 渲染。
+        "geometry": geo,
     }
 
     write_json(run_dir / "geometry.json", geo)

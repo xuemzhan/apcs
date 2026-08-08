@@ -103,6 +103,24 @@ def run_with_compliance(cfg: dict, runner, run_dir, runtime: dict | None = None)
     return result
 
 
+def _transitive_deps(task: str) -> set[str]:
+    """task 的全部传递依赖（依赖的依赖…，含间接依赖）。
+
+    §72 Gate FAIL 不得跳过：`dependencies()` 只给直接依赖，
+    next_allowed 必须检查闭包 —— 若 t04 失败，则所有（间接）依赖 t04 的
+    任务（如 t09 经 t05/t06/t08）都不得放行。
+    """
+    seen: set[str] = set()
+    stack = list(dependencies(task))
+    while stack:
+        d = stack.pop()
+        if d in seen:
+            continue
+        seen.add(d)
+        stack.extend(dependencies(d))
+    return seen
+
+
 def next_allowed(task: str, last_status: dict[str, str]) -> str | None:
     """根据前序状态决定下一步可执行任务。
 
@@ -118,8 +136,10 @@ def next_allowed(task: str, last_status: dict[str, str]) -> str | None:
         # 所有依赖必须都已 PASS/OK
         if any(d not in last_status or last_status[d] not in {"PASS", "OK"} for d in deps):
             continue
-        # 也不能与失败任务有传递依赖
-        if deps & failed:
+        # 也不能与失败任务有传递依赖（闭包内任一 FAIL 即阻断，
+        # ◆ bug：旧实现只查 `deps & failed` 直接依赖，t04 FAIL 而
+        #   t05/t06/t07/t08 全 PASS 时会误放行 t09）
+        if _transitive_deps(t) & failed:
             continue
         return t
     return None

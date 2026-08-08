@@ -17,6 +17,23 @@ from __future__ import annotations
 
 import datetime as _dt
 from pathlib import Path
+from typing import Any
+
+
+def _gate_number(v: Any) -> Any:
+    """把 Gate 阈值统一为数值渲染（§70 design.md: CHG > 0 / PSR_A > 0 是数值阈值）。
+
+    - bool（True/False 开关）→ 0：布尔标志只表示该 Gate 是否启用，
+      阈值语义是数值 0（"> 0"），渲染 `> True`/`> False` 是 B5 字面量 bug；
+    - int/float → 原样；
+    - None → 0（未配置时按设计阈值 CHG > 0 占位）；
+    - 其他（如字符串描述）→ 原样 str(v)。
+    """
+    if isinstance(v, bool):
+        return 0
+    if v is None:
+        return 0
+    return v
 
 
 def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
@@ -78,10 +95,10 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
         "## 6. Gates (§5, §6, §7)",
         "",
         f"- Gate 0 (Self-KV Replay): all samples PASS",
-        f"- Gate 1 (Retention): `≥ {gates.get('retention_min')}` PASS",
-        f"                     `≥ {gates.get('retention_strong')}` STRONG",
-        f"- Gate 2A (CHG): `> {gates.get('chg_positive')}` AND bootstrap CI lower > 0 AND TGRR > 0",
-        f"- Gate 2A (PSR_A): `> {gates.get('psr_a_positive')}`",
+        f"- Gate 1 (Retention): `≥ {_gate_number(gates.get('retention_min'))}` PASS",
+        f"                     `≥ {_gate_number(gates.get('retention_strong'))}` STRONG",
+        f"- Gate 2A (CHG): `> {_gate_number(gates.get('chg_positive'))}` AND bootstrap CI lower > 0 AND TGRR > 0",
+        f"- Gate 2A (PSR_A): `> {_gate_number(gates.get('psr_a_positive'))}`",
         "",
         "## 7. Negative Result Policy",
         "",
