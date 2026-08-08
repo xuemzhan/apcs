@@ -65,7 +65,9 @@ Thumbs.db
 
 # 日志
 *.log
-!reports/runs/*/t*/*.log  # Run 内 stdout.log 必须保留（§63）
+# 例外：Run 内 stdout.log 必须保留（§63 reports/runs/<id>/<task>/stdout.log）
+# 此规则放在 *.log 之后才生效（gitignore "最后匹配胜出"）
+!reports/runs/*/t*/*.log
 
 # 大文件（KV cache、模型权重）
 *.bin
@@ -75,3 +77,6 @@ Thumbs.db
 *.h5
 *.pkl
 *.pkl.gz
+
+# 注意：reports/runs/*/PREREGISTRATION.md 是 §70 必须保留的，
+# 由 .gitignore 中"未列入排除规则"自动保留。
