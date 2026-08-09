@@ -38,6 +38,7 @@ def _toy(n_t=4, n_s=2, S=8, H=2, D=16, seed=0, with_signal=True):
 
 
 def _layer_map(n_t, n_s):
+    """构造最简 layer_map：Student 层 s 只对齐 Teacher 层 s（一对一层映射）。"""
     return [list(range(s, s + 1)) for s in range(n_s)]
 
 
@@ -45,6 +46,7 @@ def _layer_map(n_t, n_s):
 
 
 def test_check_shape_raises_on_mismatch():
+    """bug-3：Teacher/Student 的 S/H/D 任一维度不一致必须 raise ValueError，禁止静默截断。"""
     bad_t = np.zeros((4, 8, 2, 16))
     bad_s = np.zeros((2, 7, 2, 16))  # S 不一致
     with pytest.raises(ValueError, match="形状不兼容"):
@@ -94,6 +96,7 @@ def test_ridge_per_head_without_de_rope_also_works():
 
 
 def test_lowrank_shape_and_smaller_than_ridge():
+    """LowRankMapper 输出形状正确，且 rank=2 时参数数应小于 Ridge（PCR 压缩比前提）。"""
     kv_t, kv_s = _toy()
     ridge = RidgePerHeadMapper()
     ridge.fit(kv_t, kv_s, _layer_map(4, 2))
@@ -103,6 +106,7 @@ def test_lowrank_shape_and_smaller_than_ridge():
 
 
 def test_shared_basis_smaller_than_lowrank():
+    """SharedBasisMapper 跨层共享基 → 同 rank 下参数数应小于 LowRankMapper，且输出形状正确。"""
     kv_t, kv_s = _toy()
     lr = LowRankMapper(rank=4)
     lr.fit(kv_t, kv_s, _layer_map(4, 2))
@@ -434,3 +438,95 @@ def test_runner_ridge_baseline_separate_kv_metrics(tmp_path):
     assert "retention_V" in metrics, "separate_kv=True 必须输出 retention_V（§22）"
     assert "mean_cos_K" in metrics and "mean_cos_V" in metrics
     assert res["status"] in ("PASS", "FAIL")
+
+
+# ---- §22 修复回归：held-out 种子空间 / kv_kinds / _merge_kv_fields / G2 警告 ----
+
+
+def test_held_out_eval_samples_do_not_collide_with_calib():
+    """seed 修复：calib（master_seed=0）与 eval（master_seed=1）的样本必须不同。
+
+    旧实现样本 seed=i 只随索引走 → eval[0..19] 与 calib[0..19] 逐字节相同
+    （held-out 名存实亡，retention 被虚高）。
+    """
+    from apcs.mapper.runner import _shared_model_weights, _synth_calibration_set
+
+    n_t, n_s, S, H, D = 4, 4, 64, 8, 128
+    w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
+    calib = _synth_calibration_set(
+        n_t, n_s, S, H, D, 32, master_seed=0, noise=0.05, w_t=w_t, w_s=w_s
+    )
+    evl = _synth_calibration_set(
+        n_t, n_s, S, H, D, 20, master_seed=1, noise=0.05, w_t=w_t, w_s=w_s
+    )
+    for i in range(min(len(calib), len(evl))):
+        assert not np.array_equal(evl[i][0], calib[i][0]), (
+            f"eval[{i}] 与 calib[{i}] 逐字节相同 → held-out 失效（种子碰撞）"
+        )
+
+
+def test_synth_calibration_reproducible_same_master_seed():
+    """回归：同 master_seed 生成结果必须可复现（§51 可复现性）。"""
+    from apcs.mapper.runner import _shared_model_weights, _synth_calibration_set
+
+    n_t, n_s, S, H, D = 4, 4, 32, 8, 128
+    w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
+    a = _synth_calibration_set(n_t, n_s, S, H, D, 5, master_seed=0, w_t=w_t, w_s=w_s)
+    b = _synth_calibration_set(n_t, n_s, S, H, D, 5, master_seed=0, w_t=w_t, w_s=w_s)
+    assert np.array_equal(a[0][0], b[0][0]) and np.array_equal(a[3][1], b[3][1])
+
+
+def test_kv_kinds_helper():
+    """internal helper：separate_kv=false → ["K"]，true → ["K","V"]（单一事实源）。"""
+    from apcs.mapper.runner import KIND_SEED_OFFSET, kv_kinds
+
+    assert kv_kinds({"mapper": {"separate_kv": False}}) == ["K"]
+    assert kv_kinds({"mapper": {"separate_kv": True}}) == ["K", "V"]
+    assert kv_kinds({}) == ["K"]
+    assert set(KIND_SEED_OFFSET) == {"K", "V"}
+    assert KIND_SEED_OFFSET["K"] == 0 and KIND_SEED_OFFSET["V"] == 100000
+
+
+def test_merge_kv_fields_guard_and_write():
+    """_merge_kv_fields：单 kind 无副作用；双 kind 写 {base}_K/{base}_V。"""
+    from apcs.mapper.runner import _merge_kv_fields
+
+    dst: dict = {}
+    _merge_kv_fields(dst, {"K": {"retention": 0.9}}, {"retention": "retention"})
+    assert dst == {}, "单 kind（无 V）时不应写入 *_K/*_V"
+
+    per_kind = {
+        "K": {"retention": 0.91, "mean_cos": 0.92},
+        "V": {"retention": 0.93, "mean_cos": 0.94},
+    }
+    dst2: dict = {}
+    _merge_kv_fields(dst2, per_kind, {"retention": "retention", "mean_cos": "mean_cos"})
+    assert dst2["retention_K"] == 0.91 and dst2["retention_V"] == 0.93
+    assert dst2["mean_cos_K"] == 0.92 and dst2["mean_cos_V"] == 0.94
+
+
+def test_cfg_layers_warns_on_head_mismatch():
+    """G2 修复：_cfg_layers 在 teacher/student head 数或 head_dim 不同时发警告。"""
+    import warnings
+
+    from apcs.mapper.runner import _cfg_layers
+
+    cfg_ok = {
+        "teacher": {"num_layers": 4, "num_kv_heads": 2, "head_dim": 16},
+        "student": {"num_layers": 2, "num_kv_heads": 2, "head_dim": 16},
+    }
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _cfg_layers(cfg_ok)
+        assert not any("G2" in str(x.message) for x in w)
+
+    cfg_bad = {
+        "teacher": {"num_layers": 4, "num_kv_heads": 2, "head_dim": 16},
+        "student": {"num_layers": 2, "num_kv_heads": 2, "head_dim": 32},
+    }
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        n_t, n_s, H, D = _cfg_layers(cfg_bad)
+        assert any("G2" in str(x.message) for x in w), "head_dim 不一致应触发 G2 警告"
+        # 与文档语义一致：runner 按 teacher 维度训练，H 取 max
+        assert (n_t, n_s, D) == (4, 2, 16)

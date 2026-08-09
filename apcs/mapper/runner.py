@@ -31,6 +31,18 @@
 - §48 Gap strata：T05/T09 按 low/medium/high gap 分别报告。
 - §49 计时：所有耗时测量按 (warmup, repeats, sync) 协议跑。
 - §53 单卡执行策略：见 `single_card_pipeline()`。
+
+───────────────────────────────────────────────────────────────────────────────
+通用约定（T04/T05/T06 共用）：
+    - 种子规则：模型权重由 `master_seed` 生成并跨样本复用（同一模型对）；
+      样本 latent Z 的种子 = `master_seed*1_000_000 + i`，保证不同
+      master_seed 的数据集（calib=0 / held-out=1 / T06 附加 eval=2）的
+      Z 与噪声完全不相交。
+    - §22 K/V 独立参数化：`mapper.separate_kv=true` 时 K 与 V 视为两套独立
+      缓存，各自用 `kv_seed_offset`（KIND_SEED_OFFSET 错开）的随机抽样校准集
+      fit 一套参数；所有 T0x 评测变体输出 `*_K` / `*_V` 分项字段。
+    - 校准与评估必须共享同一组 w_t/w_s（同一 Teacher/Student 模型对），只换
+      latent Z —— 否则 train/eval 等于拿不同模型的 KV 做（cosine 归零）。
 """
 from __future__ import annotations
 
@@ -46,6 +58,49 @@ from ..rope.runner import _rope_pairs, de_rope
 from ..utils import percentile
 from .aggregate import concat_kv_samples, fit_ridge_aggregate
 from .math import LowRankMapper, RidgePerHeadMapper, SharedBasisMapper
+
+# ===========================================================================
+# design.md §22：K/V 独立参数化 —— 单一事实源
+# ===========================================================================
+# K 与 V 的随机抽样错开固定 offset：同一结构（共享 W_t/W_s 模型对）、
+# 不同随机性（独立 latent Z）—— 模拟真实 K/V 是两个独立缓存（§22）。
+KIND_SEED_OFFSET: dict[str, int] = {"K": 0, "V": 100000}
+
+
+def kv_kinds(cfg: dict[str, Any]) -> list[str]:
+    """§22：决定当前评测使用哪些 KV 种类（K/V 独立参数化）。
+
+    参数：
+        cfg: 全局配置字典，仅读取 `cfg["mapper"]["separate_kv"]`
+    返回：
+        separate_kv=true → ["K", "V"]（K 与 V 独立校准/评估、互不覆盖）；
+        否则 → ["K"]（单 kind 行为，与旧实现数值一致）。
+    """
+    separate_kv = bool(cfg.get("mapper", {}).get("separate_kv", False))
+    return ["K", "V"] if separate_kv else ["K"]
+
+
+def _merge_kv_fields(
+    dst: dict[str, Any],
+    per_kind: dict[str, dict[str, float]],
+    fields: dict[str, str],
+) -> None:
+    """§22：把 per-kind 指标合并为 `{base}_K` / `{base}_V` 顶层字段。
+
+    参数：
+        dst: 目标指标字典（原地修改）
+        per_kind: {"K": {...}, "V": {...}} 各 kind 的指标子字典
+        fields: {输出基名: per_kind[kind] 内键}，如 {"retention": "retention"} →
+            dst["retention_K"] / dst["retention_V"]
+    返回：
+        None。仅当 per_kind 含 "V"（separate_kv=true）时写入 K/V 分项字段，
+        否则无副作用（单 kind 行为不变）。
+    """
+    if "V" not in per_kind:
+        return
+    for base, inner in fields.items():
+        dst[f"{base}_K"] = per_kind["K"][inner]
+        dst[f"{base}_V"] = per_kind["V"][inner]
 
 # ===========================================================================
 # Calibration 数据合成（bug-4 修复）
@@ -96,10 +151,12 @@ def _synth_calibration_kv(
     """
     # §22：K 与 V 用不同随机种子抽样 → 独立 latent Z 与噪声（独立缓存）
     rng = np.random.default_rng(seed + kv_seed_offset)
-    Z = rng.standard_normal((seq_len, n_kv, head_dim))  # 共享 latent
+    Z = rng.standard_normal((seq_len, n_kv, head_dim))  # 共享 latent：所有层的"真实信号"
+    # 输出张量按层预分配（n_t / n_s 层），逐层填充避免反复分配
     kv_t = np.zeros((n_t, seq_len, n_kv, head_dim), dtype=np.float32)
     kv_s = np.zeros((n_s, seq_len, n_kv, head_dim), dtype=np.float32)
-    # 每个 Teacher 层一个独立的"提取矩阵"；传入共享 W 时复用（聚合校准）
+    # 每个 Teacher 层一个独立的"提取矩阵"；传入共享 W 时复用（聚合校准）。
+    # /sqrt(head_dim) 归一化：使 ||W|| 保持 O(1)，避免 D 维矩阵乘放大方差
     W_t = w_t if w_t is not None else [
         rng.standard_normal((head_dim, head_dim)) / np.sqrt(head_dim)
         for _ in range(n_t)
@@ -140,7 +197,11 @@ def _synth_calibration_set(
     参数：
         n_t, n_s, seq_len, n_kv, head_dim: 同 `_synth_calibration_kv`
         n_samples: 校准样本数（§32 目标 100-500）
-        master_seed: 生成共享 W_t/W_s 的种子
+        master_seed: 生成共享 W_t/W_s 的种子；同时作为**样本种子空间的基底**，
+            样本 i 的 latent 种子 = master_seed*1_000_000 + i —— 保证不同
+            master_seed 的数据集（如 calib=0、held-out eval=1）的 latent Z
+            与噪声完全不相交（否则 eval[0..19] 会与 calib[0..19] 逐字节相同，
+            held-out 名存实亡）。
         noise: 加性高斯噪声 std
         w_t, w_s: ◆ 可选复用已有 W（校准集与评估集必须属于**同一模型对**）。
             调用方应先生成一组 W 并同时传给校准集与 held-out 评估集
@@ -153,6 +214,7 @@ def _synth_calibration_set(
     返回：
         [(kv_t_i, kv_s_i) ...] 共 n_samples 对，全部共享同一组 W
     """
+    # 共享 W_t/W_s 只生成一次：由 master_seed 决定，跨所有样本复用（同一模型对）
     rng = np.random.default_rng(master_seed)
     W_t = w_t if w_t is not None else [
         rng.standard_normal((head_dim, head_dim)) / np.sqrt(head_dim)
@@ -162,10 +224,12 @@ def _synth_calibration_set(
         rng.standard_normal((head_dim, head_dim)) / np.sqrt(head_dim)
         for _ in range(n_s)
     ]
+    # 每个样本换一套 latent Z 与噪声：种子 = master_seed*1_000_000 + i
+    # （见 docstring —— 保证不同 master_seed 数据集完全不相交）
     return [
         _synth_calibration_kv(
             n_t, n_s, seq_len, n_kv, head_dim,
-            seed=i, noise=noise, w_t=W_t, w_s=W_s,
+            seed=master_seed * 1_000_000 + i, noise=noise, w_t=W_t, w_s=W_s,
             kv_seed_offset=kv_seed_offset,  # §22：K/V 独立随机抽样
         )
         for i in range(n_samples)
@@ -180,6 +244,15 @@ def _shared_model_weights(
     校准集与 held-out 评估集必须复用同一组权重（§32），本 helper 供
     T04/T05/T06 的 calib/eval 划分使用：先拿权重，再分别传入
     `_synth_calibration_set(w_t=..., w_s=...)`，保证 train/eval 同模型。
+
+    参数：
+        n_t / n_s: Teacher / Student 层数（决定每层生成一个独立提取矩阵）
+        head_dim: 每个 head 的维度（矩阵为 (head_dim, head_dim)）
+        master_seed: 权重随机种子；T04/T05/T06 统一用 0，保证
+            calib 与 held-out 属于同一模型对
+    返回：
+        (w_t, w_s)：各 n_t / n_s 个 (head_dim, head_dim) 矩阵的列表。
+        矩阵经 /sqrt(head_dim) 归一化保持 ||W|| ≈ O(1)（数值稳定）。
     """
     rng = np.random.default_rng(master_seed)
     w_t = [
@@ -194,12 +267,29 @@ def _shared_model_weights(
 
 
 def _score_kv(kv_pred: np.ndarray, kv_ref: np.ndarray) -> dict[str, float]:
-    """对齐两个 KV 张量并计算 R² / cosine / KL。"""
+    """对齐两个 KV 张量并计算 R² / cosine / KL（T04/T05/T06 通用评分）。
+
+    参数：
+        kv_pred: 预测的 KV（Teacher→Student 映射输出）
+        kv_ref:  参考 KV（真实 Student KV）
+    返回：
+        {"r2", "cosine", "kl"} 三个标量指标。
+    边界说明：
+        - 张量先 reshape 为 (样本行, D)，即把 S、H（、层）都并入样本维，
+          逐 token 对齐后计算指标。
+        - KL 分支：用 |kv| 按 D 维求平均得到一个非负"分布"，+1e-6 平滑
+          避免 0 值导致 log(0)/除零（数值稳定性；kl_divergence 内部另有
+          eps=1e-12 归一化保护）。
+        - 这是离线 feature 空间的 proxy 评分（§75 明确禁止以 R²/cosine
+          替代 CHG 等科学端点）。
+    """
+    # 压平到 (n_tokens, D)：每个 token 的 D 维向量逐行对齐比较
     a = kv_pred.reshape(-1, kv_pred.shape[-1])
     b = kv_ref.reshape(-1, kv_ref.shape[-1])
     return {
         "r2": r2(a, b),
         "cosine": cosine(a, b),
+        # KL 用"按 D 平均的 |kv|"当分布，1e-6 防止 0 值出现（log(0) 防御）
         "kl": kl_divergence(
             np.abs(a).mean(0) + 1e-6, np.abs(b).mean(0) + 1e-6
         ),
@@ -212,15 +302,21 @@ def _score_kv(kv_pred: np.ndarray, kv_ref: np.ndarray) -> dict[str, float]:
 
 
 def time_block(repeats: int, warmup: int, sync: bool = True):
-    """生成 (timing_results, sync_callable) 的 context manager 工厂。
+    """生成计时用 context manager 工厂（§49 规范：warmup + sync + ≥10 repeats）。
 
-    §49 规范：每个 timing 必须 warmup + sync + ≥10 repeats + P50/P95。
+    参数：
+        repeats: 有效计时的重复次数（§49 要求 ≥10）
+        warmup: 预热次数 —— 丢弃初始化/首次分配等一次性开销
+        sync: 是否在计时前后做 CUDA 同步（GPU 计时必须，否则异步误差）
+    返回：
+        contextmanager 工厂；with 块内每 yield 一次记一次耗时，
+        结束后 `cm.times` 保存每次耗时（ms），供 P50/P95 统计。
     """
     import contextlib
 
     @contextlib.contextmanager
     def _cm():
-        # warmup
+        # warmup：先跑 warmup 次，丢弃启动开销（CUDA 首次调用/内存分配）
         for _ in range(warmup):
             yield None
         times = []
@@ -233,11 +329,13 @@ def time_block(repeats: int, warmup: int, sync: bool = True):
                 if has_cuda:
                     torch.cuda.synchronize()
         except ImportError:
+            # 无 torch（CPU-only 环境）：同步为空操作
             has_cuda = False
 
             def sync_call():
                 pass
 
+        # 正式计时：每次 yield 前后各 sync 一次，保证测到的是 GPU 完成时间
         for _ in range(repeats):
             sync_call()
             t0 = time.perf_counter()
@@ -275,39 +373,41 @@ def single_card_pipeline(
     本函数返回每阶段耗时（ms），便于 §38 T10 报告。
     """
     timings: dict[str, float] = {}
+    # §53 单卡约束：同一时刻只允许一个模型驻留显存 —— 必须先卸载 Teacher
+    # 并清理 CUDA 后才能加载 Student（顺序不可调换）。每阶段耗时单位 ms。
     t0 = time.perf_counter()
-    teacher_load_fn()
+    teacher_load_fn()  # 1) 加载 Teacher 权重
     timings["teacher_load"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    capture_fn()
+    capture_fn()  # 2) Teacher Forward + 捕获 C_T(X) KV
     timings["capture"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    unload_fn()
+    unload_fn()  # 3) KV offload 到 CPU 后卸载 Teacher（释放显存）
     timings["teacher_unload"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    cuda_cleanup_fn()
+    cuda_cleanup_fn()  # 4) 清空 CUDA context / 缓存碎片
     timings["cuda_cleanup"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    student_load_fn()
+    student_load_fn()  # 5) 加载 Student（此时显存已腾空）
     timings["student_load"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    map_fn()
+    map_fn()  # 6) mapper：C_T(X) → C_S*(X)（合成 Student 状态）
     timings["map"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    inject_fn()
+    inject_fn()  # 7) 把合成 KV 注入 Student cache
     timings["inject"] = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    decode_fn()
+    decode_fn()  # 8) 解码（zero prefill：不重新读 X，§52 禁止 1）
     timings["decode"] = (time.perf_counter() - t0) * 1000.0
 
-    return timings
+    return timings  # {阶段名: 耗时(ms)}，供 §38 T10 / PSR_A 报告
 
 
 # ===========================================================================
@@ -321,13 +421,15 @@ def _cfg_layers(cfg: dict[str, Any]) -> tuple[int, int, int, int]:
     优先使用 cfg["teacher"]["num_layers"] 等显式字段；
     否则 fallback 到 Qwen3-4B/1.7B 的已知值。
     """
+    # 优先读显式架构字段（configs/*.yaml 可配置项）
     n_t = cfg["teacher"].get("num_layers")
     n_s = cfg["student"].get("num_layers")
     H_t = cfg["teacher"].get("num_kv_heads")
     H_s = cfg["student"].get("num_kv_heads")
-    D = cfg["teacher"].get("head_dim")
+    D_t = cfg["teacher"].get("head_dim")
+    D_s = cfg["student"].get("head_dim")
 
-    # fallback 到已知 Qwen3 架构
+    # fallback 到已知 Qwen3 架构（按 model_id 关键字匹配，只填缺省的字段）
     teacher_mid = str(cfg["teacher"].get("model_id", "")).lower()
     student_mid = str(cfg["student"].get("model_id", "")).lower()
 
@@ -340,29 +442,44 @@ def _cfg_layers(cfg: dict[str, Any]) -> tuple[int, int, int, int]:
         if tag in teacher_mid:
             n_t = n_t or d["num_layers"]
             H_t = H_t or d["num_kv_heads"]
-            D = D or d["head_dim"]
+            D_t = D_t or d["head_dim"]
         if tag in student_mid:
             n_s = n_s or d["num_layers"]
             H_s = H_s or d["num_kv_heads"]
-            D = D or d["head_dim"]
+            D_s = D_s or d["head_dim"]
     n_t = n_t or 36
     n_s = n_s or 28
     H_t = H_t or 8
     H_s = H_s or 8
-    D = D or 128
-    # §12 / §13：head 不一致 → G2
-    if H_t != H_s or D != D:
-        # 这里仅警告，真实 G2 需要 P_H/P_d projection
-        pass
-    return n_t, n_s, max(H_t, H_s), D
+    D_t = D_t or 128
+    D_s = D_s or 128
+    # §12 / §13：head 或 head_dim 不一致 → G2（需 P_H / P_d projection）
+    if H_t != H_s or D_t != D_s:
+        import warnings
+
+        warnings.warn(
+            f"G2 维度不匹配：teacher(H={H_t}, D={D_t}) vs student(H={H_s}, D={D_s})；"
+            f"当前 runner 按 teacher 维度训练，真实 G2 需走 mismatched 投影（§12/§13）",
+            stacklevel=2,
+        )
+    # 返回 (Teacher 层数, Student 层数, 统一 head 数, Teacher head_dim)：
+    # 当前 runner 按 Teacher 维度训练，H 取 max 以避免 GQA 比例差异被截断
+    return n_t, n_s, max(H_t, H_s), D_t
 
 
 def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T04 Ridge Baseline（design.md §32）。
 
-    输出：
-        mapper size, R², cosine, attention-output cosine
-        （attn-output cosine = softmax(Q·K^T/√d) 的分布相似度）
+    指标体系（§32）：
+        - mapper_n_params：Ridge per-head 映射的参数规模
+        - mean_r2 / mean_kv_cosine：预测 KV vs 真实 Student KV 的拟合度
+        - mean_attn_output_cosine：attention 输出分布相似度
+          （attn-output cosine = softmax(Q·K^T/√d) 的分布相似度，§32）
+        - retention：handoff cosine / self cosine（§33，有界到 1.0）
+        - latency_map_ms_p50/p95：fit/transform 计时（§49 协议）
+    种子规则：权重 master_seed=0（同一模型对）；校准样本 master_seed=0、
+    held-out 评估样本 master_seed=1（Z/噪声完全不相交）。
+    Gate：mean_kv_cosine > 0.5 → PASS（T04 无正式 gate，此为报告性阈值）。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
     seq = cfg.get("mapper", {}).get("calibration_context", 512)
@@ -370,8 +487,8 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     repeats = int(cfg.get("timing", {}).get("repeats", 10))
     warmup = int(cfg.get("timing", {}).get("warmup", 2))
 
-    layer_map = proportional_mapping(n_t, n_s)
-    ridge = RidgePerHeadMapper(lam=1e-3)
+    layer_map = proportional_mapping(n_t, n_s)  # §21：按比例对齐 Teacher→Student 层
+    ridge = RidgePerHeadMapper(lam=1e-3)  # λ=1e-3 岭正则：保证 (G+λI) 可逆（数值稳定性）
 
     # —— §23：默认开启 de-RoPE 路径（这里用 teacher theta）
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
@@ -384,12 +501,11 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # ◆ design.md §22（K/V 独立参数化）：separate_kv=true 时 K 与 V 是两套
     #   独立缓存 —— 各自用独立随机抽样的校准集 fit 一套参数（kv_kind），
     #   transform 时按 kind 分别产出 K/V 两路输出并各自评估。
-    separate_kv = bool(cfg.get("mapper", {}).get("separate_kv", False))
-    kinds = ["K", "V"] if separate_kv else ["K"]
-    # K 与 V 的随机抽样错开固定 offset：同一结构（共享 W_t/W_s 模型对）、
-    # 不同随机性（独立 latent Z）—— 模拟真实 K/V 是两个独立缓存（§22）。
-    KIND_SEED_OFFSET = {"K": 0, "V": 100000}
+    kinds = kv_kinds(cfg)
+    separate_kv = "V" in kinds
 
+    # master_seed=0：权重种子；calib（master_seed=0）与 held-out（master_seed=1）
+    # 复用同一组 w_t/w_s，只换 latent Z —— train/eval 同一模型对（§32）
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
     per_kind: dict[str, dict[str, float]] = {}
     latencies: list[float] = []
@@ -406,6 +522,7 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         # 在 held-out 样本上评分（§32：校准集与评估集分离；**同一模型对**——
         # 复用上面的 w_t/w_s，只换 latent Z 与噪声）
         r2_list, cos_list, attn_cos_list, ret_list = [], [], [], []
+        # held-out 评估：20 个样本，master_seed=1 与校准（=0）的 Z/噪声完全不相交
         eval_samples = _synth_calibration_set(
             n_t, n_s, seq, H, D, 20, master_seed=1, noise=0.05,
             w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
@@ -418,7 +535,8 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             m = _score_kv(pred, kv_s)
             r2_list.append(m["r2"])
             cos_list.append(m["cosine"])
-            # §33 retention：handoff cosine / self cosine（有界到 1.0）
+            # §33 retention：handoff cosine / self cosine（有界到 1.0；
+            # 分母 max(..., 1e-6) 防御 self cosine 为 0 的除零边界）
             s_self = _score_kv(kv_s, kv_s)
             ret_list.append(min(1.0, m["cosine"] / max(s_self["cosine"], 1e-6)))
             # §32 attn-output cosine：用随机 Q 模拟 attn 输出分布相似度
@@ -437,7 +555,7 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             "retention": float(np.mean(ret_list)),
         }
 
-    # §49 P50 / P95
+    # §49 P50 / P95（latencies 含每次 fit + 每次 transform 的耗时）
     p50 = percentile(latencies, 0.50) if latencies else 0.0
     p95 = percentile(latencies, 0.95) if latencies else 0.0
     # separate_kv=false 时只有 K → 数值与旧实现一致；true 时取 K/V 平均
@@ -456,18 +574,19 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "latency_map_ms_p95": p95,
         "repeats": repeats,
         "warmup": warmup,
+        # 报告性阈值：KV cosine > 0.5 视为可恢复（T04 非正式 gate）
         "gate": "PASS" if mean_cos > 0.5 else "FAIL",
     }
     # design.md §22：separate_kv=true 时输出 K/V 各自的 retention/cosine/R² 字段
-    if separate_kv:
-        metrics["retention_K"] = per_kind["K"]["retention"]
-        metrics["retention_V"] = per_kind["V"]["retention"]
-        metrics["mean_cos_K"] = per_kind["K"]["mean_cos"]
-        metrics["mean_cos_V"] = per_kind["V"]["mean_cos"]
-        metrics["mean_r2_K"] = per_kind["K"]["mean_r2"]
-        metrics["mean_r2_V"] = per_kind["V"]["mean_r2"]
-        metrics["mean_attn_output_cosine_K"] = per_kind["K"]["mean_attn_cos"]
-        metrics["mean_attn_output_cosine_V"] = per_kind["V"]["mean_attn_cos"]
+    _merge_kv_fields(
+        metrics, per_kind,
+        {
+            "retention": "retention",
+            "mean_cos": "mean_cos",
+            "mean_r2": "mean_r2",
+            "mean_attn_output_cosine": "mean_attn_cos",
+        },
+    )
     write_json(run_dir / "metrics.json", metrics)
     summary = (
         "# T04 Ridge Baseline\n\n"
@@ -516,13 +635,20 @@ def _attn_output(q: np.ndarray, k: np.ndarray) -> np.ndarray:
 def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T05 Replacement（design.md §33）。
 
-    输出：
-        - 各 context 的 Retention / KL / Token Agreement / Latency (§33)
-        - 按 Gap strata 分桶报告 (§48)
-        - Gate 1 判定
+    指标体系（§33）：
+        - retention_per_context：每个 context 长度的 handoff/self 保留率
+        - mean_retention / mean_token_agreement：跨 context 汇总
+        - token_agreement：用 argmax 维度的 KV 最后 token 一致率（离线 proxy）
+        - latency_p50_ms / p95_ms：fit + transform 计时（§49 协议）
+        - gap_strata：按 retention 离散度分 low/medium/high 桶（§48 代理）
+    种子规则：权重 master_seed=0；每 context 校准 master_seed=0、
+    held-out 评估 master_seed=1。
+    Gate 1（§33）：mean_retention ≥ 0.90 → PASS；0.80–0.90 → CONDITIONAL；
+    < 0.80 → FAIL。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
     layer_map = proportional_mapping(n_t, n_s)
+    # 上下文长度列表（默认四档），只取前 4 档，逐档独立校准/评估
     contexts = cfg.get("context_lengths", [512, 1024, 2048, 4096])[:4]
     repeats = int(cfg.get("timing", {}).get("repeats", 10))
     warmup = int(cfg.get("timing", {}).get("warmup", 2))
@@ -531,16 +657,14 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
 
-    ridge = RidgePerHeadMapper(lam=1e-3)
+    ridge = RidgePerHeadMapper(lam=1e-3)  # λ=1e-3 岭正则（数值稳定性，同 T04）
     rows = []
     token_agree_list = []
     latencies = []
-    de_rope_fn = lambda k, p: de_rope(k, p, inv_freq)
+    de_rope_fn = lambda k, p: de_rope(k, p, inv_freq)  # §23 强制 de-RoPE 路径
     # design.md §22（K/V 独立参数化）：separate_kv=true 时 K/V 独立 fit/评估
-    separate_kv = bool(cfg.get("mapper", {}).get("separate_kv", False))
-    kinds = ["K", "V"] if separate_kv else ["K"]
-    # K 与 V 独立随机抽样错开固定 offset（同一结构、不同随机性，§22）
-    KIND_SEED_OFFSET = {"K": 0, "V": 100000}
+    kinds = kv_kinds(cfg)
+    separate_kv = "V" in kinds
     # 同一模型对：校准集与 held-out 评估集复用同一组 w_t/w_s（§32）
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
     for ctx in contexts:
@@ -579,23 +703,25 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
                 token_agree_list.append(ta)
             per_kind_ret[kind] = float(np.mean(retentions))
             per_kind_ta[kind] = float(np.mean(tas))
+        # 单 kind 时即该 kind 的均值；separate_kv 时对 K/V 平均得到总指标
         row = {
             "context": ctx,
             "retention": float(np.mean(list(per_kind_ret.values()))),
             "token_agreement": float(np.mean(list(per_kind_ta.values()))),
         }
         # design.md §22：separate_kv=true 时输出 K/V 各自的 retention / TA
-        if separate_kv:
-            row["retention_K"] = per_kind_ret["K"]
-            row["retention_V"] = per_kind_ret["V"]
-            row["token_agreement_K"] = per_kind_ta["K"]
-            row["token_agreement_V"] = per_kind_ta["V"]
+        _merge_kv_fields(
+            row, 
+            {k: {"retention": per_kind_ret[k], "token_agreement": per_kind_ta[k]} for k in kinds},
+            {"retention": "retention", "token_agreement": "token_agreement"},
+        )
         rows.append(row)
 
     # §48 Gap strata：把 retention_per_context 按"假设 teacher-student gap"分桶
     # （离线模拟：用 retention 的离散度做 strata）
     gap_strata = _gap_strata(rows)
 
+    # Gate 1 判定（§33）：跨所有 context 的平均 retention
     ret = float(np.mean([r["retention"] for r in rows]))
     if ret >= 0.90:
         gate = "PASS"
@@ -618,12 +744,12 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "gate1": gate,
     }
     # design.md §22：separate_kv=true 时输出 K/V 各自的平均 retention
+    # （对 rows 再取一次平均，供 T09 等下游直接消费）
     if separate_kv:
         metrics["mean_retention_K"] = float(np.mean([r["retention_K"] for r in rows]))
         metrics["mean_retention_V"] = float(np.mean([r["retention_V"] for r in rows]))
         metrics["mean_token_agreement_K"] = float(np.mean([r["token_agreement_K"] for r in rows]))
         metrics["mean_token_agreement_V"] = float(np.mean([r["token_agreement_V"] for r in rows]))
-    write_json(run_dir / "metrics.json", metrics)
     summary = (
         "# T05 Replacement\n\n"
         f"- Contexts: {[r['context'] for r in rows]}\n"
@@ -640,11 +766,19 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 def _token_agreement(kv_ref: np.ndarray, kv_pred: np.ndarray) -> float:
     """§33 Token Agreement：用 KV 最后一个 token 的"最大分量维度"作 proxy token。
 
-    真实实现需要接 model head；离线时用 feature-level proxy。
+    参数：
+        kv_ref:  参考 Student KV (L_s, S, H, D)
+        kv_pred: 映射预测的 Student KV (L_s, S, H, D)
+    返回：
+        [0,1] 标量：每个 head 的 argmax 维度一致率。
+    说明：真实实现需要接 model head 得到真实 top-1 token；离线模拟用
+    feature-level proxy —— 取 Student 最后层、最后 token 的 K (H, D)，
+    对 D 维 argmax 当作"预测的 top-1 token 索引"。
     """
     # 取 Student 最后层、最后 token 的 K → (H, D)
     a = kv_ref[-1, -1]  # (H, D)
     b = kv_pred[-1, -1]
+    # 每个 head 独立 argmax：最高激活维度即"预测 token"（proxy）
     a_idx = np.argmax(a, axis=-1)
     b_idx = np.argmax(b, axis=-1)
     return float((a_idx == b_idx).mean())
@@ -653,8 +787,13 @@ def _token_agreement(kv_ref: np.ndarray, kv_pred: np.ndarray) -> float:
 def _gap_strata(rows: list[dict]) -> dict[str, list[float]]:
     """§48 Gap strata 报告（按 retention 分布分桶）。
 
-    在离线模拟中，没有真实 teacher/student gap，所以这里用 retention 值
-    离散度作为 strata 代理。真实实现应从 T07 的 gap_distribution 读入。
+    参数：
+        rows: 各 context 的指标行（须含 "retention" 键）
+    返回：
+        {"low": [...], "medium": [...], "high": [...]}：按 retention 相对
+        中位数分桶 —— 严格小于中位数 → low，等于 → medium，大于 → high。
+    说明：在离线模拟中没有真实 teacher/student gap，所以用 retention 值
+    离散度作为 strata 代理；真实实现应从 T07 的 gap_distribution 读入。
     """
     if not rows:
         return {"low": [], "medium": [], "high": []}
@@ -675,7 +814,13 @@ def _gap_strata(rows: list[dict]) -> dict[str, list[float]]:
 def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T06 Lightweight Mapper（design.md §34 / Figure 1 PCR vs Retention）。
 
-    对比：Ridge (full) / Rank 8 / Rank 16 / Rank 32 / Shared Basis (A2)
+    对比变体：Ridge (full, PCR 分母) / LowRank rank=8/16/32 /
+    Shared Basis rank=16（§34 A2 消融，需 cfg.mapper.shared_basis=true）。
+    指标体系（§34 / §3.4）：
+        - params：各 mapper 参数量
+        - pcr：PCR = params / p_ref（相对 Ridge 全量的参数压缩比，§3.4）
+        - retention / r2 / cosine：在 held-out 样本上的替换保真度
+    种子规则：权重 master_seed=0；校准 master_seed=0、held-out master_seed=2。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
     seq = cfg.get("mapper", {}).get("t06_context", 1024)
@@ -683,7 +828,7 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     #   采用 concat 方案 A（§32）拼接全部样本一次 fit。n_agg 限制拼接后的
     #   样本行数控制内存（seq=1024 时每样本 ≈ 1M tokens×D×4B/层，见下）。
     n_agg = int(cfg.get("mapper", {}).get("t06_aggregate_samples", 16))
-    n_calib = 64
+    n_calib = 64  # 校准样本总数（其中前 n_agg 个用于 concat 聚合，§32 目标区间）
     layer_map = proportional_mapping(n_t, n_s)
 
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
@@ -694,10 +839,8 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     ridge_ref = RidgePerHeadMapper(lam=1e-3)
     # design.md §22（K/V 独立参数化）：separate_kv=true 时 K 与 V 各自用
     # 独立随机抽样的校准集 fit 一套参数，评估时按 kind 分别 transform。
-    separate_kv = bool(cfg.get("mapper", {}).get("separate_kv", False))
-    kinds = ["K", "V"] if separate_kv else ["K"]
-    # K 与 V 的随机抽样错开固定 offset（同一结构、不同随机性，§22）
-    KIND_SEED_OFFSET = {"K": 0, "V": 100000}
+    kinds = kv_kinds(cfg)
+    separate_kv = "V" in kinds
     # 同一模型对：calib 与 held-out eval 复用同一组 w_t/w_s（§32），
     # 只换 latent Z —— 否则等于拿不同模型的 KV 做 train/eval。
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
@@ -720,6 +863,7 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             n_t, n_s, seq, H, D, 1, master_seed=2, noise=0.05,
             w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
         )[0]
+    # PCR 分母：Ridge 全量参数；positions_big 对应 concat 后 (n_agg*S) 的坐标
     p_ref = ridge_ref.n_params
     positions_big = np.tile(np.arange(seq, dtype=np.float64), n_agg)
     positions = np.arange(seq, dtype=np.float64)
@@ -729,11 +873,17 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     ) -> dict[str, dict[str, float]]:
         """对每种 kind 各 fit 一次、各 transform 一次并评分（design.md §22）。
 
-        返回 per-kind 的 {"retention", "r2", "cosine"}；K/V 参数互不覆盖，
-        单独 kind 时与旧实现数值一致。
+        参数：
+            mapper: LowRankMapper / SharedBasisMapper 实例（ALS 类，concat 一次 fit）
+            kinds: 待评测的 KV 种类列表（["K"] 或 ["K","V"]）
+            row: 当前变体的指标行（原地补充 params/pcr/retention/r2/cosine）
+        返回：
+            per-kind 的 {"retention", "r2", "cosine"}；K/V 参数互不覆盖，
+            单独 kind 时与旧实现数值一致。
         """
         per_kind_metrics: dict[str, dict[str, float]] = {}
         for kind in kinds:
+            # concat 后的大 KV 校准样本（沿 S 维拼接，position 用 positions_big）
             kv_t_big, kv_s_big = calib_kv[kind]
             kv_t_eval, kv_s_eval = eval_kv[kind]
             mapper.fit(kv_t_big, kv_s_big, layer_map, kv_kind=kind,
@@ -741,36 +891,36 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             pred = mapper.transform(kv_t_eval, layer_map, kv_kind=kind,
                                     positions=positions, de_rope_fn=de_rope_fn)  # §22
             m = _score_kv(pred, kv_s_eval)
+            # retention 有界到 1.0；分母 max(...,1e-6) 防御 self cosine=0 除零
             ret = min(1.0, m["cosine"] / max(_score_kv(kv_s_eval, kv_s_eval)["cosine"], 1e-6))
             per_kind_metrics[kind] = {
                 "retention": float(ret),
                 "r2": float(m["r2"]),
                 "cosine": float(m["cosine"]),
             }
+        # 汇总到变体行：params / PCR（§3.4）/ retention / r2 / cosine
         row["params"] = mapper.n_params
         row["pcr"] = pcr(mapper.n_params, p_ref)
-        # 单 kind 时与旧实现数值一致；separate_kv 时取 K/V 平均
         row["retention"] = float(np.mean([v["retention"] for v in per_kind_metrics.values()]))
         row["r2"] = float(np.mean([v["r2"] for v in per_kind_metrics.values()]))
         row["cosine"] = float(np.mean([v["cosine"] for v in per_kind_metrics.values()]))
-        if separate_kv:
-            # design.md §22：输出 K/V 各自的 retention/R²/cosine 字段
-            row["retention_K"] = per_kind_metrics["K"]["retention"]
-            row["retention_V"] = per_kind_metrics["V"]["retention"]
-            row["r2_K"] = per_kind_metrics["K"]["r2"]
-            row["r2_V"] = per_kind_metrics["V"]["r2"]
-            row["cosine_K"] = per_kind_metrics["K"]["cosine"]
-            row["cosine_V"] = per_kind_metrics["V"]["cosine"]
+        # design.md §22：separate_kv=true 时输出 K/V 各自的 retention/R²/cosine
+        _merge_kv_fields(
+            row, per_kind_metrics,
+            {"retention": "retention", "r2": "r2", "cosine": "cosine"},
+        )
         return per_kind_metrics
 
     rows = []
+    # §34 低秩变体：rank 8 / 16 / 32 —— 目标 PCR 更低、retention 不显著掉
     for rank in [8, 16, 32]:
         lr = LowRankMapper(rank=rank)
         row: dict[str, Any] = {"variant": f"lowrank-{rank}", "rank": rank}
         _fit_score_kinds(lr, kinds, row)
         rows.append(row)
 
-    # Shared Basis（A2 消融开关）—— 同样 concat 一次 fit（每 kind 一次）
+    # Shared Basis（§34 A2 消融开关）—— 同样 concat 一次 fit（每 kind 一次）。
+    # 与 LowRank 的区别：低秩因子在层间共享一个基底，参数更省
     if cfg.get("mapper", {}).get("shared_basis", False):
         sb = SharedBasisMapper(rank=16)
         row_sb: dict[str, Any] = {"variant": "shared-basis-16", "rank": 16}
