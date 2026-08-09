@@ -21,6 +21,13 @@
 
 本模块提供最小可复现的合成数据（用于 CI/单元测试）；
 真实实验由各 task 替换为 HF datasets 加载。
+
+数据流约定（合成数据同样遵守）：
+    Sample 是唯一的数据单元 {sample_id, context, query, answer, split}；
+    T01/T04/T05 等 runner 按 split 过滤使用：
+        train      → 计算 Teacher Margin / Guidance Weight（§16 Train）
+        validation → 决定 Rank / α_max / Top-k / Loss Weight（§16 Validation）
+        test       → 完全冻结，只做评估（§36 / §70），禁止任何超参搜索
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -30,7 +37,17 @@ from dataclasses import dataclass
 
 @dataclass
 class Sample:
-    """统一 sample 结构。"""
+    """统一 sample 结构。
+
+    字段：
+        sample_id: str          全局唯一样本 ID（如 "fidelity-3"），跨 run 可追溯
+        context: str            上下文 X（长文本），Teacher 预填充的内容，Student 不重读
+        query: str              查询 q，解码入口
+        answer: str | None      参考答案（评估用）；None 表示无监督/生成式 sample
+        split: str              "train" | "validation" | "test"（§16 三层，见模块 docstring）
+
+    依赖：无。纯数据结构，不参与计算；消费方按 split 过滤。
+    """
     sample_id: str
     context: str
     query: str
@@ -39,7 +56,13 @@ class Sample:
 
 
 def synthetic_fidelity_set(n: int = 8) -> list[Sample]:
-    """§15 Fidelity Set 最小可复现样本（用于 T01 / T05 fidelity 通路验证）。"""
+    """§15 Fidelity Set 最小可复现样本（用于 T01 / T05 fidelity 通路验证）。
+
+    输入：n=样本数（默认 8）。
+    输出：list[Sample]，全部 split="test"（fidelity 只评估、不训练）。
+    结构：样本 i 的 context = 基础句拼接 (i+1) 遍（长度递增，覆盖不同上下文规模），
+    固定问答"首字母动物 → fox"，使 T01 的 max_error / token_agreement 有确定性判据。
+    """
     out: list[Sample] = []
     base = (
         "The quick brown fox jumps over the lazy dog. "
@@ -47,14 +70,14 @@ def synthetic_fidelity_set(n: int = 8) -> list[Sample]:
         "How vexingly quick daft zebras jump! "
     )
     for i in range(n):
-        ctx = base * (i + 1)
+        ctx = base * (i + 1)  # 句子重复次数递增 → context 长度线性增长
         out.append(
             Sample(
                 sample_id=f"fidelity-{i}",
                 context=ctx,
                 query="What animal is mentioned first?",
                 answer="fox",
-                split="test",
+                split="test",  # §15 fidelity 集只评估：全部进 test 桶
             )
         )
     return out
@@ -63,9 +86,14 @@ def synthetic_fidelity_set(n: int = 8) -> list[Sample]:
 def synthetic_teacher_advantage_set(n: int = 16) -> list[Sample]:
     """§16 Teacher-Advantage Set 最小样本。
 
+    输入：n=样本数（默认 16，须为偶数）。
+    输出：list[Sample]；前 n//2 个 split="train"（算 Teacher margin），
+          后 n//2 个 split="validation"（定 Rank/α_max/Top-k/Loss Weight）。
     注意：
         - 一半 train（计算 Teacher margin） + 一半 validation（决定超参）
         - 真实实现禁止使用 test 做超参搜索（§36）
+    内容：事实表排序推理（Alpha>Beta>Gamma>Delta → 最大者为 Alpha），
+    构造 Teacher 稳定优于 Student 的优势任务（dataset-level 选取，§52 禁止 4 合规）。
     """
     out: list[Sample] = []
     for i in range(n):
@@ -80,6 +108,7 @@ def synthetic_teacher_advantage_set(n: int = 16) -> list[Sample]:
                 context=ctx,
                 query="Which is greater, Alpha or Delta?",
                 answer="Alpha",
+                # §16 分层：前一半供 Train 算 margin，后一半供 Validation 定超参
                 split="train" if i < n // 2 else "validation",
             )
         )
@@ -87,10 +116,17 @@ def synthetic_teacher_advantage_set(n: int = 16) -> list[Sample]:
 
 
 def synthetic_long_context_set(n: int = 4, length_tokens_approx: int = 512) -> list[Sample]:
-    """§17 Long-Context Set 最小样本。"""
-    block = "word " * 32
+    """§17 Long-Context Set 最小样本。
+
+    输入：n=样本数（默认 4），length_tokens_approx=目标 token 数（默认 512）。
+    输出：list[Sample]，全部 split="test"。
+    结构：context = "word " 填充块重复（32 词/块），query 要求复述最后一个词，
+    用于 T10 context length 扩展实验（4K/8K/16K/32K 时增大 length_tokens_approx）。
+    """
+    block = "word " * 32  # 一个填充块 ≈ 32 tokens
     out: list[Sample] = []
     for i in range(n):
+        # 块数 = max(1, 目标长度 // 32)：保证最短也有一块
         ctx = block * (max(1, length_tokens_approx // 32))
         out.append(
             Sample(
@@ -105,7 +141,13 @@ def synthetic_long_context_set(n: int = 4, length_tokens_approx: int = 512) -> l
 
 
 def synthetic_behavior_set(n: int = 6) -> list[Sample]:
-    """§18 Behavior-Sensitive Set 最小样本（Judge / Ranker 用）。"""
+    """§18 Behavior-Sensitive Set 最小样本（Judge / Ranker 用）。
+
+    输入：n=样本数（默认 6）。
+    输出：list[Sample]，全部 split="test"。
+    结构：双选项决策场景（安全 vs 冒险），query 要求"选更安全选项"，
+    用于 T09 JCR / Judge 行为稳定性评估（§45/§48：accuracy 不变时决策是否漂移）。
+    """
     out: list[Sample] = []
     for i in range(n):
         ctx = f"Decision scenario #{i}. Option A is safe. Option B is risky but profitable."

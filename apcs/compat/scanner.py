@@ -27,7 +27,13 @@ from ..io.runs import write_json
 
 @dataclass
 class ModelSpec:
-    """§28 模型规格字段。"""
+    """§28 模型规格字段：从 AutoConfig（或 fallback）抽取的架构快照。
+
+    关键字段的判定用途：
+        - num_kv_heads / head_dim / hidden_size → KV 维度匹配判定（G1/G2）
+        - vocab_size → tokenizer 是否一致的粗略判定（同 vocab 视为同词表）
+        - num_layers → T03 Layer Alignment 的层映射依据（L_t / L_s）
+    """
     model_id: str
     revision: str
     vocab_size: int = 0
@@ -54,13 +60,16 @@ def _from_config_dict(model_id: str, revision: str, cfg: dict[str, Any]) -> Mode
     return ModelSpec(
         model_id=model_id,
         revision=revision,
+        # LLaMA/Qwen 命名：hidden_size；GPT-2 命名：n_embd（field 级 fallback 链）
         vocab_size=int(cfg.get("vocab_size", 0)),
         hidden_size=int(cfg.get("hidden_size", cfg.get("n_embd", 0))),
         num_layers=int(cfg.get("num_hidden_layers", cfg.get("n_layer", 0))),
         num_attention_heads=int(cfg.get("num_attention_heads", cfg.get("n_head", 0))),
+        # num_key_value_heads 缺失（非 GQA 模型）时退化为 num_attention_heads
         num_kv_heads=int(
             cfg.get("num_key_value_heads", cfg.get("num_attention_heads", 0))
         ),
+        # head_dim 未显式给出时用 hidden_size // num_attention_heads 推算
         head_dim=int(
             cfg.get("head_dim", 0)
             or (
@@ -75,15 +84,21 @@ def _from_config_dict(model_id: str, revision: str, cfg: dict[str, Any]) -> Mode
 
 
 def _live_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
-    """真实加载（需要 transformers）。失败则抛 ImportError。"""
+    """真实加载（需要 transformers）。失败则抛 ImportError。
+
+    ImportError 是本函数的"信号出口"：scan_model 捕获它切换到 fallback；
+    其它异常（如网络失败）继续向外抛，避免静默产出错误估计。
+    """
     from transformers import AutoConfig  # type: ignore
 
+    # revision 默认 "main"（HF hub 主分支）；显式 revision 可 pin 特定 commit
     cfg = AutoConfig.from_pretrained(
         spec_cfg["model_id"], revision=spec_cfg.get("revision", "main")
     )
     spec = _from_config_dict(
         spec_cfg["model_id"], spec_cfg.get("revision", "main"), cfg.to_dict()
     )
+    # attention_implementation / dtype 不在 AutoConfig 中，从 yaml 配置补填
     spec.attention_implementation = spec_cfg.get("attention_implementation", "")
     spec.dtype = spec_cfg.get("dtype", "")
     return spec
@@ -98,6 +113,10 @@ def _fallback_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
         - Qwen3-1.7B: vocab=151936, hidden=2048, layers=28, heads=16, kv_heads=8, head_dim=128
     """
     mid = spec_cfg["model_id"].lower()
+    # fallback 检查矩阵（按 model_id 子串匹配，仅覆盖已知 Qwen3 尺寸）：
+    #   4B   → 36 层 / 20 heads / 8 kv_heads / head_dim 128
+    #   1.7B → 28 层 / 16 heads / 8 kv_heads / head_dim 128
+    #   其它 → 通用 LLaMA 风格默认值（保守估计，产物标注 source="fallback"）
     if "4b" in mid:
         vocab, hidden, layers, heads, kv_heads, head_dim, inter = (
             151936, 2560, 36, 20, 8, 128, 6912
@@ -130,7 +149,11 @@ def _fallback_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
 
 
 def scan_model(spec_cfg: dict[str, Any]) -> ModelSpec:
-    """优先用 AutoConfig；ImportError 时 fallback 到已知架构。"""
+    """优先用 AutoConfig；ImportError 时 fallback 到已知架构。
+
+    策略分层：真实读取 > 硬编码估计。fallback 产物带
+    extras={"source": "fallback"} 标记，消费方可据此识别数据来源。
+    """
     try:
         return _live_spec(spec_cfg)
     except ImportError:
@@ -146,6 +169,9 @@ def compatibility_report(t: ModelSpec, s: ModelSpec) -> dict[str, Any]:
         diff_kv    AND same_tokenizer   → G2_MISMATCHED_HEAD_DIM
         diff_kv    AND diff tokenizer   → G3_CROSS_FAMILY
     """
+    # 检查矩阵：matched_kv × same_tokenizer 两个布尔量组合出 4 个 verdict。
+    #   matched_kv      = kv_heads 与 head_dim 同时一致（G1 的硬条件）
+    #   same_tokenizer  ≈ vocab_size 相同（粗略判断；真正审计在 T03+）
     matched_kv = (t.num_kv_heads == s.num_kv_heads) and (t.head_dim == s.head_dim)
     matched_hidden = t.hidden_size == s.hidden_size
     same_tokenizer = t.vocab_size == s.vocab_size  # 粗略判断；真正审计在 T03+
@@ -181,19 +207,31 @@ def compatibility_report(t: ModelSpec, s: ModelSpec) -> dict[str, Any]:
 
 
 def run_compat_scan(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
-    """T00 入口：扫描 + 判定 + 输出。"""
+    """T00 入口：扫描 + 判定 + 输出（CLI 分发到 run_compat_scan(cfg, run_dir)）。
+
+    扫描步骤（与 §28 对齐）：
+        1. scan_model 分别读取 teacher / student 架构（AutoConfig 优先，
+           transformers 缺失时用 fallback 估计）；
+        2. compatibility_report 对比两份 ModelSpec，得 G1/G2/G3 verdict；
+        3. 落盘 model_compatibility.json（两端 spec + verdict）、
+           metrics.json（status=OK + verdict）、summary.md（人类可读摘要）。
+    """
     teacher_cfg = cfg["teacher"]
     student_cfg = cfg["student"]
+    # 步骤 1：分别扫描两端模型架构
     t = scan_model(teacher_cfg)
     s = scan_model(student_cfg)
+    # 步骤 2：判定兼容性分流（G1/G2/G3）
     compat = compatibility_report(t, s)
 
+    # 步骤 3a：model_compatibility.json = 两端完整 spec + 兼容性判定
     payload = {
         "teacher": t.__dict__,
         "student": s.__dict__,
         "compatibility": compat,
     }
     write_json(run_dir / "model_compatibility.json", payload)
+    # 步骤 3b：metrics.json —— CLI 据此取 status/verdict（T13 聚合也读 verdict）
     write_json(
         run_dir / "metrics.json",
         {"status": "OK", "task": "T00", "verdict": compat["verdict"]},
@@ -214,6 +252,7 @@ def run_compat_scan(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         f"heads={s.num_attention_heads}, kv_heads={s.num_kv_heads}, "
         f"head_dim={s.head_dim}\n"
     )
+    # 步骤 3c：summary.md 人类可读摘要（verdict + 两端关键维度）
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")
 
     return {

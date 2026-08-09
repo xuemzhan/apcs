@@ -1,4 +1,12 @@
-"""Decision runner 测试 + bootstrap/permutation 测试（bug-5 修复）。"""
+"""Decision runner 测试 + bootstrap/permutation 测试（bug-5 修复）。
+
+覆盖：
+    T11 MVP Decision（§69）：A/B/C/D 四分支判定边界
+    §45 paired permutation test：H0 下 p 接近 1、H1 下 p < 0.05
+    T09（§37/§51）端到端：bootstrap CI + permutation + gap strata + gate2a 字段
+    bug-9 科学诚实性：跨进程稳定 seed 派生（源码禁止内置 hash()）、
+        T09 结果必须自标注 offline demo（合成数据，不得冒充真实实验）
+"""
 from __future__ import annotations
 
 import json
@@ -15,10 +23,12 @@ from apcs.decision.runner import decide
 
 
 def test_decide_a_when_all_positive():
+    """§69 分支 A：retention≥0.90 且 CHG/TGRR/PSR_A 全正 → A_RUNTIME_CAPABILITY_TRANSFER。"""
     assert decide(retention=0.95, chg=0.05, tgrr=0.5, psr_a=0.3) == "A_RUNTIME_CAPABILITY_TRANSFER"
 
 
 def test_decide_b_when_chg_zero_psr_positive():
+    """§69 分支 B：retention≥0.90、CHG≤0 但 PSR_A>0 → B_EFFICIENT_STATE_HANDOFF。"""
     assert decide(retention=0.92, chg=-0.01, tgrr=-0.1, psr_a=0.4) == "B_EFFICIENT_STATE_HANDOFF"
 
 
@@ -28,6 +38,7 @@ def test_decide_c_mechanism_boundary():
 
 
 def test_decide_d_when_low_retention():
+    """§69 分支 D：retention<0.80 → D_STOP_REPLACEABILITY_UNSTABLE（阻断后续实验）。"""
     assert decide(retention=0.5, chg=0.0, tgrr=0.0, psr_a=0.0) == "D_STOP_REPLACEABILITY_UNSTABLE"
 
 

@@ -32,18 +32,24 @@ def proportional_mapping(n_t: int, n_s: int) -> list[list[int]]:
     """
     mapping: list[list[int]] = []
     for s in range(n_s):
+        # Student 层 s 对应 Teacher 层的比例区间 [start, end)：
+        # 把 [0, n_t) 按层数比例切成 n_s 段，逐段均摊
         start = int(round(s * n_t / n_s))
         end = int(round((s + 1) * n_t / n_s))
-        end = max(end, start + 1)
-        end = min(end, n_t)
+        end = max(end, start + 1)   # 保证每个 Student 层至少取 1 个 Teacher 层
+        end = min(end, n_t)          # 截断到 Teacher 层数上界
         mapping.append(list(range(start, end)))
     return mapping
 
 
 def last_layer_mapping(n_t: int, n_s: int, k: int = 2) -> list[list[int]]:
-    """每个 Student 层只取最末 k 个 Teacher 层（baseline 退化版）。"""
-    tail = list(range(max(0, n_t - k), n_t))
-    return [list(tail) for _ in range(n_s)]
+    """每个 Student 层只取最末 k 个 Teacher 层（baseline 退化版）。
+
+    说明：仅作退化 baseline 参与 A7 消融对比，用于凸显
+    data-driven / geometry-aware 策略在深层表示对齐上的优势。
+    """
+    tail = list(range(max(0, n_t - k), n_t))   # 最末 k 个 Teacher 层索引
+    return [list(tail) for _ in range(n_s)]     # 所有 Student 层共享同一 tail
 
 
 def data_driven_topk(
@@ -52,8 +58,9 @@ def data_driven_topk(
     """基于相似度矩阵，每个 Student 层取 top-k Teacher 层。"""
     mapping: list[list[int]] = []
     for s in range(sim_matrix.shape[0]):
+        # 对相似度行降序取前 k：np.argsort(-sim[s]) 返回从大到小的 Teacher 层下标
         idx = np.argsort(-sim_matrix[s])[:k]
-        mapping.append(sorted(idx.tolist()))
+        mapping.append(sorted(idx.tolist()))   # 升序排序，保证映射确定性/可读性
     return mapping
 
 
@@ -70,7 +77,10 @@ def geometry_aware_topk(
         for s in range(n_s):
             lo = max(0, s - 1)
             hi = min(n_s, s + 2)
+            # 邻近层平滑：当前层相似度与上下相邻层相似度的加权平均，
+            # 避免个别 Student 层出现"断层式"映射（相邻层跳到无关 Teacher 层）。
             smoothed[s] = (1 - alpha) * sim_matrix[s] + alpha * sim_matrix[lo:hi].mean(0)
+    # 平滑后再走 data-driven top-k
     return data_driven_topk(smoothed, k=k)
 
 
@@ -81,11 +91,14 @@ def synthetic_similarity(n_t: int, n_s: int, seed: int = 0) -> np.ndarray:
         sim[s, t] = cos(hidden_s_layer_s.mean(0), hidden_t_layer_t.mean(0))
     """
     rng = np.random.default_rng(seed)
+    # 基底：均匀噪声 [0, 0.3)，代表与结构无关的随机相似度
     sim = rng.uniform(0, 0.3, size=(n_s, n_t))
     for s in range(n_s):
+        # 期望中心位置：Student 层 s 大致对应 Teacher 层 (s+0.5)·n_t/n_s
         center = (s + 0.5) * n_t / n_s
         for t in range(n_t):
             d = abs(t - center)
+            # 高斯核：离中心越近相似度越高 → 对角带状结构，模拟真实层间渐进对应
             sim[s, t] += float(np.exp(-d * d / (n_t / n_s) ** 2))
     return sim
 
@@ -94,6 +107,7 @@ def run_layer_alignment(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T03 入口：构造 4 种 mapping 策略并写出 layer_mapping.json。"""
     n_t = cfg["teacher"].get("num_layers", 36)
     n_s = cfg["student"].get("num_layers", 28)
+    # 无真实 hidden states 时用合成"对角带状"相似度矩阵占位（真实实验应传 attn-output cosine）
     sim = synthetic_similarity(n_t, n_s)
 
     mappings = {
@@ -111,6 +125,7 @@ def run_layer_alignment(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "mapping_size_avg": {
             k: float(np.mean([len(v) for v in mp])) for k, mp in mappings.items()
         },
+        # §21 默认选取 proportional（简单可复现）；其余策略保留给 A7 消融
         "selected": "proportional",
         "note": "offline demo 用对角带状合成相似度矩阵；真实实验需 attn-output cosine。",
     }

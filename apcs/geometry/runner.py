@@ -15,6 +15,18 @@
 bug-7 修复：旧实现用随机子空间做 placeholder，没说明这是离线 demo。
         新版在 docstring 与 metrics 中明确标注，并提供 `from_hidden_states`
         接口让真实 hidden states 接入。
+
+几何视角（流形 / 投影）：
+    - 每层 hidden states 可看作高维空间中一条"表示流形"的采样点；
+      不同层对应不同深度的表示流形切片。
+    - 投影：对每层表示做 PCA 取前 rank 个主成分 → 得到该层的 rank 维主子空间
+      （Grassmann 流形上的一个点）。
+    - principal angle：两个子空间在主方向上的夹角（近似测地距离），
+      越小代表 Teacher/Student 在该层的几何越对齐。
+    - linear CKA：对 scale 不敏感的子空间整体相似度（§40）。
+    - effective rank：表示的内在维度（信息量 / 流形"厚度"代理）。
+    - attn-output cosine：K 被替换后 attention 分布保持程度（§32/§40）。
+    几何对齐 → Retention / CHG 的机制解释（§62 Fig.7）。
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -30,7 +42,16 @@ from ..metrics import effective_rank, linear_cka, principal_angle
 
 @dataclass
 class GeometryResult:
-    """单层的几何诊断结果。"""
+    """单层的几何诊断结果。
+
+    字段语义（§40）：
+        student_layer / teacher_layer : 被比对的 Student / Teacher 层索引
+        cka                 : 线性 CKA（子空间相似度，对 scale 不敏感）
+        principal_angle     : 主子空间夹角（弧度，越小越对齐）
+        effective_rank_t/s  : Teacher / Student 表示的有效秩（内在维度）
+        attn_output_cosine  : Q·K^T 注意力 logits 分布的余弦（§32/§40）
+        head_correlation    : head 间平均相关（§62 Fig.7d）
+    """
     student_layer: int
     teacher_layer: int
     cka: float
@@ -46,7 +67,9 @@ def _random_subspace(seed: int, dim: int, rank: int) -> np.ndarray:
 
     真实实现应通过：
         hidden_t = teacher_model(...).hidden_states[layer_idx]  # (S, hidden)
-        然后做 PCA 取前 rank 个主成分作为子空间。
+        然后做 PCA 取前 rank 个主成分作为子空间
+        （即把表示流形投影到其 rank 维主子空间）。
+    返回 (rank, dim) 的子空间基向量。
     """
     rng = np.random.default_rng(seed)
     return rng.standard_normal((rank, dim))
@@ -65,8 +88,10 @@ def _attn_output_cosine(q: np.ndarray, kt: np.ndarray, kp: np.ndarray) -> float:
     只修输入形状假设，不改变算法数值语义。
     """
     d = np.sqrt(kt.shape[-1])
+    # 注意力 logits：Q · K^T / sqrt(d)，与 Transformer attention 公式一致
     a = np.einsum("id,jd->ij", q, kt) / d
     b = np.einsum("id,jd->ij", q, kp) / d
+    # 展平后求余弦：度量"参考 K"与"替换 K"对同一 Q 产生的注意力分布差异
     return float(np.dot(a.reshape(-1), b.reshape(-1)) / (
         np.linalg.norm(a) * np.linalg.norm(b) + 1e-12
     ))
@@ -79,13 +104,13 @@ def _head_correlation(k: np.ndarray) -> float:
     """
     h = k.shape[0]
     if h < 2:
-        return 0.0
-    centered = k - k.mean(axis=1, keepdims=True)
+        return 0.0   # 只有 1 个 head，无两两组合
+    centered = k - k.mean(axis=1, keepdims=True)   # 每 head 减去自身均值（Pearson 相关）
     norms = np.linalg.norm(centered, axis=1, keepdims=True) + 1e-12
     normed = centered / norms
-    corr = normed @ normed.T  # (H, H)
-    iu = np.triu_indices(h, k=1)
-    return float(np.mean(np.abs(corr[iu])))
+    corr = normed @ normed.T  # (H, H) 相关矩阵
+    iu = np.triu_indices(h, k=1)   # 严格上三角，排除对角线 self-correlation
+    return float(np.mean(np.abs(corr[iu])))   # 两两相关取平均绝对值
 
 
 def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
@@ -94,11 +119,18 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     接受 cfg["hidden_states_path"] 真实 hidden states 可选：
         若提供：每层 (S, hidden) → PCA 到 rank → 子空间对比
         若不提供：使用合成随机子空间（标 placeholder=True）
+
+    几何模型（§40-§43）：
+        - 每层表示被投影到其 rank 维主子空间（Grassmann 流形上的点）。
+        - principal_angle 度量两个子空间主方向夹角（近似测地距离）；
+        - linear CKA 度量子空间整体相似度；
+        - effective rank 度量表示的内在维度。
+        这些几何量用于解释 Retention / CHG 的机制（§62 Fig.7）。
     """
     n_t = cfg["teacher"].get("num_layers", 36)
     n_s = cfg["student"].get("num_layers", 28)
     hidden_dim = cfg.get("hidden_dim", 128)
-    rank = cfg.get("geometry_rank", 8)
+    rank = cfg.get("geometry_rank", 8)   # 投影子空间的维度（主成分个数）
 
     # 占位：使用合成随机子空间。真实实验从 hidden states PCA。
     use_placeholder = "hidden_states_path" not in cfg
@@ -106,6 +138,7 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     layers_s = []
     rng = np.random.default_rng(0)
     for l in range(max(n_t, n_s)):
+        # 每层一个 rank×dim 随机子空间基（Teacher 与 Student 用不同 seed 区间隔离）
         layers_t.append(_random_subspace(seed=l + 1, dim=hidden_dim, rank=rank))
         layers_s.append(_random_subspace(seed=10_000 + l, dim=hidden_dim, rank=rank))
 
@@ -113,7 +146,7 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     for s in range(n_s):
         # 简化：Student 层 s 与 Teacher 层 round(s * n_t/n_s) 比对（与 T03 一致）
         t = int(round((s + 0.5) * n_t / n_s - 0.5))
-        t = max(0, min(n_t - 1, t))
+        t = max(0, min(n_t - 1, t))   # 夹取到合法 Teacher 层范围
         a = layers_s[s]   # (rank, dim)
         b = layers_t[t]
         # attn-output cosine 近似：把子空间当作 Q/K
@@ -123,12 +156,12 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             GeometryResult(
                 student_layer=s,
                 teacher_layer=t,
-                cka=float(linear_cka(a, b)),
-                principal_angle=float(principal_angle(a, b)),
-                effective_rank_t=float(effective_rank(b)),
-                effective_rank_s=float(effective_rank(a)),
-                attn_output_cosine=attn_cos,
-                head_correlation=_head_correlation(b),
+                cka=float(linear_cka(a, b)),                     # 子空间相似度（§40）
+                principal_angle=float(principal_angle(a, b)),    # 主夹角，弧度（§40）
+                effective_rank_t=float(effective_rank(b)),       # Teacher 有效秩
+                effective_rank_s=float(effective_rank(a)),       # Student 有效秩
+                attn_output_cosine=attn_cos,                     # attention 分布保持度
+                head_correlation=_head_correlation(b),           # head 冗余度（§62 Fig.7d）
             ).__dict__
         )
 

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from apcs.io import load_config
 
-QWEN3_CFG = "configs/pair_qwen3.yaml"
-SMOLLM2_CFG = "configs/pair_smollm2.yaml"
+QWEN3_CFG = "configs/pair_qwen3.yaml"     # G1 Matched KV 主实验对（§11）
+SMOLLM2_CFG = "configs/pair_smollm2.yaml"  # G2 Mismatched Head Dim 第二对（§12）
 
 
 def test_qwen3_config_explicit_layers() -> None:

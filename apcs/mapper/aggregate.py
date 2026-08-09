@@ -61,12 +61,22 @@ def concat_kv_samples(
 
     配合一次 fit 时，positions 需用 np.tile(positions, n) 拼接（S 扩展）；
     拼接不改变层/头/维度，只增加样本行 —— 这正是方案 A 的语义。
+
+    拼接语义：n 个 (kv_t, kv_s) 对沿 S 维首尾相接成一个"长序列"，数学上
+    等价于"把全部样本当作一条超长序列做一次 fit"。Ridge 闭式解由 Gram 累加
+    证明两种写法逐位等价；ALS 类 mapper（LowRank / SharedBasis）无闭式解，
+    concat 是唯一严格写法。
+    内存注意：拼接后行数为 n*S，随样本数线性增长 —— 样本多/序列长时请用
+    fit_ridge_aggregate（方案 B，内存 O(L_s×H×D²) 与样本数无关）。
     """
     pairs = list(samples)
+    # 边界：空样本集无意义（后续 fit 会退化），显式报错而非静默返回空 KV
     if not pairs:
         raise ValueError("concat_kv_samples: samples 不能为空")
     kv_t_list = [kv_t for kv_t, _ in pairs]
     kv_s_list = [kv_s for _, kv_s in pairs]
+    # axis=1 = S 维：层/头/维度保持不变，只把多个样本的序列行首尾相接。
+    # 各样本 S/H/D 不一致会在 np.concatenate 处抛 ValueError（G1 要求几何一致）
     return (
         np.concatenate(kv_t_list, axis=1),
         np.concatenate(kv_s_list, axis=1),
@@ -98,12 +108,15 @@ def fit_ridge_aggregate(
         把样本行拼接后 fit ⇒ G = Σ_i Y_i^T Y_i、B = Σ_i Y_i^T X_i。
     因此本函数与"concat 后一次 fit"逐位等价（测试断言 maxdiff < 1e-4）。
     """
+    # 取第一个样本确定几何形状（全部样本共享同一模型对 → 形状一致）
     kv_t0, kv_s0 = list(samples)[0]
     L_s, S, H, D = kv_s0.shape
     L_t = kv_t0.shape[0]
     if positions is None:
-        positions = np.arange(S, dtype=np.float64)
+        positions = np.arange(S, dtype=np.float64)  # 缺省按 S 个 token 从 0 编号
 
+    # per-head 语义（RidgePerHeadMapper）→ 每个 (s, h) 一套参数；
+    # per-layer 语义（RidgeMapper）→ 每层一套参数（h 固定为 0）
     per_head = isinstance(mapper, RidgePerHeadMapper)
     if not (per_head or isinstance(mapper, RidgeMapper)):
         raise TypeError(
@@ -118,29 +131,36 @@ def fit_ridge_aggregate(
     G = {(kv_kind, s, h): np.zeros((D, D)) for s in range(L_s) for h in (range(H) if per_head else [0])}
     B = {(kv_kind, s, h): np.zeros((D, D)) for s in range(L_s) for h in (range(H) if per_head else [0])}
 
+    # 逐样本累加 Gram：samples 共享同一 W_t/W_s（同一模型对），每个样本的
+    # 贡献是独立的 (D,D) 外积累加 —— 与"concat 后一次 fit"逐位等价
     for kv_t, kv_s in samples:
         for s in range(L_s):
+            # Student 层 s 对应的 Teacher 层索引；越界时按比例回退（与 fit 一致）
             teachers = (
                 layer_map[s]
                 if s < len(layer_map)
                 else [int(round(s * L_t / L_s))]
             )
+            # 对每个教师层先 de-RoPE（§23 强制路径），再 stack 成 (k, S, H, D)
             src_layers = [
                 _apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers
             ]
             src_all = np.stack(src_layers, axis=0)  # (k, S, H, D)
             if per_head:
+                # per-head：batch 视图 (H, k*S, D)，要求 src/tgt head 数一致（G1 §10）
                 _, _, src_h, tgt_h = _stack_topk(src_all, kv_s[s])  # (H, k*S, D)
                 for h in range(H):
                     sh, th = src_h[h], tgt_h[h]
                     G[(kv_kind, s, h)] += sh.T @ sh
                     B[(kv_kind, s, h)] += sh.T @ th
             else:
+                # per-layer：flat 视图 (k*S*H, D)，把 head 并入样本行
                 src_f, tgt_f, _, _ = _stack_topk(src_all, kv_s[s])  # (k*S*H, D)
                 G[(kv_kind, s, 0)] += src_f.T @ src_f
                 B[(kv_kind, s, 0)] += src_f.T @ tgt_f
 
-    # 一次求解全部 (s, h) 的 W = (G + λI)^{-1} B（键已含 kv_kind）
+    # 一次求解全部 (s, h) 的 W = (G + λI)^{-1} B（键已含 kv_kind）。
+    # λI 岭正则：保证 G+λI 对称正定、必可逆（数值稳定性；λ 与 math.fit 一致）
     eye = np.eye(D)
     for key, g in G.items():
         mapper.W[key] = np.linalg.solve(g + mapper.lam * eye, B[key])

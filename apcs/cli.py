@@ -31,7 +31,13 @@ from .io import load_config
 from .io.runs import ensure_run_dir, write_json, write_text
 from .orchestrator import write_task_report
 
-# task id → (module, function, title, docstring objective)
+# §71 子命令映射表：task id → (模块路径, 入口函数名, 显示标题, 目标说明)。
+# 每个子命令运行时用 `_import_attr` 动态导入对应 runner，
+# 统一按 runner(cfg, run_dir) → dict 的契约调用（见 main 内注释）。
+#   模块路径   — 该 task 的 runner 所在包，如 apcs.compat.scanner
+#   入口函数名 — 实际执行的入口函数，如 run_compat_scan
+#   显示标题   — 命令行打印的 task 名称（如 "T00 Compatibility Scanner"）
+#   目标说明   — §73 Task Report 的 OBJECTIVE 字段内容
 TASKS = {
     "t00": ("apcs.compat.scanner", "run_compat_scan", "T00 Compatibility Scanner",
             "读取 teacher/student 架构，输出 model_compatibility.json 并判定 G1/G2/G3。"),
@@ -71,6 +77,11 @@ TASKS = {
 
 
 def _import_attr(module_path: str, attr: str):
+    """按 TASKS 表的 (模块, 函数) 动态加载 runner 入口。
+
+    只在函数内 import importlib（延迟加载），避免 CLI 启动时
+    把 13+3 个 runner 全部 import 一遍拖慢冷启动。
+    """
     import importlib
 
     mod = importlib.import_module(module_path)
@@ -84,7 +95,15 @@ def _write_task_report(
     result: dict,
     status: str,
 ) -> None:
-    """§73 Task Report 12 字段。"""
+    """§73 Task Report 12 字段。
+
+    集中从三处取数组合成标准报告：
+        - cfg     → MODEL_PAIR / DATASET / CONFIG / STATISTICAL_CHECK
+        - result  → KEY_METRICS / BEHAVIOR_CHECK / GEOMETRY_CHECK / SYSTEM_COST
+        - run_dir → OUTPUT_FILES（该 task 目录下所有文件的相对路径列表）
+    status 即该 task 的 gate 状态（PASS/OK/FAIL/CONDITIONAL），
+    写入 ACCEPTANCE_CRITERIA.gate。
+    """
     output_files = sorted(
         str(p.relative_to(run_dir)) for p in run_dir.glob("*") if p.is_file()
     )
@@ -118,6 +137,19 @@ def _write_task_report(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI 主入口：解析子命令 → 加载配置 → 建 run 目录 → 跑 runner → 落产物。
+
+    标准输出语义（供脚本/CI 消费）：
+        - `[apcs] task=...` / `[apcs] run_id=...` / `[apcs] run_dir=...`
+          运行头信息（开始即打印，便于确认命令被正确分发）；
+        - 运行期间所有 stdout/stderr 同时 tee 到 `<run_dir>/stdout.log`（§63）；
+        - 末尾 `[apcs] DONE. status=...` + 缩进的 metrics JSON（人工可读）；
+        - 退出码：status ∈ {PASS, OK} → 0；FAIL/CONDITIONAL/异常 → 1。
+    """
+    # ---- 参数解析 ----
+    # task 为位置参数（argparse choices 限定为 TASKS 的 key，非法任务直接拒绝）；
+    # --config 必填（整个实验的入口配置）；--run-id 可选覆盖；
+    # --no-prereg 仅对 t07 生效，跳过 PREREGISTRATION.md 生成。
     parser = argparse.ArgumentParser(prog="apcs", description="APCS 实验 CLI")
     parser.add_argument("task", choices=sorted(TASKS.keys()))
     parser.add_argument("--config", required=True)
@@ -127,14 +159,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="跳过 PREREGISTRATION.md 生成")
     args = parser.parse_args(argv)
 
+    # ---- 配置解析：load_config 展开 ${...} 占位符（§64），再定 run 路径 ----
     cfg = load_config(args.config)
+    # run_id 默认取 cfg.experiment.run_id；T11/T13 靠它跨 task 共享数据
     run_id = args.run_id or cfg["experiment"]["run_id"]
     base = Path(cfg["output"]["base_dir"])
+    # run_root = <base>/<run_id>/，整个 experiment 共享；PREREGISTRATION.md 也放这
     run_root = ensure_run_dir(base, run_id)
     # 每个 task 的产物放在 `<run_root>/<task>/` 下，方便 T11 聚合
     run_dir = run_root / args.task
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # §63 落一份完整 cfg（合并默认 + 用户后的最终值）到 run 目录
     write_json(run_dir / "config.json", cfg)
 
     module_path, func_name, title, objective = TASKS[args.task]
@@ -145,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     fn = _import_attr(module_path, func_name)
 
     # §63 stdout.log：捕获 stdout/stderr 到文件
+    # _tee 是双写代理：同一行同时写真实 stream（终端可见）和 log_f（落盘）。
     log_path = run_dir / "stdout.log"
     log_f = log_path.open("w", encoding="utf-8")
 
@@ -154,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             def write(self, s):
                 stream.write(s)
                 log_f.write(s)
-                log_f.flush()
+                log_f.flush()  # 每行 flush：崩溃/超时时日志不丢
 
             def flush(self):
                 stream.flush()
@@ -162,16 +199,21 @@ def main(argv: list[str] | None = None) -> int:
 
         yield _Tee()
 
+    # runner 契约：fn(cfg, run_dir) → dict；必需键 status，
+    # 可选键 metrics / system / geometry / summary（下方按需落盘）。
     with contextlib.redirect_stdout(_tee(sys.stdout)), contextlib.redirect_stderr(_tee(sys.stderr)):
         try:
             result = fn(cfg, run_dir)
             status = result.get("status", "UNKNOWN")
         except Exception as e:  # noqa: BLE001
+            # 异常先写进 stdout.log 再向外抛，保持运行记录完整
             log_f.write(f"\n[ERROR] {type(e).__name__}: {e}\n")
             log_f.flush()
             raise
     log_f.close()
 
+    # ---- §63 按标准产物清单落盘：metrics / system / geometry / summary ----
+    # metrics.json 全 task 必写；system.json 仅 T10、geometry.json 仅 T12 有值
     write_json(run_dir / "metrics.json", result.get("metrics", {}))
     if "system" in result:
         write_json(run_dir / "system.json", result["system"])
@@ -180,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     write_text(run_dir / "summary.md", result.get("summary", ""))
 
     # §64/§65 metadata.json（标准字段补全）
+    # 独立 try：metadata 失败只记 warn，不阻断 task 主产物（非关键路径）
     try:
         from .io.metadata import write_run_metadata
 
@@ -194,15 +237,17 @@ def main(argv: list[str] | None = None) -> int:
         log_f.write(f"\n[metadata warn] {type(e).__name__}: {e}\n")
         log_f.close()
 
-    # §73 Task Report
+    # §73 Task Report：汇总 12 字段，写到 task_report.md
     _write_task_report(cfg, run_dir, args.task, result, status)
 
-    # §70 PREREGISTRATION：t07 后自动生成
+    # §70 PREREGISTRATION：t07 后自动生成（冻结 Models/Dataset/…/Gates）。
+    # 写在 run_root 而非 run_dir —— 它是整个 experiment 的 manifest
     if args.task == "t07" and not args.no_prereg:
         from .prereg import generate_prereg
 
         generate_prereg(cfg, run_root / "PREREGISTRATION.md")
 
+    # ---- 标准输出收尾：状态行 + 指标 JSON + 退出码（PASS/OK → 0）----
     print(f"[apcs] DONE. status={status}")
     print(json.dumps(result.get("metrics", {}), indent=2, ensure_ascii=False))
     return 0 if status in {"PASS", "OK"} else 1

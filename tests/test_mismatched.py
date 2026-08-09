@@ -14,6 +14,7 @@ from apcs.rope.runner import _rope_pairs, apply_rope, de_rope
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    """展平后计算余弦相似度（held-out 保留度的统一度量）。"""
     a = a.reshape(-1)
     b = b.reshape(-1)
     return float(np.sum(a * b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))

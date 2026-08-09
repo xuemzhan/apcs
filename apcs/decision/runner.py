@@ -34,11 +34,14 @@ def _read_metrics(base_dir: Path, task: str, shared_run_id: str | None) -> dict 
     若 shared_run_id 为 None：遍历 base_dir 下所有 run_id，挑出含目标 task
     metrics 的最近修改时间的那个。
     """
+    # 显式 run_id：直接拼 <base>/<shared_run_id>/<task>/metrics.json 读取
     if shared_run_id is not None:
         p = base_dir / shared_run_id / task / "metrics.json"
         if p.exists():
             return json.loads(p.read_text(encoding="utf-8"))
         return None
+    # 自动检测模式（run_id 形状不合法时的 mtime fallback）：
+    # 遍历 base_dir 下所有 run 目录，收集含目标 task metrics 的 candidates
     if not base_dir.exists():
         return None
     candidates: list[Path] = []
@@ -49,12 +52,16 @@ def _read_metrics(base_dir: Path, task: str, shared_run_id: str | None) -> dict 
             candidates.append(run)
     if not candidates:
         return None
+    # 取最近修改时间的 run（避免多实验并存时误读旧数据）
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return json.loads((candidates[0] / task / "metrics.json").read_text(encoding="utf-8"))
 
 
 def _read_system(base_dir: Path, shared_run_id: str | None) -> dict | None:
-    """T10 的 system 写在 system.json 而非 metrics.json，单独处理。"""
+    """T10 的 system 写在 system.json 而非 metrics.json，单独处理。
+
+    逻辑与 _read_metrics 相同：优先显式 run_id，否则 mtime fallback。
+    """
     if shared_run_id is not None:
         p = base_dir / shared_run_id / "t10" / "system.json"
         if p.exists():
@@ -70,12 +77,22 @@ def _read_system(base_dir: Path, shared_run_id: str | None) -> dict | None:
             candidates.append(run)
     if not candidates:
         return None
+    # 取最近修改时间的 run（mtime fallback）
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return json.loads((candidates[0] / "t10" / "system.json").read_text(encoding="utf-8"))
 
 
 def decide(retention: float, chg: float, tgrr: float, psr_a: float) -> str:
-    """§69 严格顺序的判定。"""
+    """§69 严格顺序的判定（先决条件在前，命中即返回）。
+
+    阈值与语义：
+        - 0.80：Replacement 最低可用线（Gate 1 FAIL 线）→ D_STOP
+        - 0.90：Replacement 强可用线（Gate 1 PASS 线）
+        - chg > 0：Handoff 需优于 Student 自 Prefill（首要科学端点）
+        - tgrr > 0：Teacher–Student 原始 gap 需被恢复
+        - psr_a > 0：系统开销需真实为正收益（仅 Scenario A 定义）
+    返回 verdict ∈ {D, A, B, C_MECHANISM_BOUNDARY, C_INCONCLUSIVE}。
+    """
     if retention < 0.80:
         return "D_STOP_REPLACEABILITY_UNSTABLE"
     if retention >= 0.90 and chg > 0 and tgrr > 0 and psr_a > 0:
@@ -108,13 +125,16 @@ def run_mvp_decision(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     else:
         shared_run_id = None
 
+    # 按共享 run_id 前缀定位前序任务产物（§69：一个 experiment 内所有 task 共享同一 run_id）
     t05 = _read_metrics(base, "t05", shared_run_id)
     t09 = _read_metrics(base, "t09", shared_run_id)
     t10_sys = _read_system(base, shared_run_id)
 
+    # T05 主指标：mean_retention（Replacement 的 Retention）
     retention = (
         float(t05.get("mean_retention", 0.0)) if isinstance(t05, dict) else 0.0
     )
+    # T09：从 per_method 中取主方法 "base_plus_adv" 的 CHG 与 TGRR
     chg_val = 0.0
     tgrr_val = 0.0
     if isinstance(t09, dict):
@@ -122,12 +142,14 @@ def run_mvp_decision(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             if row["method"] == "base_plus_adv":
                 chg_val = float(row["chg"])
                 tgrr_val = float(row["tgrr"])
+    # T10：system.json 中取最小上下文长度档（pc[0]）的 PSR_A p50
     psr_a_val = 0.0
     if isinstance(t10_sys, dict):
         pc = t10_sys.get("per_context", [])
         if pc:
             psr_a_val = float(pc[0]["psr_a_p50"])
 
+    # §69 严格顺序判定 → 输出 verdict
     verdict = decide(retention, chg_val, tgrr_val, psr_a_val)
 
     md = (
@@ -139,6 +161,7 @@ def run_mvp_decision(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         f"- PSR_A (T10 p50, smallest ctx): {psr_a_val:.3f}\n\n"
         f"## Verdict: **{verdict}**\n\n"
     )
+    # §69 各 verdict 的论文路径说明（返回语义）
     if verdict.startswith("A"):
         md += "Runtime Capability Transfer via KV State Handoff.\n"
     elif verdict.startswith("B"):
@@ -157,6 +180,7 @@ def run_mvp_decision(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "tgrr": tgrr_val,
         "psr_a": psr_a_val,
         "verdict": verdict,
+        # 数据可用性：缺任一前序产物时相关指标取 0，verdict 更可能落入 C_INCONCLUSIVE
         "sources": {
             "t05_found": t05 is not None,
             "t09_found": t09 is not None,

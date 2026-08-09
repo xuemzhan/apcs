@@ -16,6 +16,18 @@ RoPE 公式：
     inv_freq[i] = θ^(-2i/d)
     默认 θ = 10000.0；Qwen3 用 θ = 1_000_000.0（更长上下文）
 
+RoPE 原理（为什么有 theta / pos / 频率）：
+    - 旋转向量：把 head_dim 维向量切成 d/2 个二维平面 (x_{2i}, x_{2i+1})，
+      每个平面内按角度 pos·inv_freq[i] 做旋转（2×2 正交旋转矩阵）。
+    - pos（位置索引）：同一平面不同 token 的旋转角不同 → 相对位置编码；
+      两个 token 向量内积只依赖相对距离 Δpos（旋转角之差），且旋转不改变模长。
+    - inv_freq（频率表）：d/2 个平面用递减频率 θ^(-2i/d)。
+      低频（i 小）旋转慢、波长长 → 编码粗粒度/长距离依赖；
+      高频（i 大）旋转快、波长短 → 编码细粒度/短距离依赖。
+    - theta（基数）：整体缩放频率尺度。θ 越大频率越小、旋转越慢，波长更长，
+      更适配长上下文（Qwen3 用 1e6；原版 RoPE 用 1e4）。
+      约束：若最大平面旋转角在上下文范围内不超过 π，各相对位置可唯一区分。
+
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -30,6 +42,13 @@ def _rope_pairs(head_dim: int, theta: float = 10000.0) -> np.ndarray:
 
     RoPE 标准形式：inv_freq[i] = theta^(-2i/d)，i = 0..(d/2)-1。
     返回 shape=(d/2,)。
+
+    说明：
+        - i 遍历"偶数下标对"（每对 (2i, 2i+1) 共用一个频率），共 d/2 个。
+        - i 越大指数越负 → inv_freq 越小 → 旋转越慢 → 波长越长，
+          形成"低频管远、高频管近"的多尺度位置编码。
+        - theta 是旋转编码的基数（周期尺度）：默认 10000（RoPE/LLaMA 标准），
+          Qwen3 放大到 1e6 以支持更长上下文（§23）。
     """
     i = np.arange(0, head_dim, 2, dtype=np.float64)
     return theta ** (-i / head_dim)
@@ -55,6 +74,8 @@ def apply_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np
     if head_dim % 2 != 0:
         raise ValueError("head_dim 必须为偶数")
     half = head_dim // 2
+    # 把最后一维重排为 (half, 2)：x_pairs[..., i, 0]=x_{2i}, [..., i, 1]=x_{2i+1}
+    # 即把 d 维向量拆成 d/2 个二维平面，每个平面内做独立旋转。
     x_pairs = x.reshape(*orig_shape[:-1], half, 2)
 
     # positions: (S,)
@@ -62,10 +83,13 @@ def apply_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np
     # 即把 positions reshape 为 (S, 1, 1, ..., 1)，共 (n-1) 个 1
     pos = positions.reshape(-1, *([1] * (x.ndim - 1)))  # (S, 1, ..., 1)
     pos = np.broadcast_to(pos, (*orig_shape[:-1], half))
+    # 旋转角 = 位置 pos × 频率 inv_freq：同一 token 的第 i 个平面旋转 pos·inv_freq[i] 弧度
     angles = pos * inv_freq
     cos = np.cos(angles)
     sin = np.sin(angles)
 
+    # 2×2 旋转矩阵 R(θ)=[[cosθ,-sinθ],[sinθ,cosθ]] 作用于 (x0,x1)：
+    # y0 = x0·cosθ - x1·sinθ ; y1 = x0·sinθ + x1·cosθ（保模长的正交变换）
     x0 = x_pairs[..., 0]
     x1 = x_pairs[..., 1]
     y0 = x0 * cos - x1 * sin
@@ -85,12 +109,16 @@ def de_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np.nd
     orig_shape = x.shape
     head_dim = orig_shape[-1]
     half = head_dim // 2
+    # 与 apply_rope 相同的拆平面/广播/角度计算（shape 约定一致）
     x_pairs = x.reshape(*orig_shape[:-1], half, 2)
     pos = positions.reshape(-1, *([1] * (x.ndim - 1)))
     pos = np.broadcast_to(pos, (*orig_shape[:-1], half))
     angles = pos * inv_freq
     cos = np.cos(angles)
     sin = np.sin(angles)
+    # 逆旋转 = 用负角度旋转：cos(-θ)=cosθ, sin(-θ)=-sinθ，
+    # 即 R(-θ)=[[cosθ,sinθ],[-sinθ,cosθ]]：
+    # y0 = x0·cosθ + x1·sinθ ; y1 = -x0·sinθ + x1·cosθ
     x0 = x_pairs[..., 0]
     x1 = x_pairs[..., 1]
     y0 = x0 * cos + x1 * sin
@@ -119,15 +147,18 @@ def run_rope_roundtrip(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T02 CLI 入口：3 layers × 3 heads × 128 tokens 抽样 round-trip。"""
     rng = np.random.default_rng(0)
     head_dim = 128
-    theta = 1_000_000.0
+    theta = 1_000_000.0  # Qwen3 的 RoPE 基数（§23），放大到 1e6 以支持更长上下文
     n_tokens = 128
-    n_layers, n_heads = 3, 3
+    n_layers, n_heads = 3, 3  # §30 要求至少 3 Layers × 3 Heads × 128 Tokens 抽样
 
     rows = []
     for layer in range(n_layers):
         for head in range(n_heads):
+            # 每个 (layer, head) 独立采样随机向量序列：x shape (S, head_dim)
             x = rng.standard_normal((n_tokens, head_dim)).astype(np.float64)
+            # 位置即 token 下标 0..S-1（取浮点以与角度乘法匹配）
             pos = np.arange(n_tokens, dtype=np.float64)
+            # apply → de 应逐位还原（正交变换，误差仅来自浮点精度）
             err, cos = roundtrip_error(x, pos, head_dim, theta)
             rows.append({"layer": layer, "head": head, "max_err": err, "cosine": cos})
 
@@ -140,6 +171,7 @@ def run_rope_roundtrip(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "n_tokens": n_tokens,
         "mean_max_err": float(np.mean([r["max_err"] for r in rows])),
         "mean_cosine": float(np.mean([r["cosine"] for r in rows])),
+        # §30 Gate 判定：平均 cosine > 0.9999 才允许 PASS
         "gate": "PASS"
         if float(np.mean([r["cosine"] for r in rows])) > 0.9999
         else "FAIL",

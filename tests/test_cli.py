@@ -1,4 +1,13 @@
-"""CLI 端到端测试：每个 task 都能跑通且产出标准产物。"""
+"""CLI 端到端测试：每个 task 都能跑通且产出标准产物（真实 configs/pair_qwen3.yaml）。
+
+覆盖：
+    t00（§28）：产出 model_compatibility.json 且含 verdict
+    t02（§30）：RoPE round-trip 精度达标 → CLI 返回 rc==0
+    t07（§70）：run_root 下自动生成 PREREGISTRATION.md（Models/Gates/Negative Result Policy）
+    t11（§39/§69）：bug-6 修复回归 —— run_id 必须从 run_dir.parent.name 提取，
+        在共享 run_id 根目录精确定位 T05/T09/T10 产物，禁止 mtime fallback
+        误读其他 run；无 task 子目录时回退用 run_dir.name。
+"""
 from __future__ import annotations
 
 import json
@@ -14,6 +23,7 @@ CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pair_qwen3.yaml
 
 
 def _setup_run(tmp_path: Path) -> Path:
+    """把真实 pair_qwen3.yaml 的 base_dir 重定向到 tmp_path/runs 并落盘为可跑配置。"""
     cfg = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8"))
     cfg["output"]["base_dir"] = str(tmp_path / "runs")
     cfg_path = tmp_path / "pair.yaml"
@@ -22,12 +32,14 @@ def _setup_run(tmp_path: Path) -> Path:
 
 
 def _run(task: str, cfg_path: Path):
+    """调用 CLI 入口跑单个 task；FAIL/CONDITIONAL 视为"跑完但 gate 失败"，不属异常。"""
     rc = cli_main([task, "--config", str(cfg_path)])
     # OK / PASS 也接受；FAIL/CONDTIONAL 视为跑完但 gate 失败
     return rc
 
 
 def _read(run_dir_root: Path, task: str, file_name: str):
+    """读取 run 产物文本：优先按固定 run_id 路径，否则兼容任意 run_id 子目录。"""
     p = run_dir_root / "runs" / "qwen3-4b-to-1.7b-20260808-122727" / task / file_name
     if p.exists():
         return p.read_text(encoding="utf-8")
@@ -39,6 +51,7 @@ def _read(run_dir_root: Path, task: str, file_name: str):
 
 
 def test_cli_t00_emits_model_compatibility(tmp_path):
+    """§28 T00 端到端：跑通并产出 model_compatibility.json（含 verdict）。"""
     cfg_path = _setup_run(tmp_path)
     _run("t00", cfg_path)
     txt = _read(tmp_path, "t00", "model_compatibility.json")
@@ -49,12 +62,14 @@ def test_cli_t00_emits_model_compatibility(tmp_path):
 
 
 def test_cli_t02_rope_passes(tmp_path):
+    """§30 T02 端到端：RoPE round-trip 精度达标 → CLI 返回 rc==0。"""
     cfg_path = _setup_run(tmp_path)
     rc = _run("t02", cfg_path)
     assert rc == 0  # T02 cosine > 0.9999
 
 
 def test_cli_t07_triggers_preregistration(tmp_path):
+    """§70 T07 端到端：run_root 下自动生成 PREREGISTRATION.md（含 Models/Gates/Negative Result Policy）。"""
     cfg_path = _setup_run(tmp_path)
     _run("t07", cfg_path)
     # PREREGISTRATION.md 应该在 run_root 下

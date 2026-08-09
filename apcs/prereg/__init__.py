@@ -30,14 +30,28 @@ def _gate_number(v: Any) -> Any:
     - 其他（如字符串描述）→ 原样 str(v)。
     """
     if isinstance(v, bool):
-        return 0
+        return 0  # True/False 只是"启用/停用"开关，阈值语义是数值 0
     if v is None:
-        return 0
-    return v
+        return 0  # 未配置时按设计默认（CHG > 0 / PSR_A > 0）占位
+    return v  # int/float 原样；其它类型（如字符串描述）交由外层 f-string 渲染
 
 
 def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
-    """生成 PREREGISTRATION.md 写到 output_path。"""
+    """生成 PREREGISTRATION.md 写到 output_path。
+
+    注册语义（§70）：在 Test 之前把实验设计"冻结"为只读 manifest ——
+    本文件生成后，任何 Models / Dataset / Hyperparams / Seeds / Statistics /
+    Gates 变更都应视为偏离预注册（论文报告中须显式声明，见 Negative
+    Result Policy 章节）。
+
+    检查点 = 8 个固定章节，按 design.md 顺序：
+        1 Models → 2 Dataset → 3 Hyperparameters → 4 Seeds →
+        5 Statistics(§51) → 6 Gates(§5/§6/§7) → 7 Negative Result Policy →
+        8 Forbidden(§52)
+    各章节直接读 cfg 对应节；可选节用 .get 兜底，缺字段不崩溃。
+    """
+    # teacher/student 是必需节（cfg["teacher"] 直接索引）；
+    # 其余节全部 .get 兜底，保证缺节也能生成合法 manifest。
     teacher = cfg["teacher"]
     student = cfg["student"]
     datasets = cfg.get("datasets", {})
@@ -46,6 +60,7 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
     stats = cfg.get("statistics", {})
     gates = cfg.get("gates", {})
 
+    # 渲染为 Markdown 行列表；f-string 直接内插配置值（Gate 阈值经 _gate_number 归一化）
     lines = [
         "# PREREGISTRATION.md",
         "",
@@ -84,6 +99,7 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
         "",
         "## 4. Seeds",
         "",
+        # 冻结 Seeds：§51 要求 3 seeds 多种子统计；改动即偏离预注册
         f"- seeds: `{cfg.get('seeds')}`",
         "",
         "## 5. Statistics (§51)",
@@ -94,6 +110,7 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
         "",
         "## 6. Gates (§5, §6, §7)",
         "",
+        # Gate 阈值经 _gate_number 归一化：bool/None → 数值 0，渲染为 "≥ 0"/"> 0"
         f"- Gate 0 (Self-KV Replay): all samples PASS",
         f"- Gate 1 (Retention): `≥ {_gate_number(gates.get('retention_min'))}` PASS",
         f"                     `≥ {_gate_number(gates.get('retention_strong'))}` STRONG",
@@ -102,6 +119,7 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
         "",
         "## 7. Negative Result Policy",
         "",
+        # 三条负向结果铁律：不重筛 test / 保留全部结果 / 不稳定则停止扩展
         "CHG ≤ 0 时 **不重新筛选 test dataset**；保留全部负向结果。",
         "若 Replacement 不稳定（Retention < 0.80），停止 Capability Transfer 扩展，",
         "优先研究 Alignment / Direction Asymmetry / Geometry。",
@@ -117,4 +135,5 @@ def generate_prereg(cfg: dict[str, Any], output_path: Path) -> None:
         "7. 用 R² / Cosine / CKA 代替 CHG。",
         "8. Cache 注入失败后 Silent Re-prefill。",
     ]
+    # 检查点落盘：一行一个 checkpoint 章节，utf-8 保证中文 manifest 正常写入
     output_path.write_text("\n".join(lines), encoding="utf-8")

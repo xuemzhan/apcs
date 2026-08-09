@@ -24,6 +24,7 @@ from apcs.alignment.runner import proportional_mapping
 from apcs.inference import HandoffPipeline, NumpyBackend, TorchBackend
 from apcs.mapper.math import RidgeMapper
 
+# §53 骨架小模型常量：Teacher 4 层 → Student 2 层，seq=16, H=2, head_dim=8, vocab=32
 N_T, N_S, SEQ, H, D, VOCAB = 4, 2, 16, 2, 8, 32
 
 

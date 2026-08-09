@@ -1,4 +1,16 @@
-"""T08 / T10 / T12 / ablation / multiturn / prereg / orchestrator 测试。"""
+"""T08 / T10 / T12 / ablation / multiturn / prereg / orchestrator 测试。
+
+覆盖：
+    T08 Advantage State Training（§22/§24/§25/§36）：calibrate_rms 放大上限、
+        BoundedAlpha tanh 范围、LowRankResidual K/V 独立参数化 + 非线性 +
+        fit 收敛，run_advantage_train 集成上报 loss 指标
+    T10 System Cost（§38）：cache_bytes 公式 + system.json 产物字段
+    multiturn（§46）：run_multi_turn 多轮稳定性输出结构
+    orchestrator（§71/§72）：TASK_ORDER 强制顺序 + Gate FAIL 直接/传递阻塞
+    prereg（§70）：PREREGISTRATION.md 必含字段 + B5 修复（Gate 2A bool
+        阈值渲染为数值而非 `> True`/`> False` 字面量）
+    task_report（§73）：12 字段完整性
+"""
 from __future__ import annotations
 
 import json
@@ -121,6 +133,7 @@ def test_cache_bytes_formula():
 
 
 def test_t10_runs_and_emits_system_json(tmp_path):
+    """§38 T10 端到端：run_system_cost 产出 system.json，per_context 每项带 teacher_cache_bytes。"""
     cfg = {
         "context_lengths_extended": [1024, 4096],
         "seeds": [0, 1],
@@ -136,6 +149,7 @@ def test_t10_runs_and_emits_system_json(tmp_path):
 
 
 def test_multi_turn_runs(tmp_path):
+    """§46 multiturn：多轮稳定性评测，per_turn 长度须等于 multi_turn_choices 选项数。"""
     cfg = {"seeds": [0, 1, 2], "multi_turn_choices": [1, 5, 10]}
     res = run_multi_turn(cfg, tmp_path)
     assert res["metrics"]["task"] == "Multi-turn"
@@ -194,6 +208,7 @@ def test_next_allowed_blocks_transitive_failure():
 
 
 def test_prereg_writes_expected_fields(tmp_path):
+    """§70 生成 PREREGISTRATION.md：必须含 Models/α_max/Negative Result Policy/Forbidden 等冻结字段。"""
     cfg = {
         "teacher": {"model_id": "T", "revision": "r", "dtype": "bf16", "attention_implementation": "sdpa"},
         "student": {"model_id": "S", "revision": "r", "dtype": "bf16", "attention_implementation": "sdpa", "freeze": True},
@@ -268,6 +283,7 @@ def test_prereg_gate2a_bool_false_renders_number(tmp_path):
 
 
 def test_write_task_report_12_fields(tmp_path):
+    """§73 Task Report 12 字段完整性：逐字段断言都出现在 task_report.md 中。"""
     write_task_report(
         run_dir=tmp_path,
         task_id="t05",

@@ -34,6 +34,9 @@ _ORDER = (
     "inject",
     "decode",
 )
+# 上表为 §53 强制阶段顺序（8 阶段）：Teacher Load → Forward → Capture →
+# CPU Offload → Teacher Unload → CUDA Cleanup → Student Load → Map →
+# Inject → Decode。管线按此顺序执行，不提供跳过/乱序的入口。
 
 
 class HandoffPipeline:
@@ -45,11 +48,19 @@ class HandoffPipeline:
         layer_map: Student 层 → Teacher 层索引（§21 proportional_mapping 产物）
         cfg:     模型配置，须含 teacher / student 两节的 num_layers 等
         out_dir: 产物目录（metrics.json + summary.md，§63 风格）
+
+    KV 缓存数据流（管线视角）：
+        Teacher Prefill → kv_t (L_t, S, H, D)   ← Teacher 自产 KV（Capture）
+        mapper.transform → kv_s (L_s, S, H, D)  ← 跨模型映射（不改序列维 S）
+        backend.inject  → Student 侧可消费 PKV ← 缓存复用入口（注入）
+        backend.decode  → 逐 token 拼接新行     ← 只复用注入 KV，不 re-prefill
     """
 
     def __init__(
         self, backend, mapper, layer_map, cfg: dict[str, Any], out_dir
     ) -> None:
+        # 记录依赖并原样转交 run()：backend 负责模型/KV 进出，
+        # mapper + layer_map 负责 Teacher KV → Student KV 的映射
         self.backend = backend
         self.mapper = mapper
         self.layer_map = layer_map
@@ -61,7 +72,13 @@ class HandoffPipeline:
     # ------------------------------------------------------------------
 
     def _model_run(self, role: str) -> dict[str, Any]:
-        """构造单侧模型参数（§53 Load 的 run 参数），并注入 role/seed。"""
+        """构造单侧模型参数（§53 Load 的 run 参数），并注入 role/seed。
+
+        边界（run 参数检查）：cfg 缺某侧配置节时取空 dict，随后由
+        后端 load_model 负责校验必需键 —— 管线不替后端做默认值兜底。
+        seed 默认值按角色区分（teacher=1 / student=2），保证 Teacher 与
+        Student 的假模型权重不同但各自可复现。
+        """
         run = dict(self.cfg.get(role, {}))
         run["role"] = role
         run.setdefault("seed", 1 if role == "teacher" else 2)
@@ -69,7 +86,12 @@ class HandoffPipeline:
 
     @contextlib.contextmanager
     def _stage(self, name: str, timings: dict[str, float]):
-        """§49 计时块：进入/退出都 sync，记录 elapsed ms。"""
+        """§49 计时块：进入/退出都 sync，记录 elapsed ms。
+
+        计时边界：进入时先 sync 把前一阶段异步工作排干，退出时再 sync
+        保证本阶段 GPU kernel 全部完成 —— 两个 sync 之间的墙钟即为
+        该阶段耗时；异常时 finally 仍会收尾并记录，异常本身照常上抛。
+        """
         self.backend.sync()
         t0 = time.perf_counter()
         try:
@@ -92,6 +114,14 @@ class HandoffPipeline:
         返回：
             metrics dict：n_generated / n_teacher_tokens / 注入 KV 形状 /
             layer_map / §52 zero_prefill gate / 阶段计时（§49）
+
+        边界（数据流）：
+            - kv_t 形状 (L_t, S, H, D)；mapper.transform 按 layer_map 做
+              层间映射/聚合（拼接/池化见 mapper 实现），序列维 S 不变。
+            - decode 只消费注入的 PKV：每步返回新 PKV 作为下一步输入，
+              Student 全程不调用 forward_prefill（zero prefill，§52 禁止 1）。
+            - n_gen < 1 时 decode 阶段为空，但 Teacher 捕获与注入照常完成，
+              此时 generated == []、student_decode_calls == 0。
         """
         timings: dict[str, float] = {}
 
@@ -99,6 +129,7 @@ class HandoffPipeline:
         with self._stage("teacher_load", timings):
             teacher = self.backend.load_model(self._model_run("teacher"))
         with self._stage("forward_capture", timings):
+            # Teacher 侧 Prefill，产出 KV 缓存 kv_t：(L_t, S, H, D)
             kv_t = self.backend.forward_prefill(teacher, teacher_tokens)
         with self._stage("teacher_unload", timings):
             # §53 CPU Offload：capture 产物（numpy ndarray）天然在主机内存
@@ -111,8 +142,12 @@ class HandoffPipeline:
         with self._stage("student_load", timings):
             student = self.backend.load_model(self._model_run("student"))
         with self._stage("map", timings):
+            # 跨模型映射：kv_t (L_t, S, H, D) → kv_s (L_s, S, H, D)，
+            # 仅做层间线性组合/池化，序列维 S 与 head 结构按 layer_map 对齐
             kv_s = self.mapper.transform(kv_t, self.layer_map)
         with self._stage("inject", timings):
+            # 缓存复用入口：注入成功才允许后续 decode；
+            # 形状不匹配时后端显式 raise，绝不静默 re-prefill（§52 禁止 8）
             injected = self.backend.inject(student, kv_s)
 
         # ③ Decode：只消费注入 KV，绝不 re-prefill（§52 禁止 1 / zero prefill）
@@ -121,6 +156,8 @@ class HandoffPipeline:
             pkv = injected
             tok = student_prefix
             for _ in range(int(n_gen)):
+                # 每步复用当前 PKV（含全部历史行）并追加当前 token 的新行；
+                # 返回的 new_pkv 作为下一步缓存继续复用（序列维逐 token 增长）
                 tok, pkv = self.backend.decode(student, tok, pkv)
                 generated.append(int(np.asarray(tok).reshape(-1)[0]))
 
@@ -156,7 +193,12 @@ class HandoffPipeline:
 
     @staticmethod
     def _summary(m: dict[str, Any]) -> str:
-        """§63 风格的人类可读摘要。"""
+        """§63 风格的人类可读摘要。
+
+        从 metrics dict 提取关键字段：backend / 注入 KV 形状 / layer_map
+        长度 / zero_prefill gate / 阶段计时 —— 全部来自 run() 已算好的
+        指标，不重复计算（纯展示函数）。
+        """
         return (
             "# §53 单卡推理管线骨架\n\n"
             f"- backend: {m['backend']} (offline_demo={m['offline_demo']})\n"

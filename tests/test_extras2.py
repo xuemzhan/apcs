@@ -1,4 +1,18 @@
-"""§11/§12/§52/§13 新模块测试。"""
+"""§11/§12/§52/§13 新模块测试。
+
+覆盖：
+    §52 compliance 八条禁止检查器：check_1..check_8 逐条检测 + check_all
+        干净路径 + compliance_report 汇总格式
+    §12 G2 Mismatched Mapper：HeadProjection（mean/repeat）、
+        DimensionProjection（truncate/pad/linear）、MismatchedHeadMapper 端到端
+    §11 / T13 Generalization：扫描 base_dir 下所有 run 的 T05/T09，
+        汇总 n_pairs_pass_gate2a
+    batch ridge 数学等价性（_ridge_closed_form_batch vs 逐 head 循环，atol=1e-9）
+    einsum 加速 transform vs 朴素循环等价（Ridge / LowRank）
+    compliance runtime 信号 CRUD + §64/§65 metadata 联合集成
+    §62 Figure 7 数据流（bug-7/B7 回归：T12 metrics 必须携带 "geometry" 键
+        fig7a 才能渲染出 > 1KB 的有效 png）
+"""
 from __future__ import annotations
 
 import json
@@ -45,6 +59,7 @@ def test_compliance_check_1_student_re_read_x():
 
 
 def test_compliance_check_2_student_frozen():
+    """§52.2：主实验微调 Student 却仍称 Runtime Transfer → 必须检出违规。"""
     cfg = {"student": {"freeze": True}}
     bad = check_2_student_frozen_in_main_exp(
         cfg, {"student_params_updated": True}
@@ -54,6 +69,7 @@ def test_compliance_check_2_student_frozen():
 
 
 def test_compliance_check_4_teacher_win_filter():
+    """§52.4：只挑 Teacher-win 的 test 样本 → 必须检出违规。"""
     bad = check_4_no_teacher_win_filtering(
         {"test_filtered_to_teacher_win": True}
     )
@@ -61,6 +77,7 @@ def test_compliance_check_4_teacher_win_filter():
 
 
 def test_compliance_check_5_hidden_teacher_prefill():
+    """§52.5：不报告 Teacher Prefill 成本 → 必须检出违规。"""
     bad = check_5_no_hidden_teacher_prefill_cost(
         {"reports_teacher_prefill": False}
     )
@@ -68,11 +85,13 @@ def test_compliance_check_5_hidden_teacher_prefill():
 
 
 def test_compliance_check_6_hidden_h2d():
+    """§52.6：隐藏 H2D / Cache Load 成本 → 必须检出违规。"""
     bad = check_6_no_hidden_h2d_cost({"hides_h2d_load": True})
     assert bad[0].rule_id == "§52.6"
 
 
 def test_compliance_check_7_similarity_for_path_a():
+    """§52.7：用 R²/Cosine/CKA 相似度主张 Path A → 必须检出违规。"""
     bad = check_7_no_replacing_chg_with_similarity(
         {"claim_path_a_on_similarity_only": True}
     )
@@ -80,6 +99,7 @@ def test_compliance_check_7_similarity_for_path_a():
 
 
 def test_compliance_check_8_silent_re_prefill():
+    """§52.8：Cache 注入失败后静默 re-prefill → 必须检出违规。"""
     bad = check_8_no_silent_reprefill({"silent_re_prefill_on_failure": True})
     assert bad[0].rule_id == "§52.8"
 
@@ -91,6 +111,7 @@ def test_check_all_clean():
 
 
 def test_compliance_report_format():
+    """compliance_report 汇总格式：n_violations 计数 + passed 布尔必须正确。"""
     v = [ComplianceViolation("§52.1", "test")]
     r = compliance_report(v)
     assert r["n_violations"] == 1
@@ -113,6 +134,7 @@ def test_head_projection_mean():
 
 
 def test_head_projection_repeat():
+    """H_T=2 → H_S=4，repeat 策略：前 2 个 Student head 原样复制 Teacher head 0/1。"""
     hp = HeadProjection(n_t_heads=2, n_s_heads=4, strategy="repeat")
     x = np.random.RandomState(0).standard_normal((3, 8, 2, 5))
     y = hp.project(x)
@@ -122,6 +144,7 @@ def test_head_projection_repeat():
 
 
 def test_dimension_projection_truncate():
+    """D_T=8 → D_S=4，truncate 策略：直接截断保留前 4 维。"""
     dp = DimensionProjection(d_t=8, d_s=4, strategy="truncate")
     x = np.random.RandomState(0).standard_normal((10, 8))
     y = dp.project(x)
@@ -130,6 +153,7 @@ def test_dimension_projection_truncate():
 
 
 def test_dimension_projection_pad():
+    """D_T=4 → D_S=8，pad 策略：前 4 维原样保留、后 4 维补零。"""
     dp = DimensionProjection(d_t=4, d_s=8, strategy="pad")
     x = np.random.RandomState(0).standard_normal((10, 4))
     y = dp.project(x)

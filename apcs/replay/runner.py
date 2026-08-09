@@ -39,7 +39,18 @@ from ..io.runs import write_json
 
 @dataclass
 class ReplayResult:
-    """单条 Self-KV Replay 结果。"""
+    """单条 Self-KV Replay 结果。
+
+    字段含义（§29 对比指标）：
+        sample_id:       样本标识（来自 synthetic_fidelity_set）
+        logit_cosine:    原生推理 vs 注入推理的 logit 余弦相似度（=1.0 等价）
+        max_error:       logit 最大绝对误差（=0.0 等价）
+        token_agreement: 输出 token 一致率（=1.0 等价）
+        passed:          是否通过 Gate 0（三个指标同时达标）
+
+    边界（数据流）：单条 passed 决定汇总 gate0 —— 只要有一条样本
+    未通过，Gate 0 即为 FAIL 并阻断后续 Cross-Model Mapper 实验（§5）。
+    """
     sample_id: str
     logit_cosine: float
     max_error: float
@@ -52,6 +63,11 @@ def _simulated_replay(sample: Any) -> ReplayResult:
 
     用于 CPU/CI 环境验证 Self-KV 通路本身的正确性。
     真实 GPU 实验请使用 HF model + past_key_values 替换。
+
+    缓存语义：同一份 C_S(X)（Student 自产 KV）先走原生 Decode 作
+    reference，再 clear 后 inject 重放走 Decode —— 模拟实现把
+    "保存-注入"视为无损，故三个指标全为理想值；这正是 Gate 0
+    （Engineering Correctness）在该环境下的上界参考。
     """
     return ReplayResult(
         sample_id=sample.sample_id,
@@ -63,9 +79,16 @@ def _simulated_replay(sample: Any) -> ReplayResult:
 
 
 def run_self_kv_replay(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
-    """CLI 入口：跑一遍 Self-KV Replay。"""
+    """CLI 入口：跑一遍 Self-KV Replay。
+
+    流程（§29）：synthetic 样本 → 逐条 _simulated_replay →
+    汇总均值 + gate0 判定 → 写 metrics.json / summary.md。
+    cfg 当前仅用于预留（样本数 n=4 为 demo 固定值），真实实验替换
+    _simulated_replay 后，cfg 可控制样本集 / 上下文长度。
+    """
     from ..data import synthetic_fidelity_set
 
+    # §29 合成保真样本（n=4）：每条含 sample_id 与 token 数据
     samples = synthetic_fidelity_set(n=4)
     results = [_simulated_replay(s) for s in samples]
 
@@ -81,6 +104,9 @@ def run_self_kv_replay(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "mean_token_agreement": float(
             sum(r.token_agreement for r in results) / max(1, len(results))
         ),
+        # Gate 0（§5）：全部样本 passed 才 PASS，任一失败即 FAIL
+        # 边界（防除零）：均值分母用 max(1, len(results))，空结果时
+        # 三项均值落在理想值 1.0 / 0.0 上而 gate0 由 all([]) → True
         "gate0": "PASS" if all(r.passed for r in results) else "FAIL",
     }
     write_json(run_dir / "metrics.json", metrics)
@@ -98,4 +124,6 @@ def run_self_kv_replay(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     return {"status": metrics["gate0"], "metrics": metrics, "summary": summary}
 
 
+# 对外导出：ReplayResult（结果容器）+ 入口函数 + 复用 metrics 工具，
+# 便于测试与真实 GPU 分支直接 import（§52 禁止 8：不提供静默 re-prefill 捷径）
 __all__ = ["ReplayResult", "run_self_kv_replay", "cosine", "jcr"]
