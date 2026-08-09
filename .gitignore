@@ -80,3 +80,6 @@ Thumbs.db
 
 # 注意：reports/runs/*/PREREGISTRATION.md 是 §70 必须保留的，
 # 由 .gitignore 中"未列入排除规则"自动保留。
+
+# 工具运行时状态（.omo/ agent 会话续跑 JSON，不入库）
+.omo/
