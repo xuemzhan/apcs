@@ -66,6 +66,11 @@ class SourceLayerMixer:
         返回：
             z: (L_s, S, H, D) 基态 C_base —— 每个 Student 层是其 top-k
                Teacher 层的逐 head 凸组合（sum_i w = 1）。
+
+        ◆ 修复（架构审查续轮）：原实现 w 长度固定为 top_k，
+          但 proportional_mapping 实际返回的 list 长度 ≤ top_k 且不等。
+          当 layer_map[s] 长度 < top_k 时，tensordot(w[2], block[1, :, h, :]) →
+          shape-mismatch。现用 w_eff = w[:k] 截断到与 block 头维一致。
         """
         L_s = len(layer_map)
         S, H, D = kv_t.shape[1:]
@@ -74,9 +79,14 @@ class SourceLayerMixer:
             teachers = layer_map[s][: self.top_k]  # 只取前 top_k 个候选源层
             if not teachers:
                 continue
-            block = kv_t[teachers]  # (k, S, H, D)
+            block = kv_t[teachers]  # (k, S, H, D)，k = len(teachers)
+            k = block.shape[0]
+            if k > self.top_k:
+                # 防御性：layer_map 返回比 top_k 还多 → 截断
+                block = block[: self.top_k]
+                k = self.top_k
             for h in range(H):
-                w = self.w[s, :, h]  # (k,) 当前 head 的混合权重
+                w = self.w[s, :k, h]  # (k,) 当前 head 的混合权重：与 block 头维一致
                 # tensordot：按权重对 k 个源层做加权求和 → 该 head 的基态。
                 out[s, :, h, :] = np.tensordot(w, block[:, :, h, :], axes=1)
         return out

@@ -482,8 +482,24 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     Gate：mean_kv_cosine > 0.5 → PASS（T04 无正式 gate，此为报告性阈值）。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
+    # ◆ 内存自适应（架构审查续轮）：默认 n_calib=128 在 4 GB 环境会 OOM，
+    #   必须按可用内存降级；用户显式 cfg 覆盖则不被本逻辑触碰。
+    from ..utils.memory import safe_calibration_defaults
     seq = cfg.get("mapper", {}).get("calibration_context", 512)
-    n_calib = cfg.get("mapper", {}).get("calibration_samples", 128)
+    n_calib_cfg = cfg.get("mapper", {}).get("calibration_samples")
+    if n_calib_cfg is None:
+        # 拿架构参数做内存估算
+        H_arch = cfg.get("teacher", {}).get("num_kv_heads", 8)
+        D_arch = cfg.get("teacher", {}).get("head_dim", 128)
+        defaults = safe_calibration_defaults(
+            n_t=n_t, n_s=n_s, H=H_arch, D=D_arch, seq=seq,
+        )
+        n_calib = defaults["n_calib_estimate"]
+        # seq 也降级（如 853 MB 预算下 1024-seq 会 OOM）
+        if seq > defaults["seq_estimate"]:
+            seq = defaults["seq_estimate"]
+    else:
+        n_calib = int(n_calib_cfg)
     repeats = int(cfg.get("timing", {}).get("repeats", 10))
     warmup = int(cfg.get("timing", {}).get("warmup", 2))
 
@@ -523,8 +539,9 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         # 复用上面的 w_t/w_s，只换 latent Z 与噪声）
         r2_list, cos_list, attn_cos_list, ret_list = [], [], [], []
         # held-out 评估：20 个样本，master_seed=1 与校准（=0）的 Z/噪声完全不相交
+        n_eval_t04 = int(cfg.get("mapper", {}).get("t04_eval_samples", 20))
         eval_samples = _synth_calibration_set(
-            n_t, n_s, seq, H, D, 20, master_seed=1, noise=0.05,
+            n_t, n_s, seq, H, D, n_eval_t04, master_seed=1, noise=0.05,
             w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
         )
         for i, (kv_t, kv_s) in enumerate(eval_samples):
@@ -590,7 +607,8 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     write_json(run_dir / "metrics.json", metrics)
     summary = (
         "# T04 Ridge Baseline\n\n"
-        f"- Calibration samples: {n_calib}, context: {seq}\n"
+        f"- Calibration samples: {n_calib}, context: {seq} "
+        "(auto-sized from available memory; override via cfg.mapper.*)\n"
         f"- Mapper params: {ridge.n_params:,}\n"
         f"- Mean R²: {metrics['mean_r2']:.4f}\n"
         f"- Mean KV cosine: {metrics['mean_kv_cosine']:.4f}\n"
@@ -650,6 +668,25 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     layer_map = proportional_mapping(n_t, n_s)
     # 上下文长度列表（默认四档），只取前 4 档，逐档独立校准/评估
     contexts = cfg.get("context_lengths", [512, 1024, 2048, 4096])[:4]
+    # ◆ 内存自适应（架构审查续轮）：n_calib 必须按最大 ctx 算一次，
+    #   然后跨 ctx 复用 —— 否则 ctx=4096 时按 ctx=4096 估出的 n_calib 在
+    #   ctx=512 时反而浪费内存预算，或反过来 ctx=4096 时不够内存 OOM。
+    from ..utils.memory import safe_calibration_defaults
+    n_calib_cfg = cfg.get("mapper", {}).get("replacement_calib_samples")
+    if n_calib_cfg is None:
+        # 用最大 ctx 估算 → 一次算出 n_calib_estimate（保守）
+        defaults = safe_calibration_defaults(
+            n_t=n_t, n_s=n_s, H=H, D=D, seq=max(contexts),
+        )
+        n_calib_for_all = defaults["n_calib_estimate"]
+        # 若最大 ctx 大于 safe estimate → 缩 ctx 列表
+        safe_max = defaults["seq_estimate"]
+        if max(contexts) > safe_max:
+            contexts = [c for c in contexts if c <= safe_max]
+            if not contexts:
+                contexts = [safe_max]
+    else:
+        n_calib_for_all = int(n_calib_cfg)
     repeats = int(cfg.get("timing", {}).get("repeats", 10))
     warmup = int(cfg.get("timing", {}).get("warmup", 2))
 
@@ -675,8 +712,11 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         per_kind_ret: dict[str, float] = {}
         per_kind_ta: dict[str, float] = {}
         for kind in kinds:
+            # 内存自适应（架构审查续轮）：n_calib 已在外层按最大 ctx 算好，
+            #   所有 ctx 复用同一值；cfg.mapper.replacement_calib_samples 覆盖则优先。
+            n_calib_kind = n_calib_for_all
             calib = _synth_calibration_set(
-                n_t, n_s, ctx, H, D, 100, master_seed=0, noise=0.05,
+                n_t, n_s, ctx, H, D, n_calib_kind, master_seed=0, noise=0.05,
                 w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
             )
             t0 = time.perf_counter()
@@ -686,8 +726,9 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             # 测试 20 样本（held-out：同一模型对、不同 Z）
             retentions = []
             tas = []
+            n_eval_kind = int(cfg.get("mapper", {}).get("replacement_eval_samples", 20))
             for kv_t, kv_s in _synth_calibration_set(
-                n_t, n_s, ctx, H, D, 20, master_seed=1, noise=0.05,
+                n_t, n_s, ctx, H, D, n_eval_kind, master_seed=1, noise=0.05,
                 w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
             ):
                 pred = ridge.transform(kv_t, layer_map, kv_kind=kind,  # §22
@@ -823,12 +864,46 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     种子规则：权重 master_seed=0；校准 master_seed=0、held-out master_seed=2。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
-    seq = cfg.get("mapper", {}).get("t06_context", 1024)
-    # ◆ bug-3 修复：ALS 类 mapper（LowRank / SharedBasis）无法 Gram 聚合，
-    #   采用 concat 方案 A（§32）拼接全部样本一次 fit。n_agg 限制拼接后的
-    #   样本行数控制内存（seq=1024 时每样本 ≈ 1M tokens×D×4B/层，见下）。
-    n_agg = int(cfg.get("mapper", {}).get("t06_aggregate_samples", 16))
-    n_calib = 64  # 校准样本总数（其中前 n_agg 个用于 concat 聚合，§32 目标区间）
+    # ◆ 内存自适应（架构审查续轮）：t06 ALS concat 把 n_agg 个样本沿 S 拼接，
+    #   单次驻留体积 = n_agg × seq × H × D × n_t × 4 B × 2（K/V 前后）。
+    #   1.0 GB 环境限制下需要把 seq / n_agg 同步降级。
+    from ..utils.memory import safe_calibration_defaults
+    seq_cfg = cfg.get("mapper", {}).get("t06_context", 1024)
+    n_agg_cfg = int(cfg.get("mapper", {}).get("t06_aggregate_samples", 16))
+    # concat-后体积 = n_agg × seq × H × D × n_t × 8B（含 K/V 双倍）
+    avail = 0
+    try:
+        from ..utils.memory import _available_memory_bytes
+        avail = _available_memory_bytes()
+    except Exception:
+        pass
+    if avail > 0:
+        # 目标：concat 后体积 ≤ 25% 可用内存
+        budget = int(avail * 0.20)
+        # single concat volume per (n_agg, seq)
+        def _concat_vol(a, s):
+            return a * s * H * D * max(n_t, n_s) * 8
+        # 若 默认 (16, 1024) 超预算，先减 n_agg，再减 seq
+        if _concat_vol(n_agg_cfg, seq_cfg) > budget:
+            # 尝试减少 n_agg 直到 ≤ 8
+            for a in [8, 4, 2]:
+                if _concat_vol(a, seq_cfg) <= budget:
+                    n_agg = a
+                    seq = seq_cfg
+                    break
+            else:
+                # 即使 n_agg=2 也超 → 缩 seq
+                n_agg = 2
+                seq = max(128, budget // (n_agg * H * D * max(n_t, n_s) * 8))
+                seq = min(seq, seq_cfg)
+        else:
+            n_agg = n_agg_cfg
+            seq = seq_cfg
+    else:
+        seq = seq_cfg
+        n_agg = n_agg_cfg
+    # 64 校准样本 × 36 层 × 1024 seq × 8 H × 128 D = 1.5 GB；低内存环境 OOM
+    n_calib = int(cfg.get("mapper", {}).get("t06_calib_samples", min(64, max(8, n_agg * 2))))  # 校准样本总数（前 n_agg 用于 concat 聚合）
     layer_map = proportional_mapping(n_t, n_s)
 
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
