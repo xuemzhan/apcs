@@ -192,10 +192,27 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             "inject",
             "decode",
         ],
+        # ---- §75 诚实性标注（架构审查 P1-4 修复）----
+        # ★ 所有耗时来自 _simulate_timings 的线性公式（非实测），
+        #   VRAM/RAM 亦为量级估算 → PSR_A / Cost_B / N_BE 全部是**推导值**。
+        #   design.md §38 明确禁止把理论估算当论文结果，故显式标注。
+        # TODO(real-gpu): 接入真实测量时替换 _simulate_timings 为
+        #   time.perf_counter + torch.cuda.synchronize（§49 warmup + ≥10 repeats，
+        #   取 P50/P95），VRAM 读 torch.cuda.max_memory_allocated、RAM 读 psutil，
+        #   并把 offline_demo 置 False。
+        "offline_demo": True,
+        "note": (
+            "T10 全部耗时由 _simulate_timings 线性公式生成，VRAM/RAM 为量级估算，"
+            "PSR_A / Cost_B / N_BE 均为推导值而非实测；"
+            "design.md §38/§75 禁止将理论估算作为论文系统收益结果。"
+        ),
     }
     write_json(run_dir / "system.json", metrics)
     md = (
         "# T10 System Cost\n\n"
+        "> ⚠️ **offline demo**：本任务所有耗时来自线性公式模拟（非 GPU 实测），"
+        "PSR_A / Cost_B / N_BE 均为推导值，不可作为论文系统收益证据"
+        "（design.md §38 / §75）。\n\n"
         f"- VRAM (Teacher est): {vram_mb_est:.1f} MB\n"
         f"- RAM (Student est): {ram_mb_est:.1f} MB\n"
         f"- Repeats: {repeats}, Warmup: {warmup}\n\n"
@@ -216,4 +233,9 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         + "\n"
     )
     (run_dir / "summary.md").write_text(md, encoding="utf-8")
-    return {"status": "OK", "system": metrics, "metrics": {}, "summary": md}
+    # ◆ 修复（design-gap-review B7 同类问题）：此前返回 "metrics": {} —— 
+    #   CLI 会据此写出**空的 metrics.json**，而 fig3（CHG–PSR_A Pareto）与
+    #   fig4（Context Scaling）都从 t10_metrics["per_context"] 取数 → 拿不到数据。
+    #   现在 metrics 与 system 落同一份内容：system.json 保持 §63 规范不变，
+    #   metrics.json 同时可用，figures / T11 均可直接消费。
+    return {"status": "OK", "system": metrics, "metrics": metrics, "summary": md}

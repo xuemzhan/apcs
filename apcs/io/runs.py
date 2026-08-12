@@ -73,3 +73,84 @@ def ensure_run_dir(base: Path, run_id: str) -> Path:
     run_dir = base / run_id
     run_dir.mkdir(parents=True, exist_ok=True)  # 幂等创建：重复调用不会清空已有产物
     return run_dir
+
+
+# ---------------------------------------------------------------------------
+# run_id 粘性解析（§71 修复：跨 task 共享同一个 run_id）
+#
+# ◆ 修复背景（架构审查 P0-1）：
+#   configs/*.yaml 里 `run_id: ${experiment.name}-${run.timestamp}`，而
+#   `${run.timestamp}` 在 **load_config 时**展开为“当前时刻”。CLI 每个
+#   task 是一个独立进程 → 每次调用都得到**不同的 run_id** → README §7.2
+#   那 14 行命令会产出最多 14 个互不相干的 run 目录，
+#   T11/T13 依赖的“同一 run_id 下共享 T05/T09/T10”前提被破坏。
+#
+# ◆ 修复策略（粘性 run_id）：
+#   把“本实验当前使用的 run_id”持久化到 `<base>/<experiment_name>.current`
+#   指针文件。首个 task 落盘，后续 task 读取复用；`--run-id` 显式覆盖，
+#   `--new-run` 强制开新实验。这样时间戳只在实验**开始时**取一次。
+# ---------------------------------------------------------------------------
+
+_POINTER_SUFFIX = ".current"
+
+
+def _pointer_path(base: Path, experiment_name: str) -> Path:
+    """返回记录“当前 run_id”的指针文件路径 `<base>/<experiment_name>.current`。
+
+    以 experiment.name（而非 run_id）为键：同一个实验（如 qwen3-4b-to-1.7b）
+    在 base_dir 下只有一个“当前 run”，不同实验（第二 Pair）互不干扰。
+    """
+    # experiment_name 可能含路径分隔符等非法字符，做一次保守清洗
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in experiment_name)
+    return base / f"{safe}{_POINTER_SUFFIX}"
+
+
+def resolve_run_id(
+    base: Path,
+    experiment_name: str,
+    cfg_run_id: str,
+    explicit: str | None = None,
+    new_run: bool = False,
+) -> tuple[str, bool]:
+    """决定本次 task 使用的 run_id，并维护 `<base>/<name>.current` 指针。
+
+    优先级（从高到低）：
+        1. explicit（CLI `--run-id`）  — 完全由调用方指定，同时刷新指针；
+        2. new_run（CLI `--new-run`）  — 强制用 cfg_run_id 开一个新实验；
+        3. 指针文件中已记录的 run_id   — 复用当前实验（**默认路径**）；
+        4. cfg_run_id                  — 指针不存在时（实验的第一个 task）。
+
+    返回：(run_id, created_new)
+        created_new=True 表示本次新建/切换了实验（指针被写入新值），
+        CLI 借此打印提示，让使用者清楚“新实验开始了”。
+
+    注意：本函数只负责“选 id + 写指针”，不创建 run 目录（由 ensure_run_dir 做）。
+    """
+    base.mkdir(parents=True, exist_ok=True)
+    ptr = _pointer_path(base, experiment_name)
+    # 先读旧值：后续判断“是否切换了实验”必须基于**写入前**的状态
+    previous = ptr.read_text(encoding="utf-8").strip() if ptr.exists() else ""
+
+    if explicit:
+        # 显式指定：以调用方为准，并把指针对齐到该 run（便于后续 task 免参数复用）
+        _write_pointer(ptr, explicit)
+        return explicit, explicit != previous
+
+    if new_run:
+        # 强制开新实验：用 cfg 里刚展开的时间戳 run_id
+        _write_pointer(ptr, cfg_run_id)
+        return cfg_run_id, True
+
+    if previous:
+        # ★ 默认路径：复用当前实验的 run_id（时间戳不再每次刷新）
+        return previous, False
+
+    # 指针不存在 → 这是该实验的第一个 task，用 cfg_run_id 建立指针
+    _write_pointer(ptr, cfg_run_id)
+    return cfg_run_id, True
+
+
+def _write_pointer(ptr: Path, run_id: str) -> None:
+    """把 run_id 写入指针文件（UTF-8，无换行噪声）。"""
+    ptr.parent.mkdir(parents=True, exist_ok=True)
+    ptr.write_text(run_id, encoding="utf-8")

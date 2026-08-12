@@ -54,6 +54,9 @@ coverage.xml
 reports/runs/*/t*/cache_bytes.bin
 reports/runs/**/__pycache__/
 reports/runs/**/*.pyc
+# run_id 粘性指针（<base>/<experiment_name>.current）：本机运行状态，不入库。
+# 它记录"当前实验用哪个 run_id"，换机器/换 checkout 后应重新生成。
+reports/runs/*.current
 # 注意：reports/runs/*/PREREGISTRATION.md 是 §70 必须保留的，不忽略
 
 # 临时文件

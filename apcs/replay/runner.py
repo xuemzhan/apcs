@@ -108,15 +108,31 @@ def run_self_kv_replay(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         # 边界（防除零）：均值分母用 max(1, len(results))，空结果时
         # 三项均值落在理想值 1.0 / 0.0 上而 gate0 由 all([]) → True
         "gate0": "PASS" if all(r.passed for r in results) else "FAIL",
+        # ---- §75 诚实性标注（架构审查 P1-4 修复）----
+        # ★ 关键：_simulated_replay **无条件**返回理想值（cosine=1.0/err=0/agree=1.0），
+        #   因此 Gate 0 在当前实现下**恒 PASS**，这是构造出来的结果、不是测量结果。
+        #   一份写着「Gate 0 PASS」却不带任何仿真标记的报告最容易被误读为真实证据，
+        #   故与 T09 一致地落 offline_demo/note，并在 summary 顶部给出醒目警告。
+        # TODO(real-gpu): 接入真实 GPU 路径时替换 _simulated_replay 为
+        #   HF model + past_key_values 注入重放，并把 offline_demo 置 False。
+        "offline_demo": True,
+        "note": (
+            "T01 为离线模拟：_simulated_replay 无条件返回理想值，Gate 0 恒 PASS，"
+            "不可作为 Engineering Correctness 的真实证据；"
+            "design.md §29/§75 要求真实 Student 自产 KV 注入重放验证。"
+        ),
     }
     write_json(run_dir / "metrics.json", metrics)
     summary = (
         "# T01 Self-KV Replay\n\n"
+        "> ⚠️ **offline demo**：本任务为离线模拟，`_simulated_replay` 无条件返回理想值，"
+        "Gate 0 **恒 PASS**，不可作为真实 Engineering Correctness 的证据"
+        "（design.md §29 / §75）。\n\n"
         f"- Samples: {metrics['n_samples']}\n"
         f"- Mean logit cosine: {metrics['mean_logit_cosine']:.4f}\n"
         f"- Mean max error: {metrics['mean_max_error']:.4e}\n"
         f"- Mean token agreement: {metrics['mean_token_agreement']:.4f}\n"
-        f"- **Gate 0: {metrics['gate0']}**\n\n"
+        f"- **Gate 0: {metrics['gate0']}**（模拟值）\n\n"
         "若 FAIL → 禁止进行 Cross-Model Mapper 实验 (design.md §5 / Gate 0)。\n"
     )
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")

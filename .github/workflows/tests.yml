@@ -1,0 +1,53 @@
+name: tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 是 pyproject 声明的下限；3.12 为常用版本。
+        # 注意：不测 GPU 路径 —— 当前代码全部为离线仿真（numpy），
+        # TorchBackend 显式 raise NotImplementedError（§75）。
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install (core + dev)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Smoke test CLI (§71 顺序前几个 task)
+        run: |
+          python -m apcs.cli t00 --config configs/pair_qwen3.yaml
+          python -m apcs.cli t01 --config configs/pair_qwen3.yaml
+          python -m apcs.cli t02 --config configs/pair_qwen3.yaml
+
+      - name: Assert §72 gate blocks dependency skipping
+        # t09 依赖 t05/t06/t07/t08，此时均未执行 → CLI 必须以退出码 2 阻断。
+        # 这道断言防止「准入检查被意外摘除」的回归。
+        run: |
+          set +e
+          python -m apcs.cli t09 --config configs/pair_qwen3.yaml
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then
+            echo "::error::期望 §72 准入阻断（退出码 2），实际得到 $rc"
+            exit 1
+          fi
+          echo "§72 gate 阻断符合预期 (rc=2)"

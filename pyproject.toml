@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apcs"
+version = "0.1.0"
+description = "APCS — Advantage-Preserving Cache Synthesis: 跨模型 KV Cache 运行时能力迁移实验工程"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "KVCache-APCS authors" }]
+keywords = ["kv-cache", "llm", "state-handoff", "research"]
+
+# 核心依赖：CI / 纯 CPU 即可跑通全部 13 个 task 与 107 个测试。
+# 注意：torch / transformers / datasets **不在**核心依赖里 —— 当前代码
+# 全部为离线仿真（numpy），真实 GPU 路径见 [project.optional-dependencies].gpu。
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# 论文 Figure 渲染（§56–§62）
+figures = ["matplotlib>=3.8"]
+# TODO(real-gpu): 真实 GPU 实验依赖。当前 apcs 不加载任何模型权重/数据集，
+#   TorchBackend 显式 raise NotImplementedError（§75 诚实性）。
+#   接入真实推理时再启用本 extra：pip install -e ".[gpu]"
+gpu = [
+    "torch>=2.2",
+    "transformers>=4.40",
+    "datasets>=2.19",
+    "psutil>=5.9",
+]
+dev = [
+    "pytest>=8.0",
+    "matplotlib>=3.8",
+]
+
+[project.scripts]
+# 安装后可直接 `apcs t00 --config configs/pair_qwen3.yaml`
+apcs = "apcs.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["apcs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -q 安静输出；--strict-markers 防止 marker 拼写错误被静默忽略
+addopts = "-q --strict-markers"

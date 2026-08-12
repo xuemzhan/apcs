@@ -110,28 +110,27 @@ def track_runtime(name: str, value: Any = True) -> Iterator[None]:
 def infer_signals_from_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
     """从 cfg 静态推断部分信号。
 
-    能推断的：
-        - reports_teacher_prefill: cfg["mapper"] 里有 calibration/eval 上下文即为 True
-        - student_params_updated: cfg["student"]["freeze"]==True 时不可能为 True
-        - claim_path_a_on_similarity_only: 总是 False（无法从 cfg 推断）
+    ◆ 修复（架构审查 P0-3）：旧实现用 `"calibration_context" in cfg["mapper"]`
+      推断 reports_teacher_prefill —— 但该键在 configs/*.yaml 中**根本不存在**，
+      于是恒为 False，导致每个 task 都被误报 §52.5 违规。
+      teacher_prefill 是否被报告只有 T10（系统成本）才谈得上，
+      不能从 mapper 配置推断 → 改为不静态推断，留给运行时信号裁决。
 
-    不能推断的（运行时才知道）：
+    能推断的（仅这一条真正可从 cfg 判定）：
+        - student_params_updated: cfg["student"]["freeze"] 为 False 时保守置 True
+
+    不能推断的（运行时才知道，一律不返回 → 由 check_* 判为 UNKNOWN）：
         - student_input_has_context（取决于 forward 输入）
-        - test_hp_search（取决于循环逻辑）
-        - test_filtered_to_teacher_win（取决于 test 评估）
-        - hides_h2d_load（取决于报告）
-        - silent_re_prefill_on_failure（取决于 cache 注入错误处理）
+        - reports_teacher_prefill（取决于 T10 是否报告 teacher prefill）
+        - test_hp_search / test_filtered_to_teacher_win
+        - hides_h2d_load / silent_re_prefill_on_failure
+        - claim_path_a_on_similarity_only
 
     静态推断的结果是可复现的基线；真实实验中以 track/track_runtime
     采集的运行时信号为准（后者覆盖前者，见 collect 的合并顺序）。
     """
     return {
-        # §52.5 信号：mapper 配置里只要含 calibration 上下文，即认为会报告
-        # teacher_prefill（静态推断；运行时仍可 track 覆盖）
-        "reports_teacher_prefill": "calibration_context" in cfg.get("mapper", {}),
         # §52.2 信号：freeze=True 时 Student 参数本就不可能被更新 → 静态判定未违规；
         # freeze=False 时静态无法确认是否真被更新，置 True（保守），由运行时信号覆盖
         "student_params_updated": not cfg.get("student", {}).get("freeze", True),
-        # §52.7 信号：cfg 层面看不出"只靠相似度主张 Path A"，只能运行时揭发 → 恒 False
-        "claim_path_a_on_similarity_only": False,
     }

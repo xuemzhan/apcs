@@ -121,7 +121,7 @@ def run_with_compliance(cfg: dict, runner, run_dir, runtime: dict | None = None)
     # collect() 合并静态信号与运行时信号；check_all 按 §52 逐条判定。
     signals = collect()
     violations = check_all(cfg, run_dir, signals)
-    rep = compliance_report(violations)
+    rep = compliance_report(violations, signals)
     write_json(
         run_dir / "compliance.json",
         {"signals": signals, "report": rep},
@@ -210,14 +210,30 @@ def write_task_report(
         if 0 <= idx < len(TASK_ORDER) - 1:
             next_t = TASK_ORDER[idx + 1]
 
+    # ---- §75 全局诚实性守卫（架构审查 P1-4）----
+    # 任何 task 的 metrics 里带 offline_demo / placeholder 标记时，
+    # 在 STATUS 行强制加 [SIMULATED] 前缀 —— 让「仿真」在报告最显眼处出现，
+    # 而不是埋在 metrics.json 深处等人去翻。
+    simulated = bool(key_metrics.get("offline_demo") or key_metrics.get("placeholder"))
+    status_line = f"[SIMULATED] {status}" if simulated else status
+
     # 组装 Markdown 行：json 字段用 ensure_ascii=False 保持中文可读
     lines = [
         "# Task Report",
         "",
         f"- TASK_ID: `{task_id}`",
-        f"- STATUS: **{status}**",
+        f"- STATUS: **{status_line}**",
         f"- Generated at: {_dt.datetime.now().isoformat()}",
         "",
+    ]
+    if simulated:
+        # 醒目警告块：紧跟在头部字段之后，任何人打开报告第一屏就能看到
+        lines += [
+            "> ⚠️ **本任务结果为离线模拟/占位数据（offline demo / placeholder），"
+            "不可作为真实实验证据**（design.md §75）。",
+            "",
+        ]
+    lines += [
         f"## OBJECTIVE",
         objective,
         "",

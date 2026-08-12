@@ -6,6 +6,39 @@
 
 ---
 
+## ⚠️ 时效性声明（2026-08-11 更新）
+
+**本文档第 2 节列出的 9 个 bug（B1–B9）现已全部修复并有测试锁定，勿据此重复排查。**
+经逐条核验（file:line 证据）：
+
+| Bug | 状态 | 现状 |
+|-----|------|------|
+| B1 RidgeMapper per-head 冗余 | ✅ 已修复 | `math.py` 按层单矩阵 `W[(kind,s,0)]`；per-head 语义移到 `RidgePerHeadMapper` |
+| B2 top-k 截断 | ✅ 已修复 | `_stack_topk` 保留全部 teacher 层；`test_topk_fit_uses_all_teacher_layers` 锁定 |
+| B3 校准循环覆盖 | ✅ 已修复 | 走 `fit_ridge_aggregate`（Gram 聚合）；等价性测试 `maxdiff<1e-4` |
+| B4 `n_t<n_s` 崩溃 / G2 未接线 | ✅ 已修复 | cfg 层 D≠D 守卫 + `mismatched.py` 接线 |
+| B5 prereg "> True" | ✅ 已修复 | Gate 2A 行正常渲染 |
+| B6 T11 run_id 恒 None | ✅ 已修复 | 改用 `run_dir.parent.name` |
+| B7 Figure7 数据流断裂 | ✅ 已修复 | `geometry` 键已写入 metrics.json，figures 读取路径正确 |
+| B8 双重 de-RoPE | ✅ 已修复 | `test_bug8_single_de_rope_beats_double_de_rope` 锁定 |
+| B9 `hash()` 跨进程不可复现 | ✅ 已修复 | 改用 `zlib.crc32`；`test_no_hash_in_capability` 扫源码禁止 |
+
+**另有一轮架构审查（2026-08-11）修复了 5 个新发现的问题**，回归测试见
+`tests/test_arch_fixes.py`：
+
+| 编号 | 问题 | 修复 |
+|------|------|------|
+| P0-1 | `${run.timestamp}` 每次 load 都重新展开 → 每个 task 落到不同 run 目录，T11/T13 前提被破坏 | `io/runs.py::resolve_run_id` 粘性指针 `<base>/<name>.current` |
+| P0-2 | `next_allowed` / `run_with_compliance` 只有 tests 调用，CLI 不校验 → §72 无执行点、全仓 0 个 compliance.json | `cli.py::_check_admission`（退出码 2）+ 统一 `run_with_compliance` 包装 |
+| P0-3 | 每条 check `runtime.get(sig, False)` → 信号缺失即判合规（虚假保证）；且 §52.5 因失效的静态推断被**每个 task 误报** | 新增 `signal_coverage` / `fully_verified` / `unknown_rules`；修正 `infer_signals_from_cfg` |
+| P1-2 | `cli.py` 用 `Any` 但未 import（被 PEP 563 掩盖） | 补 `from typing import Any` |
+| P1-4 | T01（Gate 0 恒 PASS）/ T10（公式计时）无任何 offline 标注 | 补 `offline_demo`+`note`+summary 警告；`write_task_report` 全局 `[SIMULATED]` 守卫 |
+
+**本文档第 1 节的"逐任务覆盖对照表"中，关于「100% 离线仿真」的整体定性依然成立**——
+这是当前仓库最重要的事实，未因上述修复而改变。
+
+---
+
 ## 0. 结论摘要（TL;DR）
 
 **现状定性**：这是一个**结构完整、章节标注清晰、但 100% 离线仿真（numpy）**的研究脚手架。全部 13 个核心任务（T00–T13）+ 3 个额外 subcommand + 8 个 Figure 渲染器都有可运行实现，72 个测试全绿。

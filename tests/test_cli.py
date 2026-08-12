@@ -31,9 +31,18 @@ def _setup_run(tmp_path: Path) -> Path:
     return cfg_path
 
 
-def _run(task: str, cfg_path: Path):
-    """调用 CLI 入口跑单个 task；FAIL/CONDITIONAL 视为"跑完但 gate 失败"，不属异常。"""
-    rc = cli_main([task, "--config", str(cfg_path)])
+def _run(task: str, cfg_path: Path, force: bool = True):
+    """调用 CLI 入口跑单个 task；FAIL/CONDITIONAL 视为"跑完但 gate 失败"，不属异常。
+
+    force=True（默认）：加 `--force` 跳过 §72 准入检查。
+    这些 CLI 测试刻意**单独**跑某个 task（不铺全 DAG 前置），
+    而 CLI 现在会按 §72 阻断缺少前置依赖的 task（退出码 2）。
+    准入逻辑本身由 tests/test_gating.py 专门覆盖，此处只测 task 自身行为。
+    """
+    argv = [task, "--config", str(cfg_path)]
+    if force:
+        argv.append("--force")
+    rc = cli_main(argv)
     # OK / PASS 也接受；FAIL/CONDTIONAL 视为跑完但 gate 失败
     return rc
 

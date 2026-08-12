@@ -26,9 +26,10 @@ import contextlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from .io import load_config
-from .io.runs import ensure_run_dir, write_json, write_text
+from .io.runs import ensure_run_dir, resolve_run_id, write_json, write_text
 from .orchestrator import write_task_report
 
 # §71 子命令映射表：task id → (模块路径, 入口函数名, 显示标题, 目标说明)。
@@ -86,6 +87,71 @@ def _import_attr(module_path: str, attr: str):
 
     mod = importlib.import_module(module_path)
     return getattr(mod, attr)
+
+
+def _collect_prior_status(run_root: Path) -> dict[str, str]:
+    """扫描 run_root 下已执行过的 task，返回 {task_id: status}。
+
+    数据来源：`<run_root>/<task>/task_report.md` 的 `- STATUS: **X**` 行。
+    选 task_report.md 而非 metrics.json，因为 status 是 §73 报告的一等字段，
+    且 metrics.json 里并非所有 task 都落 status。
+
+    用于 §72 准入判定（Gate FAIL 不得跳过）。解析失败的 task 视为未执行
+    （不阻断，也不放行——由调用方按缺失依赖处理）。
+    """
+    out: dict[str, str] = {}
+    if not run_root.exists():
+        return out
+    for task_dir in run_root.iterdir():
+        if not task_dir.is_dir():
+            continue
+        report = task_dir / "task_report.md"
+        if not report.exists():
+            continue
+        for line in report.read_text(encoding="utf-8").splitlines():
+            if line.startswith("- STATUS:"):
+                # 形如 `- STATUS: **PASS**` → 取 ** 之间的内容。
+                # 注意：仿真任务的 STATUS 会带 `[SIMULATED] ` 前缀（§75 守卫），
+                # 这里剥掉前缀只留 gate 状态，避免准入判定把 PASS 误读为未通过。
+                raw = line.split("**")[1] if "**" in line else line.split(":", 1)[1]
+                out[task_dir.name] = raw.replace("[SIMULATED]", "").strip()
+                break
+    return out
+
+
+def _check_admission(task: str, run_root: Path) -> tuple[bool, str]:
+    """§72 准入检查：本 task 的（传递）依赖是否都已 PASS/OK。
+
+    返回 (allowed, reason)。allowed=False 时 reason 说明阻断原因，
+    CLI 打印后以退出码 2 终止 —— 与「task 自身 FAIL」（退出码 1）区分开，
+    便于脚本/CI 分辨「没资格跑」与「跑了但没过」。
+
+    §72 规则：Gate FAIL 后不能跳过（含传递闭包）。这里复用 orchestrator 的
+    dependencies() / _transitive_deps()，避免依赖表两处维护。
+    """
+    from .orchestrator import _transitive_deps, dependencies
+
+    prior = _collect_prior_status(run_root)
+    ok = {"PASS", "OK"}
+
+    # ① 直接依赖必须已执行且通过
+    missing = [d for d in sorted(dependencies(task)) if d not in prior]
+    if missing:
+        return False, f"缺少前置 task（尚未执行）：{', '.join(missing)}"
+    failed_direct = [d for d in sorted(dependencies(task)) if prior[d] not in ok]
+    if failed_direct:
+        detail = ", ".join(f"{d}={prior[d]}" for d in failed_direct)
+        return False, f"直接依赖未通过 Gate：{detail}"
+
+    # ② 传递闭包内任一已执行且失败的 task 都阻断（§72 不得跳过）
+    failed_closure = sorted(
+        t for t in _transitive_deps(task) if t in prior and prior[t] not in ok
+    )
+    if failed_closure:
+        detail = ", ".join(f"{t}={prior[t]}" for t in failed_closure)
+        return False, f"传递依赖未通过 Gate（§72 不得跳过）：{detail}"
+
+    return True, ""
 
 
 def _write_task_report(
@@ -154,28 +220,56 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("task", choices=sorted(TASKS.keys()))
     parser.add_argument("--config", required=True)
     parser.add_argument("--run-id", default=None,
-                        help="覆盖默认 run_id；不传则用 config 中的 run_id")
+                        help="覆盖默认 run_id；不传则复用当前实验的 run_id（见 --new-run）")
+    parser.add_argument("--new-run", action="store_true",
+                        help="强制开启新实验（生成新 run_id 并重置 <base>/<name>.current 指针）")
     parser.add_argument("--no-prereg", action="store_true",
                         help="跳过 PREREGISTRATION.md 生成")
+    parser.add_argument("--force", action="store_true",
+                        help="跳过 §72 Gate 准入检查（仅供调试；会在报告中留痕）")
     args = parser.parse_args(argv)
 
     # ---- 配置解析：load_config 展开 ${...} 占位符（§64），再定 run 路径 ----
     cfg = load_config(args.config)
-    # run_id 默认取 cfg.experiment.run_id；T11/T13 靠它跨 task 共享数据
-    run_id = args.run_id or cfg["experiment"]["run_id"]
     base = Path(cfg["output"]["base_dir"])
+    # ◆ P0-1 修复：run_id 必须在整个实验内保持一致。
+    #   cfg["experiment"]["run_id"] 里的 ${run.timestamp} 每次 load 都会变，
+    #   因此不能直接用它——交给 resolve_run_id 走「粘性指针」逻辑：
+    #   首个 task 落盘 run_id，后续 task 自动复用，除非 --run-id / --new-run。
+    run_id, created_new = resolve_run_id(
+        base,
+        experiment_name=str(cfg["experiment"]["name"]),
+        cfg_run_id=str(cfg["experiment"]["run_id"]),
+        explicit=args.run_id,
+        new_run=args.new_run,
+    )
+    # 把最终 run_id 回写进 cfg，保证落盘的 config.json 与实际目录一致
+    cfg["experiment"]["run_id"] = run_id
     # run_root = <base>/<run_id>/，整个 experiment 共享；PREREGISTRATION.md 也放这
     run_root = ensure_run_dir(base, run_id)
+
+    module_path, func_name, title, objective = TASKS[args.task]
+    print(f"[apcs] task={args.task} title={title}")
+    print(f"[apcs] run_id={run_id}" + ("  (新实验)" if created_new else "  (复用当前实验)"))
+
+    # ---- §72 准入检查：Gate FAIL / 缺少前置依赖时拒绝执行 ----
+    # ◆ P0-2 修复：此前 orchestrator 的 next_allowed/依赖闭包只有 tests 调用，
+    #   CLI 完全不校验 → §72「Gate FAIL 不能跳过」在架构上没有执行点。
+    allowed, reason = _check_admission(args.task, run_root)
+    if not allowed:
+        if args.force:
+            print(f"[apcs] WARNING: 准入检查未通过但 --force 已指定，继续执行。原因：{reason}")
+        else:
+            print(f"[apcs] BLOCKED: {reason}")
+            print(f"[apcs] §72 要求按依赖顺序执行；如确需跳过请显式加 --force。")
+            return 2  # 2 = 准入阻断（区别于 1 = 执行了但未通过 Gate）
+
     # 每个 task 的产物放在 `<run_root>/<task>/` 下，方便 T11 聚合
     run_dir = run_root / args.task
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # §63 落一份完整 cfg（合并默认 + 用户后的最终值）到 run 目录
     write_json(run_dir / "config.json", cfg)
-
-    module_path, func_name, title, objective = TASKS[args.task]
-    print(f"[apcs] task={args.task} title={title}")
-    print(f"[apcs] run_id={run_id}")
     print(f"[apcs] run_dir={run_dir}")
 
     fn = _import_attr(module_path, func_name)
@@ -201,9 +295,17 @@ def main(argv: list[str] | None = None) -> int:
 
     # runner 契约：fn(cfg, run_dir) → dict；必需键 status，
     # 可选键 metrics / system / geometry / summary（下方按需落盘）。
+    # ◆ P0-2 修复：统一经 run_with_compliance 包装 —— 此前该包装只有 tests 调用，
+    #   导致全仓 compliance.json 数量为 0（README 声称每个 task 都会落）。
+    #   compliance 子命令自身除外（它就是检查器，避免自我包装递归）。
+    from .orchestrator import run_with_compliance
+
     with contextlib.redirect_stdout(_tee(sys.stdout)), contextlib.redirect_stderr(_tee(sys.stderr)):
         try:
-            result = fn(cfg, run_dir)
+            if args.task == "compliance":
+                result = fn(cfg, run_dir)
+            else:
+                result = run_with_compliance(cfg, fn, run_dir)
             status = result.get("status", "UNKNOWN")
         except Exception as e:  # noqa: BLE001
             # 异常先写进 stdout.log 再向外抛，保持运行记录完整

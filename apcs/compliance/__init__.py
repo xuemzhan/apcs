@@ -14,11 +14,13 @@ design.md §52 列出 8 条禁止项，必须有自动化检测来确保实验�
 
 check 契约：
     - 每个 check_X 接收 (cfg, run_dir, runtime) 的子集，返回 list[ComplianceViolation]；
-    - 空列表 = 该条 PASS；任一 check 返回违规 → 整体 FAIL（violations == 0 才放行）；
-    - runtime 中未采集到的信号走 .get 默认值：
-        * 默认 False = "乐观默认"（未观测到违规即视为合规，§52.1/2/3/4/6/7/8）；
-        * 默认 True  = "保守默认"（§52.5 reports_teacher_prefill：未报告即判违规）；
-    - 信号缺失是"检测盲区"：不报违规 ≠ 实验干净，应在运行时强制采集
+    - 空列表 = 该条未发现违规；任一 check 返回违规 → 整体 FAIL；
+    - **信号缺失 ≠ 合规**（§52 诚实性，架构审查 P0-3 修复）：
+        * runtime 中没有对应信号时，check_X 一律不报违规，
+          但 compliance_report 会把该条标为 UNKNOWN（检测盲区）；
+        * `passed=True` 仅表示「已采集的信号里没有违规」；
+        * 只有 `fully_verified=True`（零违规 且 零盲区）才可声称八条都验证过。
+    - 因此在埋点补齐前，compliance 的 passed=True **不构成实验合规的证据**
       （静态可推断的部分见 apcs.compliance.runtime.infer_signals_from_cfg）。
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -56,6 +58,43 @@ class ComplianceError(Exception):
             "Compliance violation: " +
             "; ".join(f"[{v.rule_id}] {v.message}" for v in violations)
         )
+
+
+# ---- 信号覆盖率（§52 检测盲区显式化） ----
+
+# 每条规则依赖的运行时信号名。用于区分：
+#   - PASS      = 信号已采集且未违规（真正验证过）
+#   - VIOLATION = 信号已采集且违规
+#   - UNKNOWN   = 信号从未采集（**检测盲区**，不等于合规）
+#
+# ◆ 修复背景（架构审查 P0-3）：旧实现每条 check 都是 `runtime.get(sig, False)`，
+#   信号缺失时静默判定合规 → 在几乎没有埋点的当前代码里，
+#   compliance 必然输出 "violations == 0 / passed=True"，
+#   给出**虚假保证**。现在把「没测到」与「测过且干净」在报告里分开。
+_RULE_SIGNALS: dict[str, str] = {
+    "§52.1": "student_input_has_context",
+    "§52.2": "student_params_updated",
+    "§52.3": "test_hp_search",
+    "§52.4": "test_filtered_to_teacher_win",
+    "§52.5": "reports_teacher_prefill",
+    "§52.6": "hides_h2d_load",
+    "§52.7": "claim_path_a_on_similarity_only",
+    "§52.8": "silent_re_prefill_on_failure",
+}
+
+
+def signal_coverage(runtime: dict[str, Any]) -> dict[str, str]:
+    """返回每条 §52 规则的检测状态：CHECKED / UNKNOWN。
+
+    CHECKED = 对应运行时信号存在于 runtime（无论其值是 True 还是 False）；
+    UNKNOWN = 信号从未被 track/推断过 → 该条规则本次运行**未被真正检查**。
+
+    这是 §52 自动化检查诚实性的关键：没有埋点就不能声称合规。
+    """
+    return {
+        rule: ("CHECKED" if sig in runtime else "UNKNOWN")
+        for rule, sig in _RULE_SIGNALS.items()
+    }
 
 
 # ---- 各条规则实现 ----
@@ -146,10 +185,13 @@ def check_5_no_hidden_teacher_prefill_cost(runtime: dict) -> list[ComplianceViol
     即使 Scenario A 把它视为沉没成本。
     """
     out: list[ComplianceViolation] = []
-    # 注意与其它 check 相反：默认 True（报告存在），显式上报 False 才判违规。
-    # 这是"保守默认"——报告缺失时无法自动判定，只能靠显式信号揭发
-    has_teacher_prefill = runtime.get("reports_teacher_prefill", True)
-    if not has_teacher_prefill:
+    # ◆ P0-3 修复：旧实现默认 True（"报告存在"），配合失效的静态推断
+    #   （infer_signals_from_cfg 曾恒推出 False）导致**每个 task 都误报 §52.5**。
+    #   现在：信号缺失 → 不判违规，改由 coverage 标为 UNKNOWN（检测盲区）；
+    #   只有显式 track 了 reports_teacher_prefill=False 才算真违规。
+    if "reports_teacher_prefill" not in runtime:
+        return out
+    if not runtime["reports_teacher_prefill"]:
         # Scenario A 把 Teacher Prefill 当沉没成本是计费口径，不是省略报告的理由
         out.append(
             ComplianceViolation(
@@ -243,18 +285,35 @@ def check_all(cfg: dict, run_dir: Path, runtime: dict | None = None) -> list[Com
     return violations
 
 
-def compliance_report(violations: list[ComplianceViolation]) -> dict[str, Any]:
+def compliance_report(
+    violations: list[ComplianceViolation],
+    runtime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """生成 compliance 报告（写到 metrics.json 旁）。
 
     把违规列表序列化为可落盘的 dict：
         n_violations / violations[{rule_id, message}] / passed（== n_violations == 0）。
+
+    ◆ P0-3 修复：额外输出 coverage / n_unknown / fully_verified —— 
+      `passed=True` 只代表「已采集的信号里没有违规」，
+      若 n_unknown > 0 则本次运行存在检测盲区，**不得据此声称实验合规**。
+      fully_verified=True 才是「八条都真正检查过且干净」。
     """
+    coverage = signal_coverage(runtime or {})
+    unknown = sorted(r for r, s in coverage.items() if s == "UNKNOWN")
+    passed = len(violations) == 0
     return {
         "n_violations": len(violations),
         "violations": [
             {"rule_id": v.rule_id, "message": v.message} for v in violations
         ],
-        "passed": len(violations) == 0,  # PASS 判定：一条违规都不允许
+        "passed": passed,  # PASS 判定：已采集信号中一条违规都没有
+        # ---- 检测盲区（诚实性字段）----
+        "coverage": coverage,
+        "n_unknown": len(unknown),
+        "unknown_rules": unknown,
+        # 只有「零违规 且 零盲区」才算通过自动化检查完整验证
+        "fully_verified": passed and not unknown,
     }
 
 
@@ -268,25 +327,40 @@ def run_compliance_check(cfg: dict, run_dir, runtime: dict | None = None) -> dic
     """
     from ..io.runs import write_json, write_text
 
-    # 1) 核心检查：runtime 信号未传时按空 dict 处理（默认全部合规，依赖 check 内默认值）
-    violations = check_all(cfg, run_dir, runtime or {})
-    rep = compliance_report(violations)
+    # 1) 核心检查：runtime 信号未传时按空 dict 处理
+    #    （此时 8 条全部为 UNKNOWN 盲区，见 compliance_report 的 coverage 字段）
+    runtime = runtime or {}
+    violations = check_all(cfg, run_dir, runtime)
+    rep = compliance_report(violations, runtime)
     # 2) 落 metrics.json：与其它 task 的产物规范一致（§63）
     metrics = {"task": "compliance", **rep}
     write_json(run_dir / "metrics.json", metrics)
     # 3) 生成人类可读的 summary.md（§73 报告的一部分）
     md = (
         "# §52 Compliance Report\n\n"
-        f"- Passed: {rep['passed']}\n"
-        f"- Violations: {rep['n_violations']}\n\n"
+        f"- Passed (已采集信号中无违规): {rep['passed']}\n"
+        f"- Violations: {rep['n_violations']}\n"
+        f"- **Fully verified (零违规且零盲区): {rep['fully_verified']}**\n"
+        f"- Unknown (未埋点/未检测): {rep['n_unknown']}\n\n"
     )
+    if rep["n_unknown"]:
+        # ★ 诚实性：明确告知哪些条款本次**根本没被检查**，避免 passed=True 被误读
+        md += (
+            f"> ⚠️ 本次运行有 {rep['n_unknown']} 条规则缺少运行时信号（UNKNOWN），"
+            "属于**检测盲区**，不构成合规证据："
+            + ", ".join(rep["unknown_rules"])
+            + "\n\n"
+        )
     if violations:
         # 有违规 → 逐条列出（rule_id + message 的审计表格）
         md += "| Rule | Message |\n| ---- | ------- |\n"
         for v in violations:
             md += f"| {v.rule_id} | {v.message} |\n"
     else:
-        md += "All §52 forbidden actions checked clean.\n"
+        md += "已采集信号中未发现 §52 违规。\n"
+    md += "\n## 逐条检测状态\n\n| Rule | Status |\n| ---- | ------ |\n"
+    for rule, st in rep["coverage"].items():
+        md += f"| {rule} | {st} |\n"
     write_text(run_dir / "summary.md", md)
     # 4) 最终 verdict：violations==0 → PASS，否则 FAIL（供 orchestrator 阻断后续 task）
     return {

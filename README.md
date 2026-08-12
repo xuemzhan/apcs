@@ -14,6 +14,31 @@
 
 ---
 
+## ⚠️ 项目状态声明（务必先读）
+
+**本仓库当前是一个 100% 离线仿真的「协议脚手架」，不是已完成的实验系统。**
+
+- **不加载任何模型权重，不下载任何数据集**：`apcs/` 内没有一处 `from_pretrained` /
+  `load_dataset`；`TorchBackend` 显式 `raise NotImplementedError`（§75 诚实性）。
+- **所有 Score / 计时 / 几何指标均为合成数据**：
+  - T09 的 CHG 来自 `capability/main.py` 的硬编码期望分表（`teacher=0.80 > student=0.50`），
+    因此 **CHG > 0 与 Gate 2A 通过是构造出来的必然结果，不是测量结果**；
+  - T01 `_simulated_replay` 无条件返回理想值 → **Gate 0 恒 PASS**；
+  - T10 计时来自线性公式 → PSR_A / Cost_B / N_BE 均为推导值（§38 禁止当论文结果）；
+  - T12 几何指标由随机子空间生成（`placeholder: true`）。
+- **仿真结果已被自动标注**：带 `offline_demo` / `placeholder` 的任务，
+  其 `task_report.md` 的 STATUS 行会强制显示 `[SIMULATED]`，
+  `summary.md` 顶部有醒目警告。
+- **`compliance` 的 `passed=True` 不构成合规证据**：八条禁止大多缺少运行时埋点，
+  报告中以 `UNKNOWN` 标出检测盲区；只有 `fully_verified=True` 才代表真正验证过。
+
+**因此：本仓库的任何输出都不得作为论文证据引用。** 真实化路径见
+[`plans/design-gap-review.md`](./plans/design-gap-review.md)。真正经过验证的部分是
+**数学内核**（RoPE round-trip、Ridge 闭式解与聚合等价性、CKA / bootstrap / permutation 等），
+它们由 120 个测试覆盖。
+
+---
+
 ## 目录
 
 - [1. 项目定位与研究逻辑](#1-项目定位与研究逻辑)
@@ -206,6 +231,8 @@ else                                               → C_INCONCLUSIVE
 ```
 
 注意：T11 必须按 `run_id` 前缀在 base_dir 下找到共享的 T05/T09/T10，**不允许**每个 task 单独 run_id。
+这一点由 `apcs.io.runs.resolve_run_id` 的**粘性指针**保证（见 §7.2）：
+首个 task 把 run_id 写入 `reports/runs/<experiment_name>.current`，后续 task 自动复用。
 
 ---
 
@@ -231,18 +258,24 @@ else                                               → C_INCONCLUSIVE
 ### 7.1 安装
 
 ```bash
-# Python 3.14+
-python -m pip install numpy scipy pyyaml
-# 仅真实 GPU 实验需要：
-python -m pip install torch transformers datasets
+# Python 3.11+（开发环境实测 3.14）
+pip install -e .            # 核心：numpy / scipy / pyyaml，CI 与全部测试可跑
+pip install -e ".[dev]"     # + pytest / matplotlib
+pip install -e ".[figures]" # 仅论文 Figure 渲染
+# TODO(real-gpu): 真实 GPU 实验（当前代码不加载模型，TorchBackend 显式 raise）
+pip install -e ".[gpu]"     # + torch / transformers / datasets / psutil
 ```
+
+安装后可直接使用 `apcs` 命令（等价于 `python -m apcs.cli`）。
 
 ### 7.2 主实验：Qwen3-4B → Qwen3-1.7B
 
-§71 强制顺序执行（一次一个 task）：
+§71 强制顺序执行（一次一个 task）。**run_id 自动共享**：首个 task 建立
+`reports/runs/<experiment_name>.current` 指针，后续 task 自动复用同一 run 目录，
+无需手动传 `--run-id`。
 
 ```bash
-python -m apcs.cli t00 --config configs/pair_qwen3.yaml
+python -m apcs.cli t00 --config configs/pair_qwen3.yaml   # 建立本次实验的 run_id
 python -m apcs.cli t01 --config configs/pair_qwen3.yaml   # Gate 0
 python -m apcs.cli t02 --config configs/pair_qwen3.yaml
 python -m apcs.cli t03 --config configs/pair_qwen3.yaml
@@ -257,6 +290,29 @@ python -m apcs.cli t12 --config configs/pair_qwen3.yaml
 python -m apcs.cli t11 --config configs/pair_qwen3.yaml   # MVP verdict
 python -m apcs.cli t13 --config configs/pair_qwen3.yaml   # §11 Generalization
 ```
+
+**§72 准入检查（自动强制）**：CLI 在执行前校验依赖闭包，
+若前置 task 未跑或未通过 Gate，则拒绝执行并返回**退出码 2**：
+
+```
+[apcs] BLOCKED: 缺少前置 task（尚未执行）：t04
+[apcs] §72 要求按依赖顺序执行；如确需跳过请显式加 --force。
+```
+
+| 退出码 | 含义 |
+|---|---|
+| 0 | task 执行且 status ∈ {PASS, OK} |
+| 1 | task 执行了但 Gate 未通过（FAIL / CONDITIONAL） |
+| 2 | **§72 准入阻断**：依赖缺失或前置 Gate FAIL，task 未执行 |
+
+常用参数：
+
+| 参数 | 作用 |
+|---|---|
+| `--run-id <id>` | 显式指定 run_id（并把指针对齐到它） |
+| `--new-run` | 强制开启新实验（生成新 run_id，重置指针） |
+| `--force` | 跳过 §72 准入检查（仅调试用） |
+| `--no-prereg` | t07 时跳过 PREREGISTRATION.md 生成 |
 
 ### 7.3 第二 Pair（§11，不同 Model Family）
 
@@ -361,7 +417,8 @@ KVCache/
 │           ├── summary.md
 │           ├── stdout.log            # §63 CLI 捕获的 stdout/stderr
 │           └── task_report.md        # §73 12 字段
-└── tests/                            # 100 个单元 + 集成测试
+└── tests/                            # 120 个单元 + 集成测试
+    └── test_arch_fixes.py            # 架构审查修复的回归测试（P0-1/2/3, P1-2/4）
 ```
 
 ---
@@ -533,7 +590,7 @@ render_all(
 ## 13. 测试
 
 ```bash
-python -m pytest tests/   # 100 个测试，全部通过
+python -m pytest tests/   # 120 个测试，全部通过
 ```
 
 测试覆盖：
@@ -550,16 +607,18 @@ python -m pytest tests/   # 100 个测试，全部通过
 - Inference pipeline 8 阶段计时 + Student zero-prefill 断言
 - Compliance runtime 信号采集（`reset` / `track` / `collect`）
 
-最近一次基线：`100 passed in 14.34s`。
+最近一次基线：`120 passed in 71.52s`。
 
 ---
 
 ## 14. 依赖
 
-- **Python 3.14+**
-- **核心**（CI / CPU 可跑）：`numpy`, `scipy`, `pyyaml`
-- **真实 GPU 实验**：`torch`, `transformers`, `datasets`
-- **论文 Figure 渲染**：`matplotlib`
+- **Python 3.11+**（开发环境实测 3.14）
+- **核心**（CI / CPU 可跑）：`numpy`, `scipy`, `pyyaml` → `pip install -e .`
+- **真实 GPU 实验**：`torch`, `transformers`, `datasets`, `psutil` → `pip install -e ".[gpu]"`
+  （TODO(real-gpu)：当前代码不加载模型，`TorchBackend` 显式 raise）
+- **论文 Figure 渲染**：`matplotlib` → `pip install -e ".[figures]"`
+- 依赖声明见 [`pyproject.toml`](./pyproject.toml)；CI 见 [`.github/workflows/tests.yml`](./.github/workflows/tests.yml)
 - **最低推荐硬件**（design.md 头部）：1×24GB NVIDIA GPU + 64–128GB RAM + 1–2TB NVMe
 
 ---
