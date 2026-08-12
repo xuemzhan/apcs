@@ -988,7 +988,8 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
     rows = []
     # §34 低秩变体：rank 8 / 16 / 32 —— 目标 PCR 更低、retention 不显著掉
-    for rank in [8, 16, 32]:
+    # cfg.mapper.t06_ranks 覆盖则优先；默认 [8,16,32]；快速 cfg 可缩到 1-2 档
+    for rank in cfg.get("mapper", {}).get("t06_ranks", [8, 16, 32]):
         lr = LowRankMapper(rank=rank)
         row: dict[str, Any] = {"variant": f"lowrank-{rank}", "rank": rank}
         _fit_score_kinds(lr, kinds, row)
