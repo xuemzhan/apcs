@@ -27,6 +27,7 @@ from apcs.providers import (
 from apcs.providers.synthetic_kv import SyntheticKVProvider
 from apcs.providers.synthetic_score import SyntheticScoreProvider
 from apcs.providers.synthetic_timing import SyntheticTimingProvider
+from apcs.providers.hf_kv import HFKVProvider
 
 
 def _cfg() -> dict:
@@ -115,19 +116,26 @@ def test_open_providers_synthetic_smoke():
                 p.close()
 
 
-def test_open_providers_hf_raises_not_silent_fallback():
-    """★ 核心：hf 路径必须显式 raise，杜绝『偷偷切回合成』。"""
+def test_open_providers_hf_raises_without_gpu_or_models():
+    """★ 核心：hf 路径现在有真实实现；无模型/无 GPU 时必须显式 raise，不静默回退。
+
+    cfg 未给 model_id（且本环境 GPU 可能不可计算）→ open 阶段必须抛错，
+    携带 "hf"/"model_id"/"GPU" 之一的可读原因，并提示 provider.json。
+    """
     cfg = _cfg()
     cfg["provider"] = {"kv": "hf"}
     try:
         open_providers(cfg, need=("kv",))
     except (RuntimeError, NotImplementedError) as e:
         msg = str(e)
-        assert "hf" in msg.lower() or "TODO" in msg
-        # 关键：sink error 必须指向 provider.json 提醒「把它记录下来」
-        assert "provider" in msg
+        assert ("model_id" in msg) or ("GPU" in msg) or ("torch" in msg), (
+            f"hf open 失败原因应可读：{msg}"
+        )
+        assert "provider" in msg, f"错误应提示 provider 选择：{msg}"
     else:
-        raise AssertionError("hf 路径不应静默回退到合成，必须显式 raise")
+        # 极端情形：本环境恰好 GPU 可计算且有默认模型 → 允许构造成功
+        # （此时 describe 应能说明模型源），但默认 cfg 无 model_id 通常抛错。
+        raise AssertionError("hf 路径在缺 model_id / GPU 不可用时不应静默成功")
 
 
 def test_providers_ctx_closes_on_exit():
@@ -152,3 +160,23 @@ def test_write_provider_manifest_round_trip(tmp_path):
     assert set(payload.keys()) == {"kv", "score", "timing"}
     for name in payload:
         assert payload[name]["kind"] == "synthetic"
+
+
+def test_hf_kv_single_card_role_lifecycle(monkeypatch):
+    """Teacher 必须在 Student 加载前释放，防止两侧模型同时驻留 GPU。"""
+    p = HFKVProvider(_tok=object(), _device="cuda:0", _cfg={"teacher": {}, "student": {}})
+    events = []
+
+    monkeypatch.setattr(p, "_make_prompt", lambda seed, i, split: (f"p{i}", f"{split}-{i}"))
+    monkeypatch.setattr(p, "_load_role", lambda role: events.append(f"load:{role}") or role)
+    monkeypatch.setattr(
+        p,
+        "_capture_role",
+        lambda model, prompts: [np.zeros((1, 2, 1, 4), dtype=np.float32) for _ in prompts],
+    )
+    monkeypatch.setattr(p, "_release_model", lambda model: events.append(f"release:{model}"))
+
+    rows = list(p._capture_split(2, 0, split="test"))
+    assert len(rows) == 2
+    assert events == ["load:teacher", "release:teacher", "load:student", "release:student"]
+    assert all(row.split == "test" for row in rows)

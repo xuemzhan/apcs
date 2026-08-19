@@ -24,12 +24,12 @@ dependencies = [
 [project.optional-dependencies]
 # 论文 Figure 渲染（§56–§62）
 figures = ["matplotlib>=3.8"]
-# TODO(real-gpu): 真实 GPU 实验依赖。当前 apcs 不加载任何模型权重/数据集，
-#   TorchBackend 显式 raise NotImplementedError（§75 诚实性）。
-#   接入真实推理时再启用本 extra：pip install -e ".[gpu]"
+# 真实 GPU / HF 数据实验依赖：pip install -e ".[gpu]"
 gpu = [
-    "torch>=2.2",
-    "transformers>=4.40",
+    "torch>=2.7",
+    "transformers>=4.51",
+    "accelerate>=1.0",
+    "modelscope>=1.20",
     "datasets>=2.19",
     "psutil>=5.9",
 ]

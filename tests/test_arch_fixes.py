@@ -252,3 +252,89 @@ def test_p1_4_real_math_task_not_marked_simulated(tmp_path):
     report = (run_dir / "t02" / "task_report.md").read_text(encoding="utf-8")
     status_line = [l for l in report.splitlines() if l.startswith("- STATUS:")][0]
     assert "[SIMULATED]" not in status_line, "真实数学任务不应被标记为仿真"
+
+
+# ───────────────── real-gpu 接入：显式失败，不静默回退 ─────────────────
+
+
+def _hf_cfg(tmp_path: Path) -> Path:
+    """provider.kv/timing = hf 的 cfg（无真实 GPU / 无 model_id 依赖）。"""
+    cfg = {
+        "experiment": {"name": "hf-pair", "run_id": "hf-pair-${run.timestamp}"},
+        "teacher": {"model_id": "Qwen/Qwen3-4B", "num_layers": 36,
+                    "num_kv_heads": 8, "head_dim": 128, "num_attention_heads": 32},
+        "student": {"model_id": "Qwen/Qwen3-1.7B", "num_layers": 28, "freeze": True,
+                    "num_kv_heads": 8, "head_dim": 128, "num_attention_heads": 16},
+        "output": {"base_dir": str(tmp_path / "runs")},
+        "seeds": [0],
+        "context_lengths": [128],
+        "context_lengths_extended": [128],
+        "provider": {"kv": "hf", "timing": "hf"},
+        "timing": {"repeats": 10, "warmup": 2},
+    }
+    p = tmp_path / "cfg_hf.yaml"
+    p.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    return p
+
+
+def test_t01_hf_path_raises_explicitly_when_gpu_unusable(tmp_path):
+    """★ T01 real-gpu 接入：provider.kv=hf 时若 GPU 不可计算，必须显式失败
+    （§75），而不是静默回退到合成路径产出 Gate 0 恒 PASS。"""
+    import pytest
+
+    from apcs.replay.runner import run_self_kv_replay
+    from apcs.io.runs import resolve_run_id
+
+    cfg_path = _hf_cfg(tmp_path)
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    base = tmp_path / "runs"
+    run_id, _ = resolve_run_id(
+        base,
+        cfg["experiment"]["name"],
+        cfg["experiment"].get("run_id", "default"),
+    )
+    run_dir = base / run_id / "t01"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        run_self_kv_replay(cfg, run_dir)
+    except (RuntimeError, NotImplementedError) as e:
+        msg = str(e)
+        assert ("GPU" in msg) or ("torch" in msg) or ("CUDA" in msg) or ("model" in msg), (
+            f"T01 hf 路径失败原因应可读：{msg}"
+        )
+        return
+    raise AssertionError(
+        "T01 在 GPU 不可计算 / 模型不可加载时必须显式 raise，"
+        "禁止静默回退到 Gate 0 恒 PASS 的合成路径（§75）"
+    )
+
+
+def test_t10_hf_path_raises_explicitly_when_gpu_unusable(tmp_path):
+    """★ T10 real-gpu 接入：provider.timing=hf 时若 GPU 不可计算，必须显式
+    失败（§75），而不是静默用线性公式产出推导值。"""
+    from apcs.system.runner import run_system_cost
+    from apcs.io.runs import resolve_run_id
+
+    cfg_path = _hf_cfg(tmp_path)
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    base = tmp_path / "runs"
+    run_id, _ = resolve_run_id(
+        base,
+        cfg["experiment"]["name"],
+        cfg["experiment"].get("run_id", "default"),
+    )
+    run_dir = base / run_id / "t10"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        run_system_cost(cfg, run_dir)
+    except (RuntimeError, NotImplementedError) as e:
+        msg = str(e)
+        assert ("GPU" in msg) or ("torch" in msg) or ("CUDA" in msg), (
+            f"T10 hf 路径失败原因应可读：{msg}"
+        )
+        return
+    raise AssertionError(
+        "T10 在 GPU 不可计算时必须显式 raise，禁止静默回退线性公式（§75）"
+    )

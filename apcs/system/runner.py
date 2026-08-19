@@ -102,11 +102,34 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     H = cfg["teacher"].get("num_kv_heads", 8)
     D = cfg["teacher"].get("head_dim", 128)
 
+    # 计时来源：provider.timing == "hf" → HFTimingProvider 真实 CUDA 计时（§49），
+    # GPU 不可用时 open() 显式 raise（§75，不静默回退线性公式）；
+    # 否则回退 _simulate_timings 线性公式（offline_demo=True）。
+    timing_kind = cfg.get("provider", {}).get("timing", "synthetic").lower()
+    if timing_kind == "hf":
+        from ..providers import providers_ctx
+
+        def _measure(ctx: int, seed: int) -> dict[str, float]:
+            with providers_ctx(cfg, need=("timing",)) as ps:
+                return ps["timing"].measure(ctx, seed)
+
+        # 当前 HFTimingProvider 仍是 CUDA 代理算子，不是 HandoffPipeline
+        # 端到端测量。必须保持 offline_demo=True，防止代理公式被当成实测。
+        real_timing = False
+        timing_evidence = "cuda_proxy_not_end_to_end"
+    else:
+
+        def _measure(ctx: int, seed: int) -> dict[str, float]:
+            return _simulate_timings(ctx, seed=seed)
+
+        real_timing = False
+        timing_evidence = "synthetic_formula"
+
     per_ctx = []
     for ctx in contexts:
         per_seed = []
-        for _ in seeds:
-            timings = _simulate_timings(ctx, seed=0)
+        for seed in seeds:
+            timings = _measure(ctx, seed=int(seed))
             # §4.1 Scenario A：Teacher Prefill 是沉没成本，分子只算 handoff 增量开销；
             # PSR_A > 0 说明 (T_map+T_load+T_query) < T_prefill_S，迁移才有系统收益
             pa = psr_a(
@@ -163,6 +186,12 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # 按 层数 × 4096 参数 × 2 字节（bfloat16）估算权重大小，只反映数量级
     vram_mb_est = (n_t * 4096 * 2) / (1024 * 1024)  # 估算 Teacher 权重大小
     ram_mb_est = (n_s * 4096 * 2) / (1024 * 1024)
+    if real_timing:
+        # provider.timing=hf：真实 VRAM 实测（torch.cuda.max_memory_allocated）
+        from ..providers import providers_ctx
+
+        with providers_ctx(cfg, need=("timing",)) as ps:
+            vram_mb_est = float(ps["timing"].measure_vram())
 
     metrics = {
         "task": "T10",
@@ -192,28 +221,35 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             "inject",
             "decode",
         ],
-        # ---- §75 诚实性标注（架构审查 P1-4 修复）----
-        # ★ 所有耗时来自 _simulate_timings 的线性公式（非实测），
-        #   VRAM/RAM 亦为量级估算 → PSR_A / Cost_B / N_BE 全部是**推导值**。
-        #   design.md §38 明确禁止把理论估算当论文结果，故显式标注。
-        # TODO(real-gpu): 接入真实测量时替换 _simulate_timings 为
-        #   time.perf_counter + torch.cuda.synchronize（§49 warmup + ≥10 repeats，
-        #   取 P50/P95），VRAM 读 torch.cuda.max_memory_allocated、RAM 读 psutil，
-        #   并把 offline_demo 置 False。
-        "offline_demo": True,
+        # ---- §75 诚实性标注（架构审查 P1-4 修复 + real-gpu 接入）----
+        # 合成路径：耗时来自 _simulate_timings 线性公式（非实测），VRAM/RAM 为
+        #   量级估算 → PSR_A / Cost_B / N_BE 全部是推导值，offline_demo=True；
+        # 真实路径（provider.timing=hf）：真实 CUDA 计时（§49 warmup+repeats+
+        #   P50/P95）+ VRAM 实测，offline_demo=False。
+        "offline_demo": not real_timing,
+        "timing_evidence": timing_evidence,
         "note": (
             "T10 全部耗时由 _simulate_timings 线性公式生成，VRAM/RAM 为量级估算，"
             "PSR_A / Cost_B / N_BE 均为推导值而非实测；"
             "design.md §38/§75 禁止将理论估算作为论文系统收益结果。"
+            if timing_evidence == "synthetic_formula"
+            else "T10 使用 CUDA 代理算子诊断，不是 HandoffPipeline 端到端计时；"
+            "PSR_A / Cost_B / N_BE 仍不可作为真实系统收益证据。"
         ),
     }
     write_json(run_dir / "system.json", metrics)
-    md = (
-        "# T10 System Cost\n\n"
+    warning = (
         "> ⚠️ **offline demo**：本任务所有耗时来自线性公式模拟（非 GPU 实测），"
         "PSR_A / Cost_B / N_BE 均为推导值，不可作为论文系统收益证据"
         "（design.md §38 / §75）。\n\n"
-        f"- VRAM (Teacher est): {vram_mb_est:.1f} MB\n"
+        if timing_evidence == "synthetic_formula"
+        else "> ⚠️ **CUDA proxy**：执行了 CUDA 代理算子，但并非 HandoffPipeline "
+        "端到端计时；PSR_A / Cost_B / N_BE 仍不可作为真实系统收益证据。\n\n"
+    )
+    md = (
+        "# T10 System Cost\n\n"
+        + warning
+        + f"- VRAM (Teacher est): {vram_mb_est:.1f} MB\n"
         f"- RAM (Student est): {ram_mb_est:.1f} MB\n"
         f"- Repeats: {repeats}, Warmup: {warmup}\n\n"
         "| ctx | PSR_A p50 | PSR_A p95 | Cost_B p50 (ms) | Cost_B p95 (ms) | N_BE | "

@@ -83,21 +83,54 @@ def _from_config_dict(model_id: str, revision: str, cfg: dict[str, Any]) -> Mode
     )
 
 
-def _live_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
-    """真实加载（需要 transformers）。失败则抛 ImportError。
+def _hub_reachable(timeout: float = 1.0) -> bool:
+    """模型 hub 是否可达的快速探测（offline 开发机/CI 无需等待连接超时）。
 
-    ImportError 是本函数的"信号出口"：scan_model 捕获它切换到 fallback；
-    其它异常（如网络失败）继续向外抛，避免静默产出错误估计。
+    优先探测 modelscope.cn（本项目模型源）；失败再退回 huggingface.co。
+    仅做一次轻量 TCP 握手（不下载任何内容），失败返回 False。
+    探测时间受 `timeout` 约束（默认 1s），确保离线环境下
+    scan_model 的 fallback 路径不被 `from_pretrained` 的默认
+    连接超时（~10s）拖慢整套测试。
     """
-    from transformers import AutoConfig  # type: ignore
+    import socket
 
-    # revision 默认 "main"（HF hub 主分支）；显式 revision 可 pin 特定 commit
-    cfg = AutoConfig.from_pretrained(
-        spec_cfg["model_id"], revision=spec_cfg.get("revision", "main")
-    )
-    spec = _from_config_dict(
-        spec_cfg["model_id"], spec_cfg.get("revision", "main"), cfg.to_dict()
-    )
+    for host in ("modelscope.cn", "huggingface.co"):
+        try:
+            with socket.create_connection((host, 443), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _live_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
+    """真实加载（需要 transformers）。失败则抛 ImportError/OSError。
+
+    ImportError 是本函数的"信号出口"之一：scan_model 捕获它切换到 fallback；
+    另一个是 OSError（网络不可达 / hub 离线）。其它异常继续向外抛，
+    避免静默产出错误估计。
+
+    模型源：优先 modelscope.cn（`model_id` 如 "Qwen/Qwen3-4B" 可直接用），
+    其 AutoConfig API 与 HuggingFace 对齐；不可达时退回 huggingface.co。
+    """
+    # offline 快速探测：hub 不可达时直接抛 OSError → scan_model 走 fallback，
+    # 不等待 from_pretrained 的默认 ~10s 连接超时（T00 与 CLI 测试会显著变快）。
+    if not _hub_reachable():
+        raise OSError(
+            f"模型 hub 不可达（offline）：无法加载 {spec_cfg['model_id']}，走 fallback"
+        )
+
+    revision = spec_cfg.get("revision", "main")
+    # 第一优先：modelscope.cn（本项目模型源，见 README 快速开始）
+    try:
+        from modelscope import AutoConfig  # type: ignore
+
+        cfg = AutoConfig.from_pretrained(spec_cfg["model_id"], revision=revision)
+    except Exception:  # noqa: BLE001  modelscope 缺失 / 模型不在其上
+        from transformers import AutoConfig  # type: ignore
+
+        cfg = AutoConfig.from_pretrained(spec_cfg["model_id"], revision=revision)
+    spec = _from_config_dict(spec_cfg["model_id"], revision, cfg.to_dict())
     # attention_implementation / dtype 不在 AutoConfig 中，从 yaml 配置补填
     spec.attention_implementation = spec_cfg.get("attention_implementation", "")
     spec.dtype = spec_cfg.get("dtype", "")
@@ -148,15 +181,31 @@ def _fallback_spec(spec_cfg: dict[str, Any]) -> ModelSpec:
     )
 
 
+def _hf_reachable(timeout: float = 1.0) -> bool:
+    """HF hub 是否可达的快速探测（offline 开发机/CI 无需等待连接超时）。
+
+    仅做一次轻量 TCP 握手（不下载任何内容）；失败返回 False。
+    探测时间受 `timeout` 约束（默认 1s），确保离线环境下
+    scan_model 的 fallback 路径不被 `from_pretrained` 的默认
+    连接超时（~10s）拖慢整套测试。
+    """
+    return _hub_reachable(timeout)
+
+
 def scan_model(spec_cfg: dict[str, Any]) -> ModelSpec:
-    """优先用 AutoConfig；ImportError 时 fallback 到已知架构。
+    """优先用 AutoConfig；ImportError/OSError 时 fallback 到已知架构。
 
     策略分层：真实读取 > 硬编码估计。fallback 产物带
     extras={"source": "fallback"} 标记，消费方可据此识别数据来源。
+
+    为什么捕获 OSError：装有 transformers 但 HF 网络不可达（离线开发机）
+    时 `AutoConfig.from_pretrained` 抛 OSError（ConnectionError/HTTPError），
+    应同样回退到已知架构估计，而不是让 T00 崩溃。离线时先经 _hf_reachable
+    快速探测，避免每次等待 ~10s 连接超时。
     """
     try:
         return _live_spec(spec_cfg)
-    except ImportError:
+    except (ImportError, OSError):
         return _fallback_spec(spec_cfg)
 
 

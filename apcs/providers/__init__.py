@@ -59,6 +59,8 @@ class CalibrationSample:
     kv_t: np.ndarray
     kv_s: np.ndarray
     sample_id: str
+    prompt: str | None = None
+    split: str | None = None
 
 
 class KVProvider(Protocol):
@@ -176,16 +178,10 @@ def _build_kv_provider(cfg: dict[str, Any]) -> KVProvider:
 
         return SyntheticKVProvider(seed=int(cfg.get("seeds", [0])[0]))
     if kind == "hf":
-        # TODO(real-gpu): 真实 HF provider 需要 torch + transformers + dataset；
-        # 当前未实现（§75 诚实性），以显式 raise 取代静默回退。
-        from .hf_kv import HFKVProvider  # noqa: F401  触发 ImportError 让路径真实可见
+        # 真实 HF KVProvider（modelscope 源；GPU 不可用时 open() 显式 raise）
+        from .hf_kv import HFKVProvider
 
-        _provider_missing_signal_raise(
-            "hf",
-            "HFKVProvider 尚未实现（见 TODO(real-gpu)）。"
-            "若需立刻从 HF 跑通，请先在 apcs/providers/hf_kv.py 中实现类，"
-            "或临时改 cfg `provider.kv: synthetic` 跑离线框架。",
-        )
+        return HFKVProvider()
     raise ValueError(f"Unknown KV provider kind: {kind!r}")
 
 
@@ -197,11 +193,9 @@ def _build_score_provider(cfg: dict[str, Any]) -> ScoreProvider:
 
         return SyntheticScoreProvider()
     if kind == "hf":
-        _provider_missing_signal_raise(
-            "hf",
-            "HFScoreProvider 尚未实现（见 TODO(real-gpu)）。"
-            "该 provider 用于 §37 7 方法的真实 LLM 评分。",
-        )
+        from .hf_score import HFScoreProvider
+
+        return HFScoreProvider()
     raise ValueError(f"Unknown Score provider kind: {kind!r}")
 
 
@@ -213,11 +207,9 @@ def _build_timing_provider(cfg: dict[str, Any]) -> TimingProvider:
 
         return SyntheticTimingProvider()
     if kind == "hf":
-        _provider_missing_signal_raise(
-            "hf",
-            "HFTimingProvider 尚未实现（见 TODO(real-gpu)）。"
-            "该 provider 用于 §49 真实计时（warmup + ≥10 repeats + P50/P95）。",
-        )
+        from .hf_timing import HFTimingProvider
+
+        return HFTimingProvider()
     raise ValueError(f"Unknown Timing provider kind: {kind!r}")
 
 
@@ -256,6 +248,22 @@ def write_provider_manifest(
     return manifest
 
 
+def write_provider_selection(cfg: dict[str, Any], run_dir: Path) -> dict[str, Any]:
+    """不打开模型，仅记录本次配置选择；适合 CLI 在任务开始时调用。"""
+    selected = cfg.get("provider", {}) or {}
+    manifest = {
+        name: {
+            "kind": str(selected.get(name, "synthetic")).lower(),
+            "status": "configured_not_opened",
+        }
+        for name in ("kv", "score", "timing")
+    }
+    (run_dir / "provider.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return manifest
+
+
 # ---------------------------------------------------------------------------
 # 便捷门面：runner 调用者一般只需要这两行
 # ---------------------------------------------------------------------------
@@ -277,13 +285,20 @@ def open_providers(
         "timing": _build_timing_provider,
     }
     out: dict[str, Any] = {}
-    for name in need:
-        if name not in builders:
-            raise ValueError(f"Unknown provider channel: {name}")
-        p = builders[name](cfg)
-        if hasattr(p, 'open'):
-            p.open(cfg)
-        out[name] = p
+    try:
+        for name in need:
+            if name not in builders:
+                raise ValueError(f"Unknown provider channel: {name}")
+            p = builders[name](cfg)
+            if hasattr(p, "open"):
+                p.open(cfg)
+            out[name] = p
+    except Exception:
+        # 多 provider 打开到一半失败时，必须释放已经加载的模型/GPU 缓存。
+        for opened in reversed(list(out.values())):
+            if hasattr(opened, "close"):
+                opened.close()
+        raise
     return out
 
 

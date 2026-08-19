@@ -16,10 +16,14 @@
 
 ## ⚠️ 项目状态声明（务必先读）
 
-**本仓库当前是一个 100% 离线仿真的「协议脚手架」，不是已完成的实验系统。**
+**本仓库是“离线仿真 + 部分真实 GPU 路径”的研究实验系统，尚不是论文证据完备版本。**
 
-- **不加载任何模型权重，不下载任何数据集**：`apcs/` 内没有一处 `from_pretrained` /
-  `load_dataset`；`TorchBackend` 显式 `raise NotImplementedError`（§75 诚实性）。
+- `provider.kv=hf` 可加载真实模型并捕获 K/V；T04–T06 已通过 Provider 接入真实
+  calibration/eval，并强制检查 split manifest 不重叠。
+- `prepare-data` 可在无 GPU 环境下载数据、冻结 train/validation/test 清单。
+- T01 真实路径比较 HF 原生 cache 与 numpy 往返重建 cache 的多步 logits/token。
+- T09 真实 Score handoff 尚未接线，`provider.score=hf` 会显式阻断，避免伪造 CHG。
+- T10 的 HF timing 当前只标记为 CUDA proxy，不得作为端到端系统收益证据。
 - **所有 Score / 计时 / 几何指标均为合成数据**：
   - T09 的 CHG 来自 `capability/main.py` 的硬编码期望分表（`teacher=0.80 > student=0.50`），
     因此 **CHG > 0 与 Gate 2A 通过是构造出来的必然结果，不是测量结果**；
@@ -35,7 +39,7 @@
 **因此：本仓库的任何输出都不得作为论文证据引用。** 真实化路径见
 [`plans/design-gap-review.md`](./plans/design-gap-review.md)。真正经过验证的部分是
 **数学内核**（RoPE round-trip、Ridge 闭式解与聚合等价性、CKA / bootstrap / permutation 等），
-它们由 120 个测试覆盖。
+它们由自动化测试覆盖；准确数量以 `pytest --collect-only` 为准。
 
 ---
 
@@ -262,11 +266,20 @@ else                                               → C_INCONCLUSIVE
 pip install -e .            # 核心：numpy / scipy / pyyaml，CI 与全部测试可跑
 pip install -e ".[dev]"     # + pytest / matplotlib
 pip install -e ".[figures]" # 仅论文 Figure 渲染
-# TODO(real-gpu): 真实 GPU 实验（当前代码不加载模型，TorchBackend 显式 raise）
+# 真实 GPU / HF 数据实验
 pip install -e ".[gpu]"     # + torch / transformers / datasets / psutil
 ```
 
 安装后可直接使用 `apcs` 命令（等价于 `python -m apcs.cli`）。
+
+无 GPU 机器可以先下载并冻结实验数据清单：
+
+```bash
+python -m apcs.cli prepare-data --config configs/pair_qwen3_real.yaml --new-run
+```
+
+产物中的 `dataset_manifest.json` 保存每个 split 的样本 ID 与 SHA-256，
+`dataset_samples.json` 保存规范化后的题目快照；train/validation/test 有交集时任务会失败。
 
 ### 7.2 主实验：Qwen3-4B → Qwen3-1.7B
 
@@ -556,7 +569,7 @@ class InferenceBackend:
 ```
 
 - `NumpyBackend` / `NumpyFakeModel`：`offline_demo` 标注，可跑、可测
-- `TorchBackend`：骨架接口显式 `raise NotImplementedError`（§75 诚实性），不可静默 mock
+- `TorchBackend`：真实 HF/CUDA 路径；GPU、依赖或模型配置不可用时显式失败，不静默 mock
 - `HandoffPipeline` 严格按 8 阶段顺序；Student 在 `decode` 阶段**不重新读 X**（zero prefill），用计数器做统计断言
 
 详见 [`apcs/inference/pipeline.py`](./apcs/inference/pipeline.py) 与 [`backends.py`](./apcs/inference/backends.py)。
@@ -590,7 +603,7 @@ render_all(
 ## 13. 测试
 
 ```bash
-python -m pytest tests/   # 120 个测试，全部通过
+python -m pytest tests/
 ```
 
 测试覆盖：
@@ -636,7 +649,8 @@ python -m pytest tests/   # 120 个测试，全部通过
 本仓库采用 **MIT License**（详见 [`LICENSE`](./LICENSE)）。
 你可以在保留版权声明的前提下自由使用、修改、分发本代码。
 
-> ⚠️ **研究代码诚信声明**：本仓库当前为 100% 离线仿真脚手架
+> ⚠️ **研究代码诚信声明**：真实与合成结果必须依据 `offline_demo`、
+> `provider.json`、split manifest 和 evidence grade 分开解释。
 > （详见顶部项目状态声明）；
 > 若用于论文级实验，必须由作者自行接入真实 Teacher/Student 模型权重
 > 与评测数据集，并重新校准所有指标。

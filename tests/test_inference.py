@@ -107,17 +107,19 @@ def test_numpy_backend_capture_and_inject_flow(tmp_path):
     assert (tmp_path / "summary.md").exists()
 
 
-def test_torch_backend_raises_not_implemented_without_gpu(tmp_path):
-    """torch 后端为接口骨架：无 GPU 实现必须显式 raise，不得静默跑 mock。
+def test_torch_backend_raises_without_model_id(tmp_path):
+    """torch 后端为真实 GPU 路径：缺少 model_id 必须显式 raise，不得静默 mock。
 
-    Given: TorchBackend（骨架，任何环境下均未实现大型 GPU forward）
+    Given: TorchBackend（真实实现，但 run 参数缺 model_id）
     When:  run() 触发 §53 第一步 Teacher Load
-    Then:  raise NotImplementedError 且消息含 "torch"
+    Then:  raise NotImplementedError 且消息含 "torch"/"model_id" 之一
     """
     backend = TorchBackend()
     assert backend.name == "torch"
     pipe = HandoffPipeline(backend, mapper=None, layer_map=[], cfg=_cfg(), out_dir=tmp_path)
 
     teacher_tokens = np.array([1, 2, 3], dtype=np.int64)
-    with pytest.raises(NotImplementedError, match="torch"):
+    with pytest.raises(NotImplementedError) as ei:
         pipe.run(teacher_tokens, student_prefix=np.array([1]), n_gen=2)
+    msg = str(ei.value)
+    assert "model_id" in msg, f"缺 model_id 时应提示显式传参：{msg}"

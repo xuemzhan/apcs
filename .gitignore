@@ -86,3 +86,10 @@ Thumbs.db
 
 # 工具运行时状态（.omo/ agent 会话续跑 JSON，不入库）
 .omo/
+
+# 工具运行时状态（.opencode/ 技能与 agent 会话续跑状态，不入库）
+.opencode/
+
+# Jupyter 检查点（不入库）
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/

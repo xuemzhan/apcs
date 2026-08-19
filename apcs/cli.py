@@ -40,6 +40,8 @@ from .orchestrator import write_task_report
 #   显示标题   — 命令行打印的 task 名称（如 "T00 Compatibility Scanner"）
 #   目标说明   — §73 Task Report 的 OBJECTIVE 字段内容
 TASKS = {
+    "prepare-data": ("apcs.data.prepare", "run_prepare_data", "Dataset Preparation",
+                     "下载并规范化真实数据，冻结互斥 train/validation/test manifest。"),
     "t00": ("apcs.compat.scanner", "run_compat_scan", "T00 Compatibility Scanner",
             "读取 teacher/student 架构，输出 model_compatibility.json 并判定 G1/G2/G3。"),
     "t01": ("apcs.replay.runner", "run_self_kv_replay", "T01 Self-KV Replay",
@@ -268,6 +270,11 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = run_root / args.task
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # 不触发模型加载也能先冻结 provider 选择；具体 runner 打开 provider 后
+    # 可用 write_provider_manifest 覆盖为包含实现/revision 的详细记录。
+    from .providers import write_provider_selection
+    write_provider_selection(cfg, run_dir)
+
     # §63 落一份完整 cfg（合并默认 + 用户后的最终值）到 run 目录
     write_json(run_dir / "config.json", cfg)
     print(f"[apcs] run_dir={run_dir}")
@@ -300,18 +307,22 @@ def main(argv: list[str] | None = None) -> int:
     #   compliance 子命令自身除外（它就是检查器，避免自我包装递归）。
     from .orchestrator import run_with_compliance
 
-    with contextlib.redirect_stdout(_tee(sys.stdout)), contextlib.redirect_stderr(_tee(sys.stderr)):
-        try:
-            if args.task == "compliance":
-                result = fn(cfg, run_dir)
-            else:
-                result = run_with_compliance(cfg, fn, run_dir)
-            status = result.get("status", "UNKNOWN")
-        except Exception as e:  # noqa: BLE001
-            # 异常先写进 stdout.log 再向外抛，保持运行记录完整
-            log_f.write(f"\n[ERROR] {type(e).__name__}: {e}\n")
-            log_f.flush()
-            raise
+    # _tee(...) 是 contextmanager：必须先 __enter__ 拿到 _Tee 实例，
+    # 再交给 redirect_stdout/stderr —— 否则 redirect 收到的是
+    # _GeneratorContextManager 对象（无 write/flush），tee 完全失效。
+    with _tee(sys.stdout) as out_tee, _tee(sys.stderr) as err_tee:
+        with contextlib.redirect_stdout(out_tee), contextlib.redirect_stderr(err_tee):
+            try:
+                if args.task == "compliance":
+                    result = fn(cfg, run_dir)
+                else:
+                    result = run_with_compliance(cfg, fn, run_dir)
+                status = result.get("status", "UNKNOWN")
+            except Exception as e:  # noqa: BLE001
+                # 异常先写进 stdout.log 再向外抛，保持运行记录完整
+                log_f.write(f"\n[ERROR] {type(e).__name__}: {e}\n")
+                log_f.flush()
+                raise
     log_f.close()
 
     # ---- §63 按标准产物清单落盘：metrics / system / geometry / summary ----

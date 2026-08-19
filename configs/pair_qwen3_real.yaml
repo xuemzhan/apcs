@@ -1,0 +1,141 @@
+# =========================================================
+# APCS 真实模型验证配置：Qwen3-4B (Teacher) → Qwen3-1.7B (Student)
+# 与 pair_qwen3.yaml 同构，仅新增 provider 节（真实 HF 路径）。
+# 模型源：ModelScope（modelscope.cn）；需 torch≥2.7/cu128+ 支持 sm_120。
+# =========================================================
+
+experiment:
+  name: qwen3-4b-to-1.7b-real
+  run_id: ${experiment.name}-${run.timestamp}
+  description: |
+    Same-family 主实验（真实模型验证轨）。Teacher Qwen3-4B, Student Qwen3-1.7B。
+    所有 HF 路径经 ModelScope 下载本地缓存，GPU 走 CUDA 真实计算。
+
+# ---- Provider 选择（新增，默认 synthetic）----
+provider:
+  kv: hf                      # T01 / T05 fidelity KV 源：HFKVProvider（modelscope）
+  score: synthetic            # T09 得分源：本轮不动，保持合成可复现
+  timing: hf                  # T10 系统计时源：HFTimingProvider（真实 CUDA 计时）
+
+# ---- 模型 ----
+teacher:
+  model_id: Qwen/Qwen3-4B
+  revision: main
+  dtype: bfloat16
+  attention_implementation: sdpa   # eager | sdpa | flash_attention_2
+  device_map: cuda:0
+  num_layers: 36
+  num_kv_heads: 8
+  head_dim: 128
+
+student:
+  model_id: Qwen/Qwen3-1.7B
+  revision: main
+  dtype: bfloat16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  freeze: true
+  num_layers: 28
+  num_kv_heads: 8
+  head_dim: 128
+
+# ---- 数据集分层 (design.md §14-§18) ----
+datasets:
+  fidelity:
+    - hellaswag
+    - arc_challenge
+    - winogrande
+  teacher_advantage:
+    primary: mmlu
+    splits: [train, validation, test]
+  long_context:
+    - ruler
+    - longbench
+  behavior_sensitive:
+    - judge_set
+    - ranker_set
+
+# ---- 上下文长度 ----
+context_lengths: [512, 1024]         # 初轮真实验证先做短上下文；P1 加 2K/4K/8K
+context_lengths_extended: [8192, 16384]
+
+# ---- Mapper (design.md §20) ----
+mapper:
+  type: ridge
+  rank: 16
+  separate_kv: true
+  de_rope: true               # 兼容旧配置，等价于 de_rope_k
+  de_rope_k: true             # RoPE 只作用于 Q/K
+  de_rope_v: false            # GPU 初测：关闭后 V retention 约 +0.03
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
+  real_calibration_samples: 16
+  real_eval_samples: 16
+  source_top_k: 2
+  layer_selection: proportional
+  alpha_max: 0.5
+  rms_calibration: true
+  shared_basis: false
+  t06_aggregate_samples: 8
+
+dataset_prepare:
+  samples_per_split: 128
+  seed: 0
+
+# ---- Advantage state (design.md §22) ----
+advantage:
+  rank: 16
+  key: lowrank
+  value: lowrank
+  source_mixer: true
+  rms_calibration: true
+  bounded_alpha: true
+
+# ---- Query gate (design.md §26) ----
+query_gate:
+  enabled: false
+
+# ---- Loss (design.md §27) ----
+loss:
+  lambda_task: 1.0
+  lambda_self: 0.1
+  lambda_teacher: 0.1
+  lambda_att: 1.0
+  lambda_reg: 0.01
+  teacher_weight_from: train_split_margin
+
+# ---- 统计与种子 (design.md §51) ----
+seeds: [0, 1, 2]
+statistics:
+  bootstrap_n: 1000
+  ci: 0.95
+  paired_test: permutation
+
+# ---- 系统计时 (design.md §49) ----
+timing:
+  warmup: 2
+  repeats: 10
+  sync_cuda: true
+  report: [p50, p95]
+
+# ---- Cache residency (design.md §50) ----
+cache_residency: cpu
+kv_save_full_debug:
+  max_samples: 10
+
+# ---- Run 数据规范 (design.md §63-§65) ----
+output:
+  base_dir: reports/runs
+  files:
+    - config.yaml
+    - metrics.json
+    - system.json
+    - geometry.json
+    - stdout.log
+    - summary.md
+
+# ---- 统计与门控 ----
+gates:
+  retention_min: 0.90
+  retention_strong: 0.95
+  chg_positive: true

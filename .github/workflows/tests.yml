@@ -12,8 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         # 3.11 是 pyproject 声明的下限；3.12 为常用版本。
-        # 注意：不测 GPU 路径 —— 当前代码全部为离线仿真（numpy），
-        # TorchBackend 显式 raise NotImplementedError（§75）。
+        # CI 不具备 GPU，只覆盖离线实现及真实路径的显式失败/契约测试。
         python-version: ["3.11", "3.12"]
 
     steps:

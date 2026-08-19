@@ -319,48 +319,315 @@ class NumpyBackend(InferenceBackend):
 
 
 # ---------------------------------------------------------------------------
-# torch 后端骨架（真实 GPU 路径，未实现）
+# torch 后端（真实 GPU 路径，§53）
 # ---------------------------------------------------------------------------
 
 
-class TorchBackend(InferenceBackend):
-    """torch 后端接口骨架（§53 真实 GPU 路径）。
+def _cuda_compute_available() -> str:
+    """检测 CUDA 是否真正可用于计算；返回空串表示可用，否则返回原因。
 
-    只定义接线，不实现 CI 无法验证的大型 GPU forward：
-        - load_model      → transformers HF 模型（Teacher / Student）
-        - forward_prefill → 真实 attention + KV cache capture
-        - decode          → 增量 decode（消费注入 KV）
-        - inject          → 把映射后 KV 写入 Student 显存缓存
+    torch.cuda.is_available() 只报告"设备可见"，不保证能跑 kernel：
+    编译时未包含该架构的 cubin/PTX（如 RTX 5090 sm_120 + torch 2.5.1）
+    时，任何实际算子都会报 `no kernel image is available`。这里用
+    `torch.cuda.get_device_capability` 与 `get_arch_list` 交叉核对，
+    提前给出可读的失败原因（§75 诚实性：不静默假装 GPU 就绪）。
+    """
+    try:
+        import torch  # type: ignore
+    except ImportError:
+        return "未安装 torch"
+    if not torch.cuda.is_available():
+        return "CUDA 不可用（torch.cuda.is_available()==False）"
+    try:
+        cap = torch.cuda.get_device_capability(0)
+        # sm 后缀无小数点：cap (12,0) → "120"（对应 arch "sm_120"），
+        # cap (9,0) → "90"。旧写法 f"{cap[0]}.{cap[1]}" → "12.0" 永远匹配不上。
+        cap_str = f"{cap[0]}{cap[1]}"
+        archs = torch.cuda.get_arch_list()
+        # get_arch_list 形如 ['sm_80','sm_90']；Blackwell 需 sm_120。
+        supported = {a.replace("sm_", "") for a in archs}
+        if cap_str not in supported:
+            return (
+                f"GPU 架构 sm_{cap_str} 与当前 torch({torch.__version__}) 编译支持 "
+                f"({sorted(archs)}) 不匹配：kernel 无法加载，需升级 torch（≥2.7/cu128+）"
+            )
+    except Exception as e:  # noqa: BLE001
+        return f"CUDA 能力检测失败：{type(e).__name__}: {e}"
+    return ""
+
+
+class TorchModel:
+    """torch 后端的模型包装：HF 模型 + tokenizer + §52 可观测计数器。
+
+    为什么要包装而非直接返回 HF model：
+        - 管线（HandoffPipeline）直接访问 `student.prefill_calls` /
+          `student.decode_calls` 做 §52 zero-prefill 统计断言；HF 模型
+          没有这些属性，包装对象补上（NumpyFakeModel 同款契约）。
+        - 保存 tokenizer / device / dtype 供 forward/decode/inject 复用，
+          避免每次重新解析 cfg。
+    """
+
+    def __init__(self, model, tokenizer, *, role: str, device: str) -> None:
+        self.model = model
+        self.tokenizer = tokenizer
+        self.role = role
+        self.device = device
+        # §52 可观测计数器（与 NumpyFakeModel 对齐）
+        self.prefill_calls = 0
+        self.decode_calls = 0
+        # inject 后挂载的 KV（numpy 宿主内存，供测试检查；真实 decode 用它建缓存）
+        self.injected_kv: np.ndarray | None = None
+
+
+def _extract_kv_numpy(pkv, n_layers: int, dtype_bytes: int = 2) -> np.ndarray:
+    """把 HF past_key_values（DynamicCache / tuple of (K,V)）转成 (L, S, H, D) numpy。
+
+    输入 pkv 的元素是 (batch, num_kv_heads, seq_len, head_dim) 的张量；
+    每个 layer 取 K 与 V，沿最后维拼接成 (S, H, 2*head_dim) 的"联合 KV 行"，
+    再叠成 (L, S, H, 2*head_dim)。返回 float32，值为 K 在前 V 在后。
+
+    为什么不拆开 K/V 各存一份 (L,S,H,D)：
+        仓库 numpy 契约以 `(L, S, H, D)` 表达每层一份 KV 状态（synthetic
+        与 mapper 均如此），真实 K/V 是"每层两份"。合并成 K|V 联合行可
+        保持同一契约（D'=2*head_dim），映射/注入两端口径一致。
+    """
+    import torch  # type: ignore
+
+    layers = []
+    if hasattr(pkv, "key_cache"):  # DynamicCache
+        keys, vals = pkv.key_cache, pkv.value_cache
+        for k, v in zip(keys, vals):
+            k = k[0]  # drop batch dim → (H, S, D)
+            v = v[0]
+            kv_row = torch.cat([k, v], dim=-1)  # (H, S, 2D)
+            layers.append(kv_row.permute(1, 0, 2))  # (S, H, 2D)
+    else:  # tuple of (K, V) per layer
+        for k, v in pkv:
+            k = k[0]
+            v = v[0]
+            kv_row = torch.cat([k, v], dim=-1)
+            layers.append(kv_row.permute(1, 0, 2))
+    if len(layers) < n_layers:
+        # 若模型只缓存了部分层（骨架用法），缺失层补零行保持形状契约
+        for _ in range(n_layers - len(layers)):
+            layers.append(torch.zeros_like(layers[0]))
+    stack = torch.stack(layers[:n_layers]).float().cpu().numpy()
+    return np.ascontiguousarray(stack, dtype=np.float32)
+
+
+def _build_cache_from_kv(
+    kv: np.ndarray, device: str | None = None, dtype: Any | None = None
+) -> Any:
+    """把 numpy (L, S, H, 2D) 联合 KV 行还原成 HF DynamicCache。
+
+    与 _extract_kv_numpy 互为逆操作：沿最后维切成 K|V，各转置成
+    (1, H, S, D)，组装成 transformers.cache_utils.DynamicCache 供 decode。
+    无 transformers 时退回轻量列表结构（接口等价，`tuple of (K,V)`）。
+    device 非空时把缓存张量搬到目标设备（否则与 GPU 上模型的 decode
+    拼接缓存时触发 "Expected all tensors to be on the same device"）；
+    dtype 指定时按模型精度铸造（bf16 模型 + float32 缓存会让 SDPA 抛
+    "Expected query, key, and value to have the same dtype"）。
+    """
+    import torch  # type: ignore
+
+    kv = np.asarray(kv)  # (L, S, H, 2D)
+    L, S, H, D2 = kv.shape
+    D = D2 // 2
+    try:
+        from transformers.cache_utils import DynamicCache  # type: ignore
+    except ImportError:
+        DynamicCache = None  # type: ignore[assignment]
+
+    kt = torch.from_numpy(kv[:, :, :, :D]).permute(0, 2, 1, 3)  # (L,H,S,D)
+    vt = torch.from_numpy(kv[:, :, :, D:]).permute(0, 2, 1, 3)
+    if dtype is not None:
+        kt = kt.to(dtype)
+        vt = vt.to(dtype)
+    else:
+        kt = kt.to(torch.float32)
+        vt = vt.to(torch.float32)
+    if device is not None:
+        kt = kt.to(device)
+        vt = vt.to(device)
+    keys = [k.unsqueeze(0) for k in kt]  # (1,H,S,D) per layer
+    vals = [v.unsqueeze(0) for v in vt]
+    if DynamicCache is not None:
+        cache = DynamicCache()
+        cache.update(keys[0], vals[0], 0)
+        for layer_idx in range(1, L):
+            cache.update(keys[layer_idx], vals[layer_idx], layer_idx)
+        return cache
+    return list(zip(keys, vals))  # type: ignore[return-value]
+
+
+class TorchBackend(InferenceBackend):
+    """torch 后端：真实 HF 模型 + CUDA 的 §53 推理路径。
+
+    以 numpy 后端为行为参考，但模型从 modelscope/transformers 加载：
+        - load_model      → AutoModelForCausalLM.from_pretrained（modelscope 优先）
+        - forward_prefill → 真实 attention，抓 past_key_values 转 numpy 宿主内存
+        - inject          → 把映射后 (L_s,S,H,2D) 联合 KV 还原成 DynamicCache
+        - decode          → 逐 token 增量生成，复用注入 KV（zero prefill）
+        - unload          → 释放模型 + torch.cuda.empty_cache()
         - sync            → torch.cuda.synchronize()（§49）
 
     与 KV 缓存的交互（真实路径语义）：
-        - KV 缓存形态为 HF 的 tuple of tensors / DynamicCache，
-          shape 约定 (L, S, H, D) 与本仓库 numpy 契约一致。
-        - forward_prefill 后 Teacher 的 KV 仍在显存，先 CPU offload
-          （或直接读回主机内存）再 unload 模型。
-        - inject 把映射后的 KV 写进 Student 的显存缓存对象，
-          decode 阶段只逐 token 追加新行并复用旧行 —— 与 numpy
-          后端行为同构，接入后即可端到端替换。
+        - KV 以 numpy (L, S, H, 2*head_dim) 在主机内存传递（capture/offload），
+          显存中仅在 decode 阶段以 DynamicCache 短期存在。
+        - forward_prefill 后 Teacher 的 KV 读回主机，再 unload 释放显存，
+          避免 Teacher/Student 同时在显存造成峰值超限（§53）。
 
-    骨架阶段一律显式 raise NotImplementedError，禁止静默 mock（§75 诚实性）。
-    真实实现以 numpy 后端为行为参考，接入后即可端到端替换。
+    §75 诚实性：
+        - GPU 不可计算（sm_120 与 torch 版本不匹配）时 load_model 显式 raise，
+          附可读原因，禁止静默假装 GPU 就绪；
+        - 模型参数缺失显式 raise，不得给默认 mock。
     """
 
     name: str = "torch"
 
-    def load_model(self, run: dict[str, Any]) -> object:
-        """§53 Teacher/Student Load：真实 HF 模型加载未实现，显式 raise。
+    def __init__(self, device: str | None = None) -> None:
+        super().__init__()
+        # device 默认取 cuda:0；由 _cuda_compute_available 决定是否真的可用
+        self._device = device or "cuda:0"
 
-        边界：torch 分支的 import 放函数内 try —— CPU/CI 环境没有 torch
-        也能安全 import 本模块；这里仅探测 torch.cuda 可用性留作真实
-        实现的入口，随后照常显式 raise（骨架不假装能跑 GPU）。
+    def _resolve_device(self) -> str:
+        """校验 CUDA 可用性并返回实际 device。
+
+        校验失败抛 NotImplementedError（带可读原因），作为 load_model 的
+        前置守卫 —— 让「GPU 路径不可用」在 load 阶段就显式失败（§75）。
         """
+        reason = _cuda_compute_available()
+        if reason:
+            raise NotImplementedError(
+                f"torch 后端无法使用 GPU：{reason}。"
+                "请升级 PyTorch 至支持该 GPU 架构的版本（RTX 50 系需 torch≥2.7/cu128+）。"
+            )
+        return self._device
+
+    def load_model(self, run: dict[str, Any]) -> TorchModel:
+        """§53 Teacher/Student Load：加载真实 HF 因果 LM（modelscope 优先）。
+
+        run 参数：model_id（必需）、revision/dtype/device_map（可选）、
+        num_layers/num_kv_heads/head_dim/vocab_size（显式架构字段，可选）。
+        模型源优先 modelscope.cn，其次 transformers（见 compat/scanner 同款策略）。
+        """
+        missing = [k for k in ("model_id",) if run.get(k) is None]
+        if missing:
+            raise NotImplementedError(
+                f"torch 后端缺少模型参数 {missing}（role={run.get('role')}）："
+                "必须显式传 model_id 才能加载真实模型（§75）"
+            )
+        device = self._resolve_device()
+        import torch  # type: ignore
+
+        model_id = str(run["model_id"])
+        revision = str(run.get("revision", "main"))
+        dtype_name = str(run.get("dtype", "bfloat16"))
+        dtype = getattr(torch, dtype_name, torch.bfloat16)
+
+        # 模型源：modelscope.cn 优先（AutoModelForCausalLM 与 transformers 接口对齐）
+        try:
+            from modelscope import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+        except ImportError:
+            from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            revision=revision,
+            torch_dtype=dtype,
+            device_map={"": device},
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        model.eval()
+        return TorchModel(model, tokenizer, role=str(run.get("role", "")), device=device)
+
+    def forward_prefill(self, model: TorchModel, tokens) -> np.ndarray:
+        """§53 Forward + Capture：真实 prefill，返回 (L_t, S, H, 2D) numpy KV。
+
+        KV 已在宿主内存（读回 CPU），满足 §53 CPU Offload 前置。
+        """
+        kv, _, _ = self.forward_prefill_native(model, tokens)
+        return kv
+
+    def forward_prefill_native(self, model: TorchModel, tokens):
+        """返回 KV numpy、模型原生 cache 与末位 logits，供 Gate 0 真对照。"""
+        import torch  # type: ignore
+
+        model.prefill_calls += 1
+        ids = torch.as_tensor(np.asarray(tokens).reshape(1, -1), dtype=torch.long).to(
+            model.device
+        )
+        with torch.no_grad():
+            out = model.model(ids, use_cache=True)
+        n_layers = int(getattr(model.model.config, "num_hidden_layers", 0))
+        if n_layers == 0:
+            n_layers = len(out.past_key_values)
+        kv = _extract_kv_numpy(out.past_key_values, n_layers)
+        logits = out.logits[:, -1, :].float().cpu().numpy()
+        return kv, out.past_key_values, logits
+
+    def decode(
+        self, model: TorchModel, tokens, past_key_values
+    ) -> tuple[Any, Any]:
+        """单步 decode：复用注入 KV + 当前 token，追加一行，返回 (next_token, new_pkv)。
+
+        §52 禁止 1：只消费 past_key_values 与当前 token，绝不重新读 X。
+        """
+        next_tok, cache, _ = self.decode_with_logits(model, tokens, past_key_values)
+        return next_tok, cache
+
+    def decode_with_logits(self, model: TorchModel, tokens, past_key_values):
+        """单步 decode，同时返回 float32 logits；Gate 0 不再用 token 代替 logits。"""
+        import torch  # type: ignore
+
+        model.decode_calls += 1
+        tok = int(np.asarray(tokens).reshape(-1)[0])
+        cache = past_key_values
+        if not isinstance(past_key_values, tuple) and not hasattr(
+            past_key_values, "key_cache"
+        ):
+            cache = _build_cache_from_kv(
+                past_key_values, device=model.device, dtype=model.model.dtype
+            )
+        ids = torch.as_tensor([[tok]], dtype=torch.long).to(model.device)
+        with torch.no_grad():
+            out = model.model(ids, past_key_values=cache, use_cache=True)
+        logits_t = out.logits[:, -1].float()
+        next_tok = int(torch.argmax(logits_t, dim=-1).item())
+        return next_tok, out.past_key_values, logits_t.cpu().numpy()
+
+    def inject(self, model: TorchModel, kv) -> object:
+        """§53 Inject：把映射后 (L_s, S, H, 2D) 联合 KV 还原为可消费缓存。
+
+        校验失败显式 raise（§52 禁止 8，不静默 re-prefill）。
+        返回 DynamicCache（decode 复用）。
+        """
+        kv = np.asarray(kv)
+        if kv.ndim != 4:
+            raise NotImplementedError(
+                f"注入 KV 形状 {kv.shape} 非法（需 (L, S, H, 2D)）：inject 必须显式校验，禁止静默 re-prefill（§52 禁止 8）"
+            )
+        cache = _build_cache_from_kv(kv, device=model.device, dtype=model.model.dtype)
+        model.injected_kv = kv
+        return cache
+
+    def unload(self, model: TorchModel) -> None:
+        """§53 Teacher Unload：释放模型 + empty_cache + 归零计数器。"""
+        import torch  # type: ignore
+
+        del model.model
+        del model.tokenizer
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        model.prefill_calls = 0
+        model.decode_calls = 0
+
+    def sync(self) -> None:
+        """§49 计时边界同步：GPU 后端 torch.cuda.synchronize()。"""
         try:
             import torch  # type: ignore
 
-            _ = torch.cuda.is_available()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
         except ImportError:
             pass
-        raise NotImplementedError(
-            "torch 后端为接口骨架：真实 GPU 推理需要 transformers + CUDA（§53）。本骨架不实现无法验证的大型 forward；numpy 后端用于测试/CI。"
-        )

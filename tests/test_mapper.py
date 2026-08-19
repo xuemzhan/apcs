@@ -18,6 +18,7 @@ from apcs.mapper.math import (
     SharedBasisMapper,
     _check_shape,
 )
+from apcs.mapper.runner import _de_rope_for_kind, _ridge_lambda
 
 
 def _toy(n_t=4, n_s=2, S=8, H=2, D=16, seed=0, with_signal=True):
@@ -40,6 +41,19 @@ def _toy(n_t=4, n_s=2, S=8, H=2, D=16, seed=0, with_signal=True):
 def _layer_map(n_t, n_s):
     """构造最简 layer_map：Student 层 s 只对齐 Teacher 层 s（一对一层映射）。"""
     return [list(range(s, s + 1)) for s in range(n_s)]
+
+
+def test_kv_specific_rope_and_lambda_defaults():
+    marker = object()
+    cfg = {"mapper": {"de_rope": True, "ridge_lambda_k": 1e-4,
+                      "ridge_lambda_v": 1e-2}}
+    assert _de_rope_for_kind(cfg, "K", marker) is marker
+    assert _de_rope_for_kind(cfg, "V", marker) is None
+    assert _ridge_lambda(cfg, "K") == 1e-4
+    assert _ridge_lambda(cfg, "V") == 1e-2
+
+    cfg["mapper"]["de_rope_v"] = True
+    assert _de_rope_for_kind(cfg, "V", marker) is marker
 
 
 # ---- bug-3 修复：_check_shape 必须 raise ----

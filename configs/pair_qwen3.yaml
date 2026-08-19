@@ -59,7 +59,11 @@ mapper:
   type: ridge                       # ridge | lowrank | shared_basis
   rank: 16
   separate_kv: true                 # A8
-  de_rope: true                     # A6 (强制: 设计文档 §23)
+  de_rope: true                     # 兼容旧配置，等价于 de_rope_k
+  de_rope_k: true                   # RoPE 只作用于 Q/K
+  de_rope_v: false                  # V 不做 RoPE
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
   source_top_k: 2                   # design.md §21, A7
   layer_selection: proportional     # A7: proportional | last-layer | data-driven | geometry-aware
   alpha_max: 0.5                    # design.md §25  bounded injection (validation freeze)

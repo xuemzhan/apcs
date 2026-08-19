@@ -51,6 +51,10 @@ mapper:
   rank: 4
   separate_kv: true
   de_rope: true
+  de_rope_k: true
+  de_rope_v: false
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
   source_top_k: 2
   layer_selection: proportional
   alpha_max: 0.5

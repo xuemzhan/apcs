@@ -80,6 +80,86 @@ def kv_kinds(cfg: dict[str, Any]) -> list[str]:
     return ["K", "V"] if separate_kv else ["K"]
 
 
+def _de_rope_for_kind(cfg: dict[str, Any], kind: str, fn: Callable | None):
+    """K/V 分别控制 de-RoPE；V 默认关闭，因为 RoPE 不作用于 Value。"""
+    mapper_cfg = cfg.get("mapper", {})
+    if kind == "K":
+        enabled = bool(mapper_cfg.get("de_rope_k", mapper_cfg.get("de_rope", True)))
+    else:
+        enabled = bool(mapper_cfg.get("de_rope_v", False))
+    return fn if enabled else None
+
+
+def _ridge_lambda(cfg: dict[str, Any], kind: str) -> float:
+    mapper_cfg = cfg.get("mapper", {})
+    return float(mapper_cfg.get(f"ridge_lambda_{kind.lower()}", mapper_cfg.get("ridge_lambda", 1e-3)))
+
+
+def _real_kv_splits(
+    cfg: dict[str, Any],
+    run_dir,
+    *,
+    n_calib: int,
+    n_eval: int,
+    requested_seq: int,
+) -> tuple[dict[str, dict[str, list[tuple[np.ndarray, np.ndarray]]]], int]:
+    """从 KVProvider 取一次真实 K|V，并裁成统一、无 padding 的序列长度。"""
+    from ..providers import providers_ctx, write_provider_manifest
+
+    with providers_ctx(cfg, need=("kv",)) as providers:
+        provider = providers["kv"]
+        write_provider_manifest(run_dir, kv=provider)
+        calib_raw = list(provider.iter_calibration(n_calib, seed=0))
+        eval_raw = list(provider.iter_eval(n_eval, seed=1))
+
+    if not calib_raw or not eval_raw:
+        raise RuntimeError("真实 KV Provider 必须同时产出非空 calibration/eval")
+    calib_ids = {x.sample_id for x in calib_raw}
+    eval_ids = {x.sample_id for x in eval_raw}
+    overlap = sorted(calib_ids & eval_ids)
+    if overlap:
+        raise RuntimeError(f"真实 KV calibration/eval sample_id 泄漏：{overlap[:10]}")
+
+    all_samples = calib_raw + eval_raw
+    seq = min(
+        int(requested_seq),
+        *(min(int(x.kv_t.shape[1]), int(x.kv_s.shape[1])) for x in all_samples),
+    )
+    if seq < 2:
+        raise RuntimeError(f"真实 KV 公共序列长度过短：{seq}")
+
+    def split_rows(rows, kind: str):
+        pairs = []
+        for row in rows:
+            if row.kv_t.shape[-1] % 2 or row.kv_s.shape[-1] % 2:
+                raise ValueError("HF KV 最后一维必须是 K|V 拼接后的偶数")
+            dt = row.kv_t.shape[-1] // 2
+            ds = row.kv_s.shape[-1] // 2
+            if dt != ds:
+                raise ValueError(f"Teacher/Student head_dim 不一致：{dt} vs {ds}")
+            sl = slice(0, dt) if kind == "K" else slice(dt, 2 * dt)
+            pairs.append((row.kv_t[:, :seq, :, sl], row.kv_s[:, :seq, :, sl]))
+        return pairs
+
+    result = {
+        kind: {
+            "calib": split_rows(calib_raw, kind),
+            "eval": split_rows(eval_raw, kind),
+        }
+        for kind in kv_kinds(cfg)
+    }
+    manifest = {
+        "provider": cfg.get("provider", {}).get("kv", "synthetic"),
+        "requested_seq": int(requested_seq),
+        "effective_seq": seq,
+        "calibration_ids": sorted(calib_ids),
+        "eval_ids": sorted(eval_ids),
+        "overlap": overlap,
+    }
+    write_json(run_dir / "kv_split_manifest.json", manifest)
+    return result, seq
+
+
 def _merge_kv_fields(
     dst: dict[str, Any],
     per_kind: dict[str, dict[str, float]],
@@ -504,7 +584,7 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     warmup = int(cfg.get("timing", {}).get("warmup", 2))
 
     layer_map = proportional_mapping(n_t, n_s)  # §21：按比例对齐 Teacher→Student 层
-    ridge = RidgePerHeadMapper(lam=1e-3)  # λ=1e-3 岭正则：保证 (G+λI) 可逆（数值稳定性）
+    ridge = RidgePerHeadMapper(lam=_ridge_lambda(cfg, "K"))
 
     # —— §23：默认开启 de-RoPE 路径（这里用 teacher theta）
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
@@ -519,6 +599,16 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     #   transform 时按 kind 分别产出 K/V 两路输出并各自评估。
     kinds = kv_kinds(cfg)
     separate_kv = "V" in kinds
+    provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
+    real_splits = None
+    n_eval_t04 = int(cfg.get("mapper", {}).get("t04_eval_samples", 20))
+    if provider_kind != "synthetic":
+        n_calib = int(cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib, 16)))
+        n_eval_t04 = int(cfg.get("mapper", {}).get("real_eval_samples", min(n_eval_t04, 16)))
+        real_splits, seq = _real_kv_splits(
+            cfg, run_dir, n_calib=n_calib, n_eval=n_eval_t04, requested_seq=seq
+        )
+        positions = np.arange(seq, dtype=np.float64)
 
     # master_seed=0：权重种子；calib（master_seed=0）与 held-out（master_seed=1）
     # 复用同一组 w_t/w_s，只换 latent Z —— train/eval 同一模型对（§32）
@@ -526,28 +616,37 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     per_kind: dict[str, dict[str, float]] = {}
     latencies: list[float] = []
     for kind in kinds:
-        calib = _synth_calibration_set(
-            n_t, n_s, seq, H, D, n_calib, master_seed=0, noise=0.05,
-            w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
+        calib = (
+            real_splits[kind]["calib"]
+            if real_splits is not None
+            else _synth_calibration_set(
+                n_t, n_s, seq, H, D, n_calib, master_seed=0, noise=0.05,
+                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+            )
         )
+        ridge.lam = _ridge_lambda(cfg, kind)
+        kind_de_rope = _de_rope_for_kind(cfg, kind, de_rope_fn)
         t0 = time.perf_counter()
         fit_ridge_aggregate(ridge, calib, layer_map, kv_kind=kind,
-                            positions=positions, de_rope_fn=de_rope_fn)  # §22
+                            positions=positions, de_rope_fn=kind_de_rope)  # §22
         latencies.append((time.perf_counter() - t0) * 1000.0)
 
         # 在 held-out 样本上评分（§32：校准集与评估集分离；**同一模型对**——
         # 复用上面的 w_t/w_s，只换 latent Z 与噪声）
         r2_list, cos_list, attn_cos_list, ret_list = [], [], [], []
         # held-out 评估：20 个样本，master_seed=1 与校准（=0）的 Z/噪声完全不相交
-        n_eval_t04 = int(cfg.get("mapper", {}).get("t04_eval_samples", 20))
-        eval_samples = _synth_calibration_set(
-            n_t, n_s, seq, H, D, n_eval_t04, master_seed=1, noise=0.05,
-            w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
+        eval_samples = (
+            real_splits[kind]["eval"]
+            if real_splits is not None
+            else _synth_calibration_set(
+                n_t, n_s, seq, H, D, n_eval_t04, master_seed=1, noise=0.05,
+                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+            )
         )
         for i, (kv_t, kv_s) in enumerate(eval_samples):
             t0 = time.perf_counter()
             pred = ridge.transform(kv_t, layer_map, kv_kind=kind,  # §22
-                                   positions=positions, de_rope_fn=de_rope_fn)
+                                   positions=positions, de_rope_fn=kind_de_rope)
             latencies.append((time.perf_counter() - t0) * 1000.0)
             m = _score_kv(pred, kv_s)
             r2_list.append(m["r2"])
@@ -591,6 +690,12 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "latency_map_ms_p95": p95,
         "repeats": repeats,
         "warmup": warmup,
+        "data_source": provider_kind,
+        "offline_demo": provider_kind == "synthetic",
+        "de_rope_k": _de_rope_for_kind(cfg, "K", de_rope_fn) is not None,
+        "de_rope_v": _de_rope_for_kind(cfg, "V", de_rope_fn) is not None,
+        "ridge_lambda_k": _ridge_lambda(cfg, "K"),
+        "ridge_lambda_v": _ridge_lambda(cfg, "V"),
         # 报告性阈值：KV cosine > 0.5 视为可恢复（T04 非正式 gate）
         "gate": "PASS" if mean_cos > 0.5 else "FAIL",
     }
@@ -694,7 +799,7 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
     inv_freq = _rope_pairs(D, theta=1_000_000.0)
 
-    ridge = RidgePerHeadMapper(lam=1e-3)  # λ=1e-3 岭正则（数值稳定性，同 T04）
+    ridge = RidgePerHeadMapper(lam=_ridge_lambda(cfg, "K"))
     rows = []
     token_agree_list = []
     latencies = []
@@ -702,6 +807,23 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # design.md §22（K/V 独立参数化）：separate_kv=true 时 K/V 独立 fit/评估
     kinds = kv_kinds(cfg)
     separate_kv = "V" in kinds
+    provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
+    real_splits = None
+    n_eval_kind = int(cfg.get("mapper", {}).get("replacement_eval_samples", 20))
+    if provider_kind != "synthetic":
+        n_calib_for_all = int(
+            cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib_for_all, 16))
+        )
+        n_eval_kind = int(cfg.get("mapper", {}).get("real_eval_samples", min(n_eval_kind, 16)))
+        real_splits, effective_seq = _real_kv_splits(
+            cfg,
+            run_dir,
+            n_calib=n_calib_for_all,
+            n_eval=n_eval_kind,
+            requested_seq=max(contexts),
+        )
+        # 真实 prompt 长度不一致时统一裁到公共最小长度；禁止零 padding 污染指标。
+        contexts = [effective_seq]
     # 同一模型对：校准集与 held-out 评估集复用同一组 w_t/w_s（§32）
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
     for ctx in contexts:
@@ -715,24 +837,34 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             # 内存自适应（架构审查续轮）：n_calib 已在外层按最大 ctx 算好，
             #   所有 ctx 复用同一值；cfg.mapper.replacement_calib_samples 覆盖则优先。
             n_calib_kind = n_calib_for_all
-            calib = _synth_calibration_set(
-                n_t, n_s, ctx, H, D, n_calib_kind, master_seed=0, noise=0.05,
-                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
+            calib = (
+                real_splits[kind]["calib"]
+                if real_splits is not None
+                else _synth_calibration_set(
+                    n_t, n_s, ctx, H, D, n_calib_kind, master_seed=0, noise=0.05,
+                    w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+                )
             )
+            ridge.lam = _ridge_lambda(cfg, kind)
+            kind_de_rope = _de_rope_for_kind(cfg, kind, de_rope_fn)
             t0 = time.perf_counter()
             fit_ridge_aggregate(ridge, calib, layer_map, kv_kind=kind,
-                                positions=positions, de_rope_fn=de_rope_fn)  # §22
+                                positions=positions, de_rope_fn=kind_de_rope)  # §22
             latencies.append((time.perf_counter() - t0) * 1000.0)
             # 测试 20 样本（held-out：同一模型对、不同 Z）
             retentions = []
             tas = []
-            n_eval_kind = int(cfg.get("mapper", {}).get("replacement_eval_samples", 20))
-            for kv_t, kv_s in _synth_calibration_set(
-                n_t, n_s, ctx, H, D, n_eval_kind, master_seed=1, noise=0.05,
-                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
-            ):
+            eval_pairs = (
+                real_splits[kind]["eval"]
+                if real_splits is not None
+                else _synth_calibration_set(
+                    n_t, n_s, ctx, H, D, n_eval_kind, master_seed=1, noise=0.05,
+                    w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+                )
+            )
+            for kv_t, kv_s in eval_pairs:
                 pred = ridge.transform(kv_t, layer_map, kv_kind=kind,  # §22
-                                       positions=positions, de_rope_fn=de_rope_fn)
+                                       positions=positions, de_rope_fn=kind_de_rope)
                 # §33 score / retention
                 s_self = _score_kv(kv_s, kv_s)
                 s_hand = _score_kv(pred, kv_s)
@@ -783,6 +915,12 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "warmup": warmup,
         "gap_strata": gap_strata,
         "gate1": gate,
+        "data_source": provider_kind,
+        "offline_demo": provider_kind == "synthetic",
+        "de_rope_k": _de_rope_for_kind(cfg, "K", de_rope_fn) is not None,
+        "de_rope_v": _de_rope_for_kind(cfg, "V", de_rope_fn) is not None,
+        "ridge_lambda_k": _ridge_lambda(cfg, "K"),
+        "ridge_lambda_v": _ridge_lambda(cfg, "V"),
     }
     # design.md §22：separate_kv=true 时输出 K/V 各自的平均 retention
     # （对 rows 再取一次平均，供 T09 等下游直接消费）
@@ -911,37 +1049,59 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
     # PCR 分母：Ridge 全量 —— ◆ bug-3 修复：64 个共享 W 的样本 Gram 聚合
     # 后只 fit 一次（内存 O(L_s×H×D²)，与样本数无关）；旧实现每轮 fit 覆盖 W。
-    ridge_ref = RidgePerHeadMapper(lam=1e-3)
+    ridge_ref = RidgePerHeadMapper(lam=_ridge_lambda(cfg, "K"))
     # design.md §22（K/V 独立参数化）：separate_kv=true 时 K 与 V 各自用
     # 独立随机抽样的校准集 fit 一套参数，评估时按 kind 分别 transform。
     kinds = kv_kinds(cfg)
     separate_kv = "V" in kinds
+    provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
+    real_splits = None
+    n_eval_real = int(cfg.get("mapper", {}).get("real_eval_samples", 8))
+    if provider_kind != "synthetic":
+        n_calib = int(cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib, 16)))
+        n_eval_real = max(1, n_eval_real)
+        real_splits, seq = _real_kv_splits(
+            cfg, run_dir, n_calib=n_calib, n_eval=n_eval_real, requested_seq=seq
+        )
+        n_agg = min(n_agg, n_calib)
     # 同一模型对：calib 与 held-out eval 复用同一组 w_t/w_s（§32），
     # 只换 latent Z —— 否则等于拿不同模型的 KV 做 train/eval。
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
     calib_kv: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     eval_kv: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    eval_multiplier = 1
     for kind in kinds:
-        calib = _synth_calibration_set(
-            n_t, n_s, seq, H, D, n_calib, master_seed=0, noise=0.05,
-            w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
+        calib = (
+            real_splits[kind]["calib"]
+            if real_splits is not None
+            else _synth_calibration_set(
+                n_t, n_s, seq, H, D, n_calib, master_seed=0, noise=0.05,
+                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+            )
         )
+        kind_de_rope = _de_rope_for_kind(cfg, kind, de_rope_fn)
+        ridge_ref.lam = _ridge_lambda(cfg, kind)
         fit_ridge_aggregate(ridge_ref, calib, layer_map, kv_kind=kind,
                             positions=np.arange(seq, dtype=np.float64),
-                            de_rope_fn=de_rope_fn)  # §22：PCR 分母也 K/V 独立
+                            de_rope_fn=kind_de_rope)  # §22：PCR 分母也 K/V 独立
         # ALS 无法按 Gram 聚合：把 n_agg 个样本沿 S 维 concat 成一个大 KV 后
         # 只 fit 一次（方案 A）。数学上等价于"用全部样本训练"（Ridge 情形已由
         # fit_ridge_aggregate 证明等价；ALS 非凸，concat 是唯一严格写法）。
         calib_kv[kind] = concat_kv_samples(calib[:n_agg])
         # held-out 评估样本（同一模型对、不同 Z）
-        eval_kv[kind] = _synth_calibration_set(
-            n_t, n_s, seq, H, D, 1, master_seed=2, noise=0.05,
-            w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],  # §22
-        )[0]
+        if real_splits is not None:
+            eval_multiplier = len(real_splits[kind]["eval"])
+            eval_kv[kind] = concat_kv_samples(real_splits[kind]["eval"])
+        else:
+            eval_kv[kind] = _synth_calibration_set(
+                n_t, n_s, seq, H, D, 1, master_seed=2, noise=0.05,
+                w_t=w_t, w_s=w_s, kv_seed_offset=KIND_SEED_OFFSET[kind],
+            )[0]
     # PCR 分母：Ridge 全量参数；positions_big 对应 concat 后 (n_agg*S) 的坐标
     p_ref = ridge_ref.n_params
     positions_big = np.tile(np.arange(seq, dtype=np.float64), n_agg)
     positions = np.arange(seq, dtype=np.float64)
+    positions_eval = np.tile(positions, eval_multiplier)
 
     def _fit_score_kinds(
         mapper, kinds: list[str], row: dict[str, Any]
@@ -961,10 +1121,11 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             # concat 后的大 KV 校准样本（沿 S 维拼接，position 用 positions_big）
             kv_t_big, kv_s_big = calib_kv[kind]
             kv_t_eval, kv_s_eval = eval_kv[kind]
+            kind_de_rope = _de_rope_for_kind(cfg, kind, de_rope_fn)
             mapper.fit(kv_t_big, kv_s_big, layer_map, kv_kind=kind,
-                       positions=positions_big, de_rope_fn=de_rope_fn)  # §22
+                       positions=positions_big, de_rope_fn=kind_de_rope)  # §22
             pred = mapper.transform(kv_t_eval, layer_map, kv_kind=kind,
-                                    positions=positions, de_rope_fn=de_rope_fn)  # §22
+                                    positions=positions_eval, de_rope_fn=kind_de_rope)  # §22
             m = _score_kv(pred, kv_s_eval)
             # retention 有界到 1.0；分母 max(...,1e-6) 防御 self cosine=0 除零
             ret = min(1.0, m["cosine"] / max(_score_kv(kv_s_eval, kv_s_eval)["cosine"], 1e-6))
@@ -1003,7 +1164,15 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         _fit_score_kinds(sb, kinds, row_sb)
         rows.append(row_sb)
 
-    metrics = {"task": "T06", "p_ref_n_params": p_ref, "rows": rows}
+    metrics = {
+        "task": "T06",
+        "p_ref_n_params": p_ref,
+        "rows": rows,
+        "data_source": provider_kind,
+        "offline_demo": provider_kind == "synthetic",
+        "de_rope_k": _de_rope_for_kind(cfg, "K", de_rope_fn) is not None,
+        "de_rope_v": _de_rope_for_kind(cfg, "V", de_rope_fn) is not None,
+    }
     write_json(run_dir / "metrics.json", metrics)
     summary = (
         "# T06 Lightweight Mapper (PCR vs Retention, Figure 1)\n\n"

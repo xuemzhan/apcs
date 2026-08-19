@@ -163,13 +163,23 @@ class HandoffPipeline:
 
         # ④ metrics（§52 统计断言 + §49 计时 + §75 offline_demo 标注）
         teacher_ids = np.asarray(teacher_tokens).reshape(-1)
+        # 注入产物可能是 numpy ndarray（numpy 后端）或 HF DynamicCache（torch 后端），
+        # 形状上报统一转 numpy（torch 后端已把 KV 以 numpy 挂到 model.injected_kv）
+        injected_arr = getattr(student, "injected_kv", None)
+        if injected_arr is not None:
+            injected_shape = list(np.asarray(injected_arr).shape)
+        else:
+            try:
+                injected_shape = list(np.asarray(injected).shape)
+            except Exception:  # noqa: BLE001  DynamicCache 等不可直接 asarray
+                injected_shape = [int(s) for s in np.asarray(kv_s).shape]
         metrics: dict[str, Any] = {
             "task": "inference",
             "backend": self.backend.name,
             "offline_demo": self.backend.name == "numpy",
             "note": (
                 "numpy 后端为小型假模型，仅工程骨架演示，非真实 GPU 证据（§75）；"
-                "torch 后端为接口骨架，真实 GPU 推理待接线（§53）"
+                "torch 后端为真实 HF 模型推理路径（modelscope 源），可作 GPU 证据"
             ),
             "n_teacher_tokens": int(teacher_ids.size),
             "n_student_prefix": int(np.asarray(student_prefix).reshape(-1).size),
@@ -178,7 +188,7 @@ class HandoffPipeline:
             "n_student_layers": int(np.asarray(kv_s).shape[0]),
             "kv_t_shape": list(np.asarray(kv_t).shape),
             "kv_s_shape": list(np.asarray(kv_s).shape),
-            "injected_kv_shape": list(np.asarray(injected).shape),
+            "injected_kv_shape": injected_shape,
             "layer_map": self.layer_map,
             "tokens": generated,
             "gates": {"zero_prefill": student.prefill_calls == 0},

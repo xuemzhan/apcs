@@ -26,6 +26,10 @@ Figure 7: Geometry
 """
 from __future__ import annotations
 
+# Figure 渲染是批处理任务，不依赖桌面/Tk。必须在导入 pyplot 前固定无头后端。
+import matplotlib
+matplotlib.use("Agg")
+
 from pathlib import Path
 
 
@@ -107,6 +111,8 @@ def fig3_pareto(t09_metrics: dict, t10_metrics: dict, out_path: Path):
     语义：右上象限（CHG>0 ∧ PSR_A>0）= 能力增强且省时，即论文主张的有利区域；
     其它象限结论要降级（如仅效率、仅能力或都不成立）。
     """
+    if not t09_metrics.get("chg_bootstrap") or not t10_metrics.get("per_context"):
+        return
     import matplotlib.pyplot as plt
 
     chg = t09_metrics.get("chg_bootstrap", {}).get("point", 0)

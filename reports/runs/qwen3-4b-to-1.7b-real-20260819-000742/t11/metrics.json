@@ -1,0 +1,13 @@
+{
+  "task": "T11",
+  "retention": 0.7138995726117969,
+  "chg": 0.1626161994292098,
+  "tgrr": 0.5384204362211394,
+  "psr_a": 0.6166666666666667,
+  "verdict": "D_STOP_REPLACEABILITY_UNSTABLE",
+  "sources": {
+    "t05_found": true,
+    "t09_found": true,
+    "t10_found": true
+  }
+}

@@ -29,6 +29,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Any
 
@@ -134,7 +135,7 @@ def _normalize_mmlu(row: dict[str, Any]) -> Sample:
     )
 
 
-def _split_train_val_test(ds, val_frac: float = 0.1):
+def _split_train_val_test(ds, val_frac: float = 0.1, seed: int = 0):
     """HuggingFace datasets 中切分 train/val/test。
 
     多数 HF 数据集只给 `train`；约定：
@@ -142,6 +143,10 @@ def _split_train_val_test(ds, val_frac: float = 0.1):
         - validation:  中间 (80%, 80% + 10%)
         - test     : 后 10%
     """
+    # 先确定性 shuffle，再切片。不能直接取“前 N 条”分别充当 train/test，
+    # 否则不同调用会重复消费同一批样本，造成 Mapper 校准/评估泄漏。
+    if hasattr(ds, "shuffle"):
+        ds = ds.shuffle(seed=int(seed))
     n = len(ds)
     n_train = int(n * 0.8)
     n_val = int(n * val_frac)
@@ -152,40 +157,55 @@ def _split_train_val_test(ds, val_frac: float = 0.1):
     }
 
 
+def _select_split(ds, split: str, *, seed: int, n: int):
+    """从一个母体数据集取确定且互斥的 train/validation/test 子集。"""
+    if split not in {"train", "validation", "test"}:
+        raise ValueError(f"split must be train/validation/test, got {split!r}")
+    part = _split_train_val_test(ds, seed=seed)[split]
+    return part.select(range(min(int(n), len(part))))
+
+
+def _stamp_split(rows: list[Sample], split: str) -> list[Sample]:
+    """规范化函数不再决定实验 split；由加载入口统一盖章。"""
+    for row in rows:
+        row.split = split
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # 注册的 loader
 # ---------------------------------------------------------------------------
 
 
 @_register("hellaswag")
-def load_hellaswag(n: int) -> list[Sample]:
+def load_hellaswag(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """HellaSwag（§15 Fidelity Set）—— commonsense 续写。"""
     ds_mod = _import_datasets()
     ds = ds_mod.load_dataset("hellaswag", split="train", trust_remote_code=True)
-    ds = ds.select(range(min(n, len(ds))))
-    return [_normalize_hellaswag(r) for r in ds]
+    ds = _select_split(ds, split, seed=seed, n=n)
+    return _stamp_split([_normalize_hellaswag(r) for r in ds], split)
 
 
 @_register("arc_challenge")
-def load_arc_challenge(n: int) -> list[Sample]:
+def load_arc_challenge(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """ARC-Challenge（§15 Fidelity Set）—— 小学科学选择题。"""
     ds_mod = _import_datasets()
     ds = ds_mod.load_dataset("allenai/ai2_arc", "ARC-Challenge", split="train", trust_remote_code=True)
-    ds = ds.select(range(min(n, len(ds))))
-    return [_normalize_arc(r) for r in ds]
+    ds = _select_split(ds, split, seed=seed, n=n)
+    return _stamp_split([_normalize_arc(r) for r in ds], split)
 
 
 @_register("arc_easy")
-def load_arc_easy(n: int) -> list[Sample]:
+def load_arc_easy(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """ARC-Easy（§15 Fidelity Set）。"""
     ds_mod = _import_datasets()
     ds = ds_mod.load_dataset("allenai/ai2_arc", "ARC-Easy", split="train", trust_remote_code=True)
-    ds = ds.select(range(min(n, len(ds))))
-    return [_normalize_arc(r) for r in ds]
+    ds = _select_split(ds, split, seed=seed, n=n)
+    return _stamp_split([_normalize_arc(r) for r in ds], split)
 
 
 @_register("mmlu")
-def load_mmlu(n: int) -> list[Sample]:
+def load_mmlu(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """MMLU（§16 Teacher-Advantage Set）—— 57 学科，4 选项。
 
     备注：HF 上的 MMLU 通常以 `cais/mmlu` / `hails/mmlu_no_train` 形式提供。
@@ -196,19 +216,19 @@ def load_mmlu(n: int) -> list[Sample]:
     except Exception:
         # fallback：部分数据集 hub 改名
         ds = ds_mod.load_dataset("hails/mmlu_no_train", split="test", trust_remote_code=True)
-    ds = ds.select(range(min(n, len(ds))))
-    return [_normalize_mmlu(r) for r in ds]
+    ds = _select_split(ds, split, seed=seed, n=n)
+    return _stamp_split([_normalize_mmlu(r) for r in ds], split)
 
 
 @_register("winogrande")
-def load_winogrande(n: int) -> list[Sample]:
+def load_winogrande(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """WinoGrande（§15 Fidelity Set）—— 共指消解。
 
     双选项（option1 / option2 + answer 整数）。
     """
     ds_mod = _import_datasets()
     ds = ds_mod.load_dataset("winogrande", "winogrande_xl", split="train", trust_remote_code=True)
-    ds = ds.select(range(min(n, len(ds))))
+    ds = _select_split(ds, split, seed=seed, n=n)
     out = []
     for r in ds:
         ctx = (r.get("sentence") or "").strip()
@@ -226,7 +246,7 @@ def load_winogrande(n: int) -> list[Sample]:
                 context=ctx,
                 query=f"Fill the blank (option1={opt1} | option2={opt2})",
                 answer=correct,
-                split="train",
+                split=split,
             )
         )
     return out
@@ -237,8 +257,14 @@ def load_winogrande(n: int) -> list[Sample]:
 # ---------------------------------------------------------------------------
 
 
-def load(name: str, n: int = 32) -> list[Sample]:
-    """按 dataset 名取前 n 个样本（list[Sample]），与 apcs.data.sync_* 接口对齐。
+def load(
+    name: str,
+    n: int = 32,
+    *,
+    split: str = "train",
+    seed: int = 0,
+) -> list[Sample]:
+    """按 dataset 名取确定性 split 的 n 个样本。
 
     这层不让 runner 感知 HF / synthetic 的差异——runner 只看到 Stream of Sample。
     """
@@ -246,7 +272,27 @@ def load(name: str, n: int = 32) -> list[Sample]:
         raise KeyError(
             f"Unknown dataset {name!r}. Available: {sorted(_REGISTRY.keys())}"
         )
-    return _REGISTRY[name](n)
+    rows = _REGISTRY[name](n, split=split, seed=seed)
+    # 双重防线：不同 split 的 manifest 不仅依赖调用者约定，也能在审计时
+    # 用稳定 hash 复核。同一原始 sample_id 在不同 split 不会被重新命名。
+    ids = [r.sample_id for r in rows]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError(f"dataset {name!r} split {split!r} contains duplicate sample_id")
+    return rows
+
+
+def split_manifest(name: str, rows: list[Sample], split: str, seed: int) -> dict[str, Any]:
+    """构造可落盘的数据清单；不包含题目正文，避免产物膨胀。"""
+    ids = [r.sample_id for r in rows]
+    digest = hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest()
+    return {
+        "dataset": name,
+        "split": split,
+        "seed": int(seed),
+        "n_samples": len(ids),
+        "sample_ids": ids,
+        "sample_ids_sha256": digest,
+    }
 
 
 def registered_names() -> list[str]:
@@ -269,6 +315,7 @@ def ensure_datasets_available() -> None:
 
 __all__ = [
     "load",
+    "split_manifest",
     "registered_names",
     "ensure_datasets_available",
     "load_hellaswag",

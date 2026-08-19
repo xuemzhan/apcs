@@ -88,7 +88,7 @@ def safe_calibration_defaults(
     D: int,
     seq: int,
     budget_fraction: float = 0.10,
-    n_calib_max: int = 32,
+    n_calib_max: int = 128,
 ) -> dict[str, int]:
     """按可用内存返回保守的 n_calib / seq 建议值。
 
@@ -103,6 +103,9 @@ def safe_calibration_defaults(
     公式（per-bug-3 聚合）：
         一次 fit_ridge_aggregate 需要把 (n_calib, seq, H, D) 张量同时驻留，
         加上等价的 Teacher 张量 + 临时 X^T X / X^T Y 矩阵 —— 经验上限 8× 系数。
+
+    n_calib 上界 n_calib_max：设计规格 §32 要求 100–500 校准样本，
+    默认 128（充裕内存直达上限），保证 8 ≤ n_calib ≤ 128 的安全区间。
     """
     avail = _available_memory_bytes()
     budget = int(avail * budget_fraction)
@@ -113,7 +116,7 @@ def safe_calibration_defaults(
     if size_all_layers <= 0:
         return {"n_calib_estimate": 8, "seq_estimate": 128}
     n_calib = max(1, budget // size_all_layers)
-    # 下限 8（保证 ridge 至少 8 个样本）；上限 n_calib_max（默认 32）
+    # 下限 8（保证 ridge 至少 8 个样本）；上限 n_calib_max（默认 128）
     n_calib = max(8, min(n_calib_max, n_calib))
     # 若 seq 太大、n_calib 跌出下限，缩 seq
     if seq > 1024 and n_calib < 16:
