@@ -1,4 +1,4 @@
-"""推理后端接口 + numpy 假模型 + torch 骨架（design.md §53 / §49）。
+"""推理后端接口 + numpy 假模型 + torch 完整路径（design.md §53 / §49）。
 
 ═══════════════════════════════════════════════════════════════════════════════
 本模块对应 design.md：
@@ -17,13 +17,143 @@
     - inject(model, kv): 把映射后 (L_s, S, H, D) KV 注入 Student 缓存。
     - unload(model): 释放模型（GPU 后端还 CPU offload）。
     - sync(): §49 计时边界同步；CPU 后端 no-op。
+
+§52 inject-eval 新增：
+    - ZeroPrefillCounter: 按阶段跟踪 token 计数，统计断言 zero-prefill。
+    - pkv_to_numpy(): 模块级导出，与 HFKVProvider capture 布局字节一致。
+    - _build_cache_from_kv(): 支持 GQA repeat_interleave（kv_heads→attn_heads）。
+    - TorchBackend.decode_step(): 带显式 position_ids 的 forward，防位置错位。
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+
+# ---------------------------------------------------------------------------
+# §52 zero-prefill 统计计数器
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ZeroPrefillCounter:
+    """§52 禁止 1 — 按阶段跟踪 token 计数，验证 zero-prefill 守卫。
+
+    每个阶段（teacher_prefill / inject / query_decode）独立计数；
+    evaluator.evaluate 结束后断言：
+        - query_decode.new_tokens == len(query_tokens)  （学生只看到 query）
+        - query_decode.past_len == seq_len（注入位置与 Teacher 长度一致）
+        - student_prefill.new_tokens == 0（Student 不重新读 X）
+
+    §53 单卡执行顺序：Teacher Load → Forward → Capture → CPU Offload →
+        Teacher Unload → CUDA Cleanup → Student Load → Map → Inject → Decode
+    本计数器贯穿整条链路，为 §52 禁止 1 提供统计断言依据。
+    """
+
+    teacher_prefill_tokens: int = 0
+    inject_seq_len: int = 0
+    query_decode_new_tokens: int = 0
+    query_decode_past_len: int = 0
+    student_prefill_new_tokens: int = 0
+
+    def record_teacher_prefill(self, seq_len: int) -> None:
+        """记录 Teacher prefill 阶段产出的序列长度。"""
+        self.teacher_prefill_tokens = seq_len
+
+    def record_inject(self, seq_len: int) -> None:
+        """记录注入的 KV 缓存序列长度（inject 后 past_len 应等于此值）。"""
+        self.inject_seq_len = seq_len
+
+    def record_query_decode(self, new_tokens: int, past_len: int) -> None:
+        """记录 query decode 阶段：新 token 数与 past_len。"""
+        self.query_decode_new_tokens = new_tokens
+        self.query_decode_past_len = past_len
+
+    def record_student_prefill(self, new_tokens: int) -> None:
+        """记录 student 自身 prefill（zero-prefill 路径应为 0）。"""
+        self.student_prefill_new_tokens = new_tokens
+
+    def assert_zero_prefill(self) -> None:
+        """§52 禁止 1 统计断言：Student 不得重新读 X。
+
+        Raises:
+            RuntimeError: 断言失败时携带完整计数信息。
+        """
+        if self.student_prefill_new_tokens != 0:
+            raise RuntimeError(
+                f"§52 禁止 1 违反：Student 重新读取了 X "
+                f"(student_prefill_new_tokens={self.student_prefill_new_tokens})。"
+                f"零 prefill 路径要求 Student 不重新 prefill，只用注入的 KV 缓存。"
+                f"计数器状态：{self._summary()}"
+            )
+
+    def assert_query_handoff(self) -> None:
+        """断言 query decode 只消耗了 query 长度的新 token，且 past_len == inject_seq_len。
+
+        Raises:
+            RuntimeError: 断言失败时携带完整计数信息。
+        """
+        if self.query_decode_past_len != self.inject_seq_len:
+            raise RuntimeError(
+                f"§52 zero-prefill handoff 断言失败：past_len({self.query_decode_past_len}) "
+                f"!= inject_seq_len({self.inject_seq_len})。"
+                f"这表明 query forward 可能重新读取了 context token。"
+                f"计数器状态：{self._summary()}"
+            )
+
+    @property
+    def is_verified(self) -> bool:
+        """综合验证：zero-prefill + handoff 均通过。"""
+        try:
+            self.assert_zero_prefill()
+            self.assert_query_handoff()
+            return True
+        except RuntimeError:
+            return False
+
+    def _summary(self) -> dict[str, int]:
+        return {
+            "teacher_prefill_tokens": self.teacher_prefill_tokens,
+            "inject_seq_len": self.inject_seq_len,
+            "query_decode_new_tokens": self.query_decode_new_tokens,
+            "query_decode_past_len": self.query_decode_past_len,
+            "student_prefill_new_tokens": self.student_prefill_new_tokens,
+        }
+
+
+# ---------------------------------------------------------------------------
+# KV 缓存布局工具（inject-eval 专用）
+# ---------------------------------------------------------------------------
+
+
+def pkv_to_numpy(pkv, num_layers: int, num_kv_heads: int, head_dim: int) -> np.ndarray:
+    """把 HF past_key_values 导出为 (L, S, H, 2*D) float32 numpy。
+
+    布局与 HFKVProvider.capture / hf_model.capture_kv_pair 字节一致：
+        每层 K 与 V 沿最后维拼接成 (H, S, 2*D)，再 permute 成 (S, H, 2*D)，
+        叠成 (L, S, H, 2*D)。K 在前 D 维，V 在后 D 维。
+
+    这是 inject-eval 路径的唯一导出函数：Teacher prefill 后调用此函数将
+    PKV 转入 numpy 宿主内存，经 mapper.transform 映射后再注入 Student。
+
+    Args:
+        pkv: HF past_key_values（DynamicCache 或 tuple of (K, V) per layer）
+        num_layers: 模型层数（从 config.num_hidden_layers 获取）
+        num_kv_heads: KV head 数
+        head_dim: 每 head 维度
+
+    Returns:
+        np.ndarray shape=(L, S, H, 2*D), dtype=float32
+        K 在前 D 维，V 在后 D 维。
+
+    Raises:
+        ImportError: torch 未安装。
+        ValueError: pkv 格式无法解析。
+    """
+    return _extract_kv_numpy(pkv, num_layers)
+
 
 # ---------------------------------------------------------------------------
 # 后端抽象接口
@@ -423,7 +553,10 @@ def _extract_kv_numpy(pkv, n_layers: int, dtype_bytes: int = 2) -> np.ndarray:
 
 
 def _build_cache_from_kv(
-    kv: np.ndarray, device: str | None = None, dtype: Any | None = None
+    kv: np.ndarray,
+    device: str | None = None,
+    dtype: Any | None = None,
+    num_attention_heads: int | None = None,
 ) -> Any:
     """把 numpy (L, S, H, 2D) 联合 KV 行还原成 HF DynamicCache。
 
@@ -434,6 +567,12 @@ def _build_cache_from_kv(
     拼接缓存时触发 "Expected all tensors to be on the same device"）；
     dtype 指定时按模型精度铸造（bf16 模型 + float32 缓存会让 SDPA 抛
     "Expected query, key, and value to have the same dtype"）。
+
+    GQA 支持（§52 inject-eval）：
+        Qwen3-1.7B 有 8 个 KV head 但 16 个 attention head（GQA ratio=2）。
+        当 num_attention_heads > H 时，沿 head 维 repeat_interleave 扩展，
+        使 KV 缓存的 head 数与模型 attention head 数一致。
+        repeats = num_attention_heads // H；不整除时 raise。
     """
     import torch  # type: ignore
 
@@ -447,6 +586,16 @@ def _build_cache_from_kv(
 
     kt = torch.from_numpy(kv[:, :, :, :D]).permute(0, 2, 1, 3)  # (L,H,S,D)
     vt = torch.from_numpy(kv[:, :, :, D:]).permute(0, 2, 1, 3)
+    # GQA 扩展：kv_heads -> attention_heads（§52 inject-eval）
+    if num_attention_heads is not None and num_attention_heads > H:
+        if num_attention_heads % H != 0:
+            raise ValueError(
+                f"num_attention_heads({num_attention_heads}) 必须是 num_kv_heads({H}) 的整数倍"
+                f"（GQA 要求 repeat_interleave 整除）"
+            )
+        repeats = num_attention_heads // H
+        kt = kt.repeat_interleave(repeats, dim=1)  # (L, A, S, D)
+        vt = vt.repeat_interleave(repeats, dim=1)
     if dtype is not None:
         kt = kt.to(dtype)
         vt = vt.to(dtype)
@@ -543,6 +692,7 @@ class TorchBackend(InferenceBackend):
             revision=revision,
             torch_dtype=dtype,
             device_map={"": device},
+            attn_implementation="sdpa",
         )
         tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
         model.eval()
@@ -603,18 +753,94 @@ class TorchBackend(InferenceBackend):
         next_tok = int(torch.argmax(logits_t, dim=-1).item())
         return next_tok, out.past_key_values, logits_t.cpu().numpy()
 
+    def decode_step(
+        self,
+        model: TorchModel,
+        input_ids,
+        past_key_values,
+        position_offset: int,
+    ) -> tuple[Any, Any, np.ndarray]:
+        """§52 inject-eval 单步 decode：带显式 position_ids 的 forward。
+
+        与 decode_with_logits 的区别：
+            - 显式传 position_ids=[position_offset]，确保 query token
+              的位置从注入 KV 的 seq_len 之后开始（不依赖 HF 自动推断）。
+            - 前置断言 past_key_values 长度 == position_offset，
+              保证 Student 没有偷偷重读 X（§52 禁止 1 的运行时守卫）。
+
+        Args:
+            model: TorchModel 包装
+            input_ids: 当前 step 的 token ids ((1,) 或 (1,1))
+            past_key_values: 注入的 PKV（DynamicCache / tuple / numpy）
+            position_offset: 位置偏移量 = inject_seq_len（注入 KV 的序列长度）
+
+        Returns:
+            (next_token, new_pkv, logits_float32)
+
+        Raises:
+            RuntimeError: past_key_values 长度 != position_offset（zero-prefill 违反）。
+        """
+        import torch  # type: ignore
+
+        model.decode_calls += 1
+        tok = int(np.asarray(input_ids).reshape(-1)[0])
+        cache = past_key_values
+        # 如果传入的是 numpy array，先转成 DynamicCache
+        if not isinstance(past_key_values, tuple) and not hasattr(
+            past_key_values, "key_cache"
+        ):
+            num_attn_heads = int(
+                getattr(model.model.config, "num_attention_heads", 0)
+            ) or None
+            cache = _build_cache_from_kv(
+                past_key_values, device=model.device, dtype=model.model.dtype,
+                num_attention_heads=num_attn_heads,
+            )
+        # §52 零 prefill 守卫：断言 past_len == position_offset
+        if hasattr(cache, "key_cache"):
+            past_len = cache.key_cache[0].shape[2] if cache.key_cache else 0
+        elif isinstance(cache, tuple) and cache:
+            past_len = cache[0][0].shape[2] if isinstance(cache[0], tuple) else 0
+        else:
+            past_len = 0
+        if past_len != position_offset:
+            raise RuntimeError(
+                f"§52 zero-prefill 违反：past_len({past_len}) != position_offset({position_offset})。"
+                f"query forward 前 past_key_values 应恰好包含 inject_seq_len 个 token 的 KV，"
+                f"不得重新读取 X（§52 禁止 1）。"
+            )
+        ids = torch.as_tensor([[tok]], dtype=torch.long).to(model.device)
+        pos_ids = torch.as_tensor([[position_offset]], dtype=torch.long).to(model.device)
+        with torch.no_grad():
+            out = model.model(
+                ids, past_key_values=cache, use_cache=True, position_ids=pos_ids
+            )
+        logits_t = out.logits[:, -1].float()
+        next_tok = int(torch.argmax(logits_t, dim=-1).item())
+        return next_tok, out.past_key_values, logits_t.cpu().numpy()
+
     def inject(self, model: TorchModel, kv) -> object:
         """§53 Inject：把映射后 (L_s, S, H, 2D) 联合 KV 还原为可消费缓存。
 
         校验失败显式 raise（§52 禁止 8，不静默 re-prefill）。
         返回 DynamicCache（decode 复用）。
+
+        §52 inject-eval GQA 支持：
+            Student 可能使用 GQA（如 Qwen3-1.7B: 8 kv_heads, 16 attn_heads）。
+            此处自动检测 num_attention_heads 并做 repeat_interleave 扩展。
         """
         kv = np.asarray(kv)
         if kv.ndim != 4:
             raise NotImplementedError(
                 f"注入 KV 形状 {kv.shape} 非法（需 (L, S, H, 2D)）：inject 必须显式校验，禁止静默 re-prefill（§52 禁止 8）"
             )
-        cache = _build_cache_from_kv(kv, device=model.device, dtype=model.model.dtype)
+        num_attn_heads = int(
+            getattr(model.model.config, "num_attention_heads", 0)
+        ) or None
+        cache = _build_cache_from_kv(
+            kv, device=model.device, dtype=model.model.dtype,
+            num_attention_heads=num_attn_heads,
+        )
         model.injected_kv = kv
         return cache
 

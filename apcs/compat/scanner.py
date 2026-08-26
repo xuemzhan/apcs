@@ -14,11 +14,17 @@
 fallback 策略：当 transformers/torch 未安装时（CI/离线开发机），
     基于 Qwen3 model_id 字符串硬编码一组合理估计，保证单元测试与
     完整实验流都能跑通。生产环境应使用 AutoConfig 真实读取。
+
+T00 溯源防串跑：scanner 输出新增 revision / rope_theta / tokenizer_hash，
+    tokenizer_hash 基于 HF 本地缓存 tokenizer_config.json 的 SHA-256，
+    离线环境（无缓存）返回 "unavailable:<reason>" 而不崩溃。
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..io import load_config  # noqa: F401  (re-export for convenience)
@@ -33,6 +39,10 @@ class ModelSpec:
         - num_kv_heads / head_dim / hidden_size → KV 维度匹配判定（G1/G2）
         - vocab_size → tokenizer 是否一致的粗略判定（同 vocab 视为同词表）
         - num_layers → T03 Layer Alignment 的层映射依据（L_t / L_s）
+        - revision → 防串跑：确保扫描时使用的模型版本与预期一致
+        - rope_theta → RoPE 频率参数（T02 需要读取）
+        - tokenizer_hash → 溯源：SHA-256 哈希 tokenizer_config.json，
+          防止同名模型不同 tokenizer 版本导致串跑
     """
     model_id: str
     revision: str
@@ -48,7 +58,36 @@ class ModelSpec:
     rope_scaling: dict | None = None
     attention_implementation: str = ""
     dtype: str = ""
+    tokenizer_hash: str = ""
     extras: dict[str, Any] = field(default_factory=dict)
+
+
+def _tokenizer_hash(model_id: str) -> str:
+    """T00 溯源：计算 HF 本地缓存中 tokenizer_config.json 的 SHA-256 哈希。
+
+    缓存路径：~/.cache/huggingface/hub/models--{org}--{model}/snapshots/<snap>/tokenizer_config.json
+    离线环境（无缓存）返回 "unavailable:<reason>" 而不崩溃。
+
+    为什么要 hash 而不是直接比较 tokenizer_name：同名模型不同版本
+    可能更换 tokenizer（vocab 扩充 / special tokens 变化），
+    SHA-256 能精确区分 tokenizer_config.json 的任何字节差异。
+    """
+    cache_root = Path.home() / ".cache" / "huggingface" / "hub"
+    # HF 缓存目录命名规则："org/model" → "models--org--model"
+    cache_model_dir = cache_root / f"models--{model_id.replace('/', '--')}"
+    snapshots_dir = cache_model_dir / "snapshots"
+
+    if not snapshots_dir.exists():
+        return f"unavailable:HF cache not found for {model_id}"
+
+    # 遍历所有 snapshot 目录，取第一个包含 tokenizer_config.json 的
+    for snap in sorted(snapshots_dir.iterdir()):
+        tok_config = snap / "tokenizer_config.json"
+        if tok_config.exists():
+            data = tok_config.read_bytes()
+            return hashlib.sha256(data).hexdigest()
+
+    return f"unavailable:no tokenizer_config.json in any snapshot for {model_id}"
 
 
 def _from_config_dict(model_id: str, revision: str, cfg: dict[str, Any]) -> ModelSpec:
@@ -202,11 +241,18 @@ def scan_model(spec_cfg: dict[str, Any]) -> ModelSpec:
     时 `AutoConfig.from_pretrained` 抛 OSError（ConnectionError/HTTPError），
     应同样回退到已知架构估计，而不是让 T00 崩溃。离线时先经 _hf_reachable
     快速探测，避免每次等待 ~10s 连接超时。
+
+    T00 溯源防串跑：扫描完成后计算 tokenizer_hash（SHA-256），
+    写入 ModelSpec.tokenizer_hash 以供后续任务防串跑校验。
     """
     try:
-        return _live_spec(spec_cfg)
+        spec = _live_spec(spec_cfg)
     except (ImportError, OSError):
-        return _fallback_spec(spec_cfg)
+        spec = _fallback_spec(spec_cfg)
+    # T00 溯源：计算 tokenizer_config.json 的 SHA-256 哈希
+    # 离线环境无 HF 缓存时返回 "unavailable:<reason>"，不崩溃
+    spec.tokenizer_hash = _tokenizer_hash(spec_cfg["model_id"])
+    return spec
 
 
 def compatibility_report(t: ModelSpec, s: ModelSpec) -> dict[str, Any]:
@@ -262,18 +308,19 @@ def run_compat_scan(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         1. scan_model 分别读取 teacher / student 架构（AutoConfig 优先，
            transformers 缺失时用 fallback 估计）；
         2. compatibility_report 对比两份 ModelSpec，得 G1/G2/G3 verdict；
-        3. 落盘 model_compatibility.json（两端 spec + verdict）、
+        3. 落盘 model_compatibility.json（两端 spec + verdict + 溯源字段）、
            metrics.json（status=OK + verdict）、summary.md（人类可读摘要）。
     """
     teacher_cfg = cfg["teacher"]
     student_cfg = cfg["student"]
-    # 步骤 1：分别扫描两端模型架构
+    # 步骤 1：分别扫描两端模型架构（含 tokenizer_hash 溯源）
     t = scan_model(teacher_cfg)
     s = scan_model(student_cfg)
     # 步骤 2：判定兼容性分流（G1/G2/G3）
     compat = compatibility_report(t, s)
 
     # 步骤 3a：model_compatibility.json = 两端完整 spec + 兼容性判定
+    # __dict__ 包含 revision / rope_theta / tokenizer_hash 等溯源字段
     payload = {
         "teacher": t.__dict__,
         "student": s.__dict__,
@@ -288,20 +335,20 @@ def run_compat_scan(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
     summary = (
         f"# T00 Compatibility Scanner\n\n"
-        f"- Teacher: {t.model_id}\n"
-        f"- Student: {s.model_id}\n"
+        f"- Teacher: {t.model_id} (revision={t.revision})\n"
+        f"- Student: {s.model_id} (revision={s.revision})\n"
         f"- Verdict: **{compat['verdict']}**\n\n"
         f"{compat['note']}\n\n"
         "## Teacher\n"
         f"- layers={t.num_layers}, hidden={t.hidden_size}, "
         f"heads={t.num_attention_heads}, kv_heads={t.num_kv_heads}, "
-        f"head_dim={t.head_dim}\n\n"
+        f"head_dim={t.head_dim}, rope_theta={t.rope_theta}\n\n"
         "## Student\n"
         f"- layers={s.num_layers}, hidden={s.hidden_size}, "
         f"heads={s.num_attention_heads}, kv_heads={s.num_kv_heads}, "
-        f"head_dim={s.head_dim}\n"
+        f"head_dim={s.head_dim}, rope_theta={s.rope_theta}\n"
     )
-    # 步骤 3c：summary.md 人类可读摘要（verdict + 两端关键维度）
+    # 步骤 3c：summary.md 人类可读摘要（verdict + 两端关键维度 + 溯源字段）
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")
 
     return {

@@ -45,6 +45,9 @@ class Sample:
         query: str              查询 q，解码入口
         answer: str | None      参考答案（评估用）；None 表示无监督/生成式 sample
         split: str              "train" | "validation" | "test"（§16 三层，见模块 docstring）
+        context_id: str | None  上下文级别 ID（§17 Long-Context Set）：
+                                同一 context_id 的所有 query 归属同一 split；
+                                None 表示 context_id := sample_id（向后兼容）。
 
     依赖：无。纯数据结构，不参与计算；消费方按 split 过滤。
     """
@@ -53,6 +56,7 @@ class Sample:
     query: str
     answer: str | None = None
     split: str = "test"            # train | validation | test（§16）
+    context_id: str | None = None  # §17 context-level splitting（向后兼容）
 
 
 def synthetic_fidelity_set(n: int = 8) -> list[Sample]:
@@ -161,3 +165,24 @@ def synthetic_behavior_set(n: int = 6) -> list[Sample]:
             )
         )
     return out
+
+
+def assert_xlevel_disjoint(rows: list[Sample]) -> None:
+    """校验 context-level splitting 的正确性：同一 context_id 不跨 split。
+
+    遍历所有行，按 context_id 聚合 split 集合；
+    若任何 context_id 出现在 ≥2 个不同 split，则 raise ValueError。
+    context_id 为 None 的行按 sample_id 兜底（单行天然不冲突）。
+    """
+    context_splits: dict[str, set[str]] = {}
+    for row in rows:
+        cid = row.context_id if row.context_id is not None else row.sample_id
+        context_splits.setdefault(cid, set()).add(row.split)
+    leaking = {cid: splits for cid, splits in context_splits.items() if len(splits) > 1}
+    if leaking:
+        detail = "; ".join(
+            f"{cid!r} → {sorted(splits)}" for cid, splits in sorted(leaking.items())
+        )
+        raise ValueError(
+            f"context_id 跨 split 泄漏（§17 上下文级互斥违反）: {detail}"
+        )

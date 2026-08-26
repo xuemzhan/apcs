@@ -18,7 +18,14 @@
 """
 from __future__ import annotations
 
-from .backends import InferenceBackend, NumpyBackend, NumpyFakeModel, TorchBackend
+from .backends import (
+    InferenceBackend,
+    NumpyBackend,
+    NumpyFakeModel,
+    TorchBackend,
+    ZeroPrefillCounter,
+    pkv_to_numpy,
+)
 from .pipeline import HandoffPipeline
 
 __all__ = [
@@ -27,4 +34,6 @@ __all__ = [
     "NumpyFakeModel",
     "TorchBackend",
     "HandoffPipeline",
+    "ZeroPrefillCounter",
+    "pkv_to_numpy",
 ]

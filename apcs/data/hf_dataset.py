@@ -33,7 +33,7 @@ import hashlib
 import os
 from typing import Any
 
-from . import Sample
+from . import Sample, assert_xlevel_disjoint
 
 
 def _import_datasets():
@@ -262,8 +262,9 @@ def load_arc_easy(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
 def load_mmlu(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     """MMLU（§16 Teacher-Advantage Set）—— 57 学科，4 选项。
 
-    本地缓存不可用时，从 teacher/student 模型邻域生成合成 MMLU 样本
-    （57 subjects × 4 choices，保留真实 MMLU 格式）。
+    仅从 HF Hub 加载真实 MMLU 数据；
+    cais/mmlu 与 hails/mmlu_no_train 均不可用时直接拒绝，不合成假数据
+    （§75 诚实性 + §52.4 防『偷偷切数据』）。
     """
     ds_mod = _import_datasets()
     ds = None
@@ -277,76 +278,10 @@ def load_mmlu(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     if ds is not None:
         ds = _select_split(ds, split, seed=seed, n=n)
         return _stamp_split([_normalize_mmlu(r) for r in ds], split)
-    # fallback: 合成 MMLU（57 学科，4 选项选择题）
-    import random as _rnd
-    import hashlib as _hl
-    _rnd.seed(seed + hash(split) % 100000)
-    subjects = [
-        "abstract_algebra", "anatomy", "astronomy", "business_ethics",
-        "college_biology", "college_chemistry", "college_computer_science",
-        "college_mathematics", "college_medicine", "college_physics",
-        "computer_security", "conceptual_physics", "econometrics",
-        "electrical_engineering", "elementary_mathematics", "formal_logic",
-        "global_facts", "high_school_biology", "high_school_chemistry",
-        "high_school_computer_science", "high_school_european_history",
-        "high_school_geography", "high_school_government_and_politics",
-        "high_school_macroeconomics", "high_school_mathematics",
-        "high_school_microeconomics", "high_school_physics",
-        "high_school_psychology", "high_school_statistics",
-        "high_school_us_history", "high_school_world_history",
-        "human_aging", "human_law", "international_law",
-        "jurisprudence", "logical_fallacies", "machine_learning",
-        "management", "marketing", "medical_genetics",
-        "miscellaneous", "moral_disputes", "moral_scenarios",
-        "nutrition", "philosophy", "prehistory",
-        "professional_accounting", "professional_law",
-        "professional_medicine", "professional_psychology",
-        "public_relations", "security_studies", "sociology",
-        "us_foreign_policy", "virology", "world_religions",
-    ]
-    choices_bank = [
-        ["True", "False", "Neither", "Both"],
-        ["A", "B", "C", "D"],
-        ["agree", "disagree", "neutral", "unsure"],
-        ["increase", "decrease", "stay the same", "fluctuate"],
-        ["1", "2", "3", "4"],
-        ["low", "medium", "high", "very high"],
-    ]
-    rows = []
-    n_per_subject = max(1, n // len(subjects))
-    idx = 0
-    for subj in subjects:
-        for _ in range(n_per_subject):
-            if len(rows) >= n:
-                break
-            c = _rnd.choice(choices_bank)
-            ans_idx = _rnd.randint(0, 3)
-            row = {
-                "question": f"Subject: {subj}. Sample question #{idx} about {subj}.",
-                "choices": c,
-                "answer": ans_idx,
-                "subject": subj,
-                "id": f"mmlu-{split}-s{seed}-{idx}",
-            }
-            rows.append(row)
-            idx += 1
-        if len(rows) >= n:
-            break
-    # pad if needed
-    while len(rows) < n:
-        subj = _rnd.choice(subjects)
-        c = _rnd.choice(choices_bank)
-        ans_idx = _rnd.randint(0, 3)
-        rows.append({
-            "question": f"Subject: {subj}. Sample question #{idx} about {subj}.",
-            "choices": c,
-            "answer": ans_idx,
-            "subject": subj,
-            "id": f"mmlu-{split}-s{seed}-{idx}",
-        })
-        idx += 1
-    samples = [_normalize_mmlu(r) for r in rows[:n]]
-    return _stamp_split(samples, split)
+    raise RuntimeError(
+        "MMLU unavailable: cais/mmlu and hails/mmlu_no_train both failed to load; "
+        "refusing to synthesize fake MMLU data"
+    )
 
 
 @_register("winogrande")
@@ -381,6 +316,228 @@ def load_winogrande(n: int, split: str = "train", seed: int = 0) -> list[Sample]
             )
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# §17 Long-Context Needle-in-a-Haystack 本地生成器
+# ---------------------------------------------------------------------------
+
+# 填充用段落池：生成近自然的叙事文本（不依赖 HF Hub）
+_PARAGRAPHS: list[str] = [
+    "The morning began with a gentle breeze that carried the scent of pine "
+    "through the valley. Birds sang their familiar melodies from the treetops, "
+    "and the sunlight painted golden patterns on the forest floor.",
+
+    "In the bustling marketplace, vendors arranged their wares with practiced "
+    "precision. Colorful fabrics hung from wooden stalls, and the aroma of "
+    "fresh bread mingled with the earthy scent of hand-ground spices.",
+
+    "The ancient library held thousands of volumes, each one carefully "
+    "catalogued by subject and era. Dust motes danced in the narrow beams "
+    "of light that filtered through the high arched windows above.",
+
+    "Rain pattered steadily against the windowpane as the train wound its way "
+    "through the countryside. Green hills rolled endlessly toward the horizon, "
+    "dotted with white houses and clusters of dark evergreen trees.",
+
+    "The laboratory was quiet except for the soft hum of equipment. Precise "
+    "measurements required absolute concentration, and the scientist adjusted "
+    "each dial with meticulous care before recording the observations.",
+
+    "A small fishing boat bobbed on the morning tide. The fisherman cast his "
+    "net into the deep blue water, watching as it spread in a wide arc before "
+    "sinking slowly beneath the surface.",
+
+    "The mountain trail grew steeper with each switchback. Wildflowers clung "
+    "to the rocky soil beside the path, their bright colors standing out "
+    "against the grey stone and dark green scrub brush.",
+
+    "Inside the workshop, the sound of a hammer on metal rang out in a "
+    "steady rhythm. Sparks flew with each precise strike as the blacksmith "
+    "shaped the glowing iron bar on his heavy anvil.",
+
+    "The concert hall filled slowly with the murmur of the arriving audience. "
+    "Musicians tuned their instruments in the warm glow of the stage lights, "
+    "preparing for the evening performance ahead.",
+
+    "Snow fell silently over the sleeping village. Chimney smoke rose in "
+    "lazy spirals against the pale grey sky, and the only sound was the "
+    "occasional creak of a snow-laden branch giving way under its weight.",
+
+    "The ship cut through the cold Atlantic waves on a clear winter morning. "
+    "Ice crystals glittered on the railing, and the crew moved efficiently "
+    "through their tasks despite the biting wind.",
+
+    "A fox padded quietly through the underbrush at twilight. Its russet fur "
+    "blended with the autumn leaves, and its ears swiveled forward at every "
+    "small sound in the gathering darkness.",
+
+    "The stone bridge spanned the narrow gorge where two rivers met. Below, "
+    "the water churned white over the rocks, and the spray hung in the air "
+    "like a fine mist that nourished the ferns along the bank.",
+
+    "Candles flickered in the dim dining room as the family gathered around "
+    "the heavy oak table. Steam rose from the soup bowls, and the warmth "
+    "of the fire in the hearth pushed back the evening chill.",
+
+    "The botanist knelt beside the rare orchid, sketching its intricate "
+    "petals in her field notebook. Each specimen was numbered and GPS-tagged "
+    "before being carefully pressed between sheets of absorbent paper.",
+]
+
+
+def _build_filler(target_words: int, context_idx: int) -> str:
+    """构建确定性填充文本，约 target_words 词。
+
+    从段落池循环取完整段落（自然度高），截到接近目标长度的句号处。
+    words→tokens 启发式：~1.3 tokens/word（见 load_needle_longctx docstring）。
+    """
+    parts: list[str] = []
+    word_count = 0
+    pidx = context_idx % len(_PARAGRAPHS)
+    while word_count < target_words:
+        para = _PARAGRAPHS[pidx % len(_PARAGRAPHS)]
+        parts.append(para)
+        word_count += len(para.split())
+        pidx += 1
+    text = " ".join(parts)
+    if word_count > target_words * 1.3:
+        words = text.split()
+        truncated = " ".join(words[:target_words])
+        last_period = truncated.rfind(".")
+        if last_period > len(truncated) // 2:
+            text = truncated[: last_period + 1]
+        else:
+            text = truncated + "."
+    return text
+
+
+# 候选 key / value 对（needle facts）
+_KEYS: list[str] = [
+    "alpha", "beta", "gamma", "delta", "epsilon", "zeta",
+    "theta", "kappa", "lambda", "sigma", "omega", "phi",
+]
+_VALUES: list[int] = [
+    42, 137, 256, 512, 1024, 2048, 3141, 8080, 9001, 6174, 2718, 1618,
+]
+
+
+@_register("needle_longctx")
+def load_needle_longctx(
+    n: int,
+    split: str = "train",
+    seed: int = 0,
+    *,
+    queries_per_context: int = 2,
+    target_tokens: int = 1024,
+) -> list[Sample]:
+    """§17 Long-Context Needle-in-a-Haystack 离线生成器（不依赖 HF Hub）。
+
+    每个上下文 X = filler 叙事文本 + 1..3 条嵌入式 needle facts，
+    格式为 "The magic number for <key> is <value>."；
+    每个 X 生成 queries_per_context 条 query（默认 2，可配2~4），
+    例如 "What is the magic number for <key>?"，answer=<value>。
+
+    上下文级分层（§16 §17）：
+        所有来自同一 X 的 query 共享同一个 context_id，归入同一 split；
+        不同 context_id 在 train/validation/test 之间互斥。
+        验证通过 assert_xlevel_disjoint(rows) 保证。
+
+    长度估算（words→tokens 启发式）：
+        1 word ≈ 1.3 tokens（英文叙事文本经验值）。
+        target_tokens 为近似目标，实际长度以生成的 word count 为准。
+        调用方传入 ~512 / ~1024 / ~4096 均可。
+
+    参数：
+        n:                每个 split 期望的上下文数量
+        split:            "train" | "validation" | "test"
+        seed:             确定性种子
+        queries_per_context: 每上下文的 query 数（2~4，默认 2）
+        target_tokens:    近似目标 token 数（默认 1024 ≈ ~770 词）
+    """
+    import random as _rnd_mod
+
+    rng = _rnd_mod.Random(seed + hash("needle_longctx") % 100000)
+
+    # ── 1. 确定需要生成的总上下文数 ──
+    # _split_train_val_test 用80/10/10切分；
+    # 为确保目标 split 至少有 n 个上下文，生成足够的总数。
+    if split == "train":
+        n_total = max(-(-n * 10 // 8), 10)  # ceil(n / 0.8)
+    else:
+        n_total = max(n * 10, 20)  # 10% fraction → 10x
+
+    target_words = max(1, int(target_tokens / 1.3))
+
+    # ── 2. 生成所有上下文 ──
+    contexts: list[tuple[str, str, list[tuple[str, int]]]] = []
+    for ci in range(n_total):
+        cid = f"nc-{seed}-{ci}"
+        # 确定 needle 数量（1~3，由 rng 决定）
+        n_needles = rng.randint(1, 3)
+        needle_keys = rng.sample(_KEYS, n_needles)
+        needle_vals = rng.sample(_VALUES, n_needles)
+        needles = list(zip(needle_keys, needle_vals))
+
+        # 填充文本
+        filler = _build_filler(target_words, ci)
+
+        # 把 needle facts 均匀嵌入 filler 中
+        sentences = filler.split(". ")
+        insert_positions = [
+            max(1, int((i + 1) * len(sentences) / (n_needles + 1)))
+            for i in range(n_needles)
+        ]
+        for pos, (k, v) in zip(insert_positions, needles):
+            needle_sent = f"The magic number for {k} is {v}."
+            sentences.insert(pos, needle_sent)
+        text = ". ".join(sentences)
+        if not text.endswith("."):
+            text += "."
+
+        contexts.append((cid, text, needles))
+
+    # ── 3. context-level split（§16 §17）──
+    n_train = int(n_total * 0.8)
+    n_val = int(n_total * 0.1)
+    split_map: dict[str, str] = {}
+    for ci in range(n_total):
+        if ci < n_train:
+            split_map[f"nc-{seed}-{ci}"] = "train"
+        elif ci < n_train + n_val:
+            split_map[f"nc-{seed}-{ci}"] = "validation"
+        else:
+            split_map[f"nc-{seed}-{ci}"] = "test"
+
+    # ── 4. 筛选目标 split，取前 n 个上下文 ──
+    target_contexts = [
+        (cid, text, needles)
+        for cid, text, needles in contexts
+        if split_map[cid] == split
+    ][:n]
+
+    # ── 5. 为每个上下文生成 queries ──
+    rows: list[Sample] = []
+    for ci, (cid, text, needles) in enumerate(target_contexts):
+        for qi in range(queries_per_context):
+            needle = needles[qi % len(needles)]
+            key, val = needle
+            query = f"What is the magic number for {key}?"
+            sample_id = f"nlx-{cid}-q{qi}"
+            rows.append(
+                Sample(
+                    sample_id=sample_id,
+                    context=text,
+                    query=query,
+                    answer=str(val),
+                    split=split,
+                    context_id=cid,
+                )
+            )
+
+    # ── 6. 互斥性校验（§17 上下文级分层保证）──
+    assert_xlevel_disjoint(rows)
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -454,4 +611,5 @@ __all__ = [
     "load_arc_easy",
     "load_mmlu",
     "load_winogrande",
+    "load_needle_longctx",
 ]

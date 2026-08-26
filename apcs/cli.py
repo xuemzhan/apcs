@@ -76,6 +76,8 @@ TASKS = {
                   "1/5/10/20 轮 CHG / KL / JCR / task score / latency（Figure 5）。"),
     "compliance": ("apcs.compliance", "run_compliance_check", "§52 Compliance",
                    "跑全部 8 条禁止项检查器，输出 violations 列表。"),
+    "inject-eval": ("apcs.inference.cli", "run_inject_eval", "Inject Eval",
+                    "Real path: Teacher prefill → map → inject → Student zero-prefill scoring."),
 }
 
 

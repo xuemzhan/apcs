@@ -73,6 +73,7 @@ def dependencies(task: str) -> set[str]:
         "ablation": {"t04", "t08"},
         "multiturn": {"t09"},
         "compliance": set(),  # compliance 不依赖其他 task
+        "inject-eval": {"t00"},  # inject-eval 依赖 t00（需 model_compatibility）
     }
     return deps.get(task, set())
 

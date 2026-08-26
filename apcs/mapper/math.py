@@ -1,4 +1,4 @@
-"""Ridge / Low-rank / Shared-Basis Mapper 数学实现。
+"""Ridge / Low-rank / Shared-Basis / V-Mapper Progression Ladder 数学实现。
 
 ═══════════════════════════════════════════════════════════════════════════════
 本模块对应 design.md §20 (Compatibility Base)、§22 (K/V 独立参数化) 与
@@ -975,3 +975,724 @@ class SharedBasisMapper:
                 # top_k>1：k 个教师层映射均值（与 fit 目标一致）
                 out[s, :, h, :] = np.stack(mapped, axis=0).mean(0)
         return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# §34 V-Mapper Progression Ladder：从无偏 Ridge 到 CCA/PLS 的四步进阶
+#
+# 无偏 Ridge → Centered affine → Standardization/Whitening → Orthogonal
+# Procrustes → CCA/PLS
+#
+# 所有新 mapper 与 RidgeMapper / RidgePerHeadMapper 兼容接口：
+#   __init__(lam), fit(), fit_batch(), transform(), n_params
+# 不兼容 fit_ridge_aggregate Gram 路径，必须用 fit_batch（list-of-pairs）。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class AffineMapper:
+    """§34 阶梯第二步：Centered affine mapper（带截距的岭回归）。
+
+    路径：§34 第二步 Centered affine。对 source / target 均做零均值中心化后
+    做岭回归，等价于带截距的线性回归。当 Teacher → Student 存在常数偏移时，
+    AffineMapper 用截距 b 直接建模偏移，不需要浪费 W 的自由度。
+
+    兼容接口：与 RidgeMapper / RidgePerHeadMapper 完全兼容。
+    """
+
+    def __init__(self, lam: float = 1e-3):
+        """lam：岭回归正则化参数（§13 λ）。"""
+        self.lam = lam
+        self.W: dict[tuple[str, int, int], np.ndarray] = {}
+        self.bias: dict[tuple[str, int, int], np.ndarray] = {}
+
+    @property
+    def n_params(self) -> int:
+        return sum(v.size for v in self.W.values()) + sum(
+            v.size for v in self.bias.values()
+        )
+
+    def fit(
+        self,
+        kv_t: np.ndarray,
+        kv_s: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ):
+        """训练 per-(layer, head) 带截距岭回归。
+
+        对 source / target 分别做零均值中心化后求解岭回归，
+        存储 W 和 bias = mean_y - mean_x @ W。
+        """
+        _check_shape(kv_t, kv_s)
+        L_s, S, H, D = kv_s.shape
+        L_t = kv_t.shape[0]
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            src_all = np.stack(
+                [_apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers],
+                axis=0,
+            )
+            tgt_all = kv_s[s]
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+            for h in range(H):
+                x = src_h[h].astype(np.float64)
+                y = tgt_h[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_c = x - x_mean
+                y_c = y - y_mean
+                W = np.linalg.solve(
+                    x_c.T @ x_c + self.lam * np.eye(D, dtype=np.float64),
+                    x_c.T @ y_c,
+                )
+                self.W[(kv_kind, s, h)] = W
+                self.bias[(kv_kind, s, h)] = (y_mean - x_mean @ W).ravel()
+
+    def fit_batch(
+        self,
+        samples: list[tuple[np.ndarray, np.ndarray]],
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> None:
+        """fit_batch（list-of-pairs 语义）：跨多个校准样本累积数据后一次拟合。"""
+        _check_shape(samples[0][0], samples[0][1])
+        L_s = samples[0][1].shape[0]
+        H = samples[0][1].shape[2]
+        D = samples[0][1].shape[3]
+        L_t = samples[0][0].shape[0]
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            x_list, y_list = [], []
+            for kv_t, kv_s in samples:
+                S_i = min(kv_t.shape[1], kv_s.shape[1])
+                pos = (
+                    np.arange(S_i, dtype=np.float64)
+                    if positions is None
+                    else positions[:S_i]
+                )
+                src_all = np.stack(
+                    [
+                        _apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos)
+                        for t in teachers
+                    ],
+                    axis=0,
+                )
+                tgt_all = kv_s[s, :S_i]
+                _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+                x_list.append(src_h)
+                y_list.append(tgt_h)
+            x_cat = np.concatenate(x_list, axis=1)
+            y_cat = np.concatenate(y_list, axis=1)
+            for h in range(H):
+                x = x_cat[h].astype(np.float64)
+                y = y_cat[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_c = x - x_mean
+                y_c = y - y_mean
+                W = np.linalg.solve(
+                    x_c.T @ x_c + self.lam * np.eye(D, dtype=np.float64),
+                    x_c.T @ y_c,
+                )
+                self.W[(kv_kind, s, h)] = W
+                self.bias[(kv_kind, s, h)] = (y_mean - x_mean @ W).ravel()
+
+    def transform(
+        self,
+        kv_t: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> np.ndarray:
+        """将 Teacher KV 经带截距岭回归映射到 Student KV。
+
+        返回：out: (L_s, S, H, D)。映射路径 = src @ W + bias。
+        """
+        _require_kv_kind(
+            kv_kind, {key[0] for key in self.W}, "AffineMapper.transform"
+        )
+        _check_shape(
+            kv_t,
+            np.zeros((len(layer_map),) + kv_t.shape[1:], dtype=kv_t.dtype),
+        )
+        L_s = len(layer_map)
+        L_t, S, H, D = kv_t.shape
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        out = np.zeros((L_s, S, H, D), dtype=np.float64)
+        for s in range(L_s):
+            teachers = layer_map[s]
+            for t in teachers:
+                k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)
+                W_stack = np.stack(
+                    [self.W[(kv_kind, s, h)] for h in range(H)], axis=0
+                )
+                b_stack = np.stack(
+                    [self.bias[(kv_kind, s, h)] for h in range(H)], axis=0
+                )
+                mapped = np.einsum(
+                    "shd,hdk->shk", k_unrot.astype(np.float64), W_stack
+                )
+                mapped += b_stack
+                out[s] += mapped
+            out[s] /= len(teachers)
+        return out.astype(kv_t.dtype)
+
+
+class WhitenedMapper:
+    """§34 阶梯第三步：Standardization / Whitening + Ridge（§34 A5）。
+
+    路径：§34 第三步。对 source 特征做逐维度标准化（零均值、单位方差）后
+    再做岭回归。标准化消除了特征间的尺度差异，使岭回归对各维度公平正则化，
+    适用于特征方差差异大的场景。
+
+    兼容接口：与 RidgeMapper / RidgePerHeadMapper 完全兼容。
+    """
+
+    def __init__(self, lam: float = 1e-3):
+        """lam：岭回归正则化参数（§13 λ）。"""
+        self.lam = lam
+        self.W: dict[tuple[str, int, int], np.ndarray] = {}
+        self.bias: dict[tuple[str, int, int], np.ndarray] = {}
+
+    @property
+    def n_params(self) -> int:
+        return sum(v.size for v in self.W.values()) + sum(
+            v.size for v in self.bias.values()
+        )
+
+    def fit(
+        self,
+        kv_t: np.ndarray,
+        kv_s: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ):
+        """训练 per-(layer, head) 标准化岭回归。
+
+        对 source 做逐维度标准化（零均值、单位方差）后求解岭回归，
+        将标准化矩阵折叠进 W_total，存储 W_total 和 bias。
+        """
+        _check_shape(kv_t, kv_s)
+        L_s, S, H, D = kv_s.shape
+        L_t = kv_t.shape[0]
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            src_all = np.stack(
+                [_apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers],
+                axis=0,
+            )
+            tgt_all = kv_s[s]
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+            for h in range(H):
+                x = src_h[h].astype(np.float64)
+                y = tgt_h[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_std = x.std(axis=0, keepdims=True) + 1e-8
+                x_w = (x - x_mean) / x_std
+                y_c = y - y_mean
+                W_ridge = np.linalg.solve(
+                    x_w.T @ x_w + self.lam * np.eye(D, dtype=np.float64),
+                    x_w.T @ y_c,
+                )
+                W_total = (1.0 / x_std).T * W_ridge
+                self.W[(kv_kind, s, h)] = W_total
+                self.bias[(kv_kind, s, h)] = (y_mean - x_mean @ W_total).ravel()
+
+    def fit_batch(
+        self,
+        samples: list[tuple[np.ndarray, np.ndarray]],
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> None:
+        """fit_batch（list-of-pairs 语义）：跨多个校准样本累积数据后一次拟合。"""
+        _check_shape(samples[0][0], samples[0][1])
+        L_s = samples[0][1].shape[0]
+        H = samples[0][1].shape[2]
+        D = samples[0][1].shape[3]
+        L_t = samples[0][0].shape[0]
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            x_list, y_list = [], []
+            for kv_t, kv_s in samples:
+                S_i = min(kv_t.shape[1], kv_s.shape[1])
+                pos = (
+                    np.arange(S_i, dtype=np.float64)
+                    if positions is None
+                    else positions[:S_i]
+                )
+                src_all = np.stack(
+                    [
+                        _apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos)
+                        for t in teachers
+                    ],
+                    axis=0,
+                )
+                tgt_all = kv_s[s, :S_i]
+                _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+                x_list.append(src_h)
+                y_list.append(tgt_h)
+            x_cat = np.concatenate(x_list, axis=1)
+            y_cat = np.concatenate(y_list, axis=1)
+            for h in range(H):
+                x = x_cat[h].astype(np.float64)
+                y = y_cat[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_std = x.std(axis=0, keepdims=True) + 1e-8
+                x_w = (x - x_mean) / x_std
+                y_c = y - y_mean
+                W_ridge = np.linalg.solve(
+                    x_w.T @ x_w + self.lam * np.eye(D, dtype=np.float64),
+                    x_w.T @ y_c,
+                )
+                W_total = (1.0 / x_std).T * W_ridge
+                self.W[(kv_kind, s, h)] = W_total
+                self.bias[(kv_kind, s, h)] = (y_mean - x_mean @ W_total).ravel()
+
+    def transform(
+        self,
+        kv_t: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> np.ndarray:
+        """将 Teacher KV 经标准化岭回归映射到 Student KV。
+
+        返回：out: (L_s, S, H, D)。映射路径 = src @ W_total + bias。
+        """
+        _require_kv_kind(
+            kv_kind, {key[0] for key in self.W}, "WhitenedMapper.transform"
+        )
+        _check_shape(
+            kv_t,
+            np.zeros((len(layer_map),) + kv_t.shape[1:], dtype=kv_t.dtype),
+        )
+        L_s = len(layer_map)
+        L_t, S, H, D = kv_t.shape
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        out = np.zeros((L_s, S, H, D), dtype=np.float64)
+        for s in range(L_s):
+            teachers = layer_map[s]
+            for t in teachers:
+                k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)
+                W_stack = np.stack(
+                    [self.W[(kv_kind, s, h)] for h in range(H)], axis=0
+                )
+                b_stack = np.stack(
+                    [self.bias[(kv_kind, s, h)] for h in range(H)], axis=0
+                )
+                mapped = np.einsum(
+                    "shd,hdk->shk", k_unrot.astype(np.float64), W_stack
+                )
+                mapped += b_stack
+                out[s] += mapped
+            out[s] /= len(teachers)
+        return out.astype(kv_t.dtype)
+
+
+class ProcrustesMapper:
+    """§34 阶梯第四步：Orthogonal Procrustes（§34 A7）。
+
+    路径：§34 第四步。中心化 source / target 后通过 SVD 求解正交映射矩阵
+    W = U V^T（使 ‖Y_c − X_c W‖_F 最小且 W^T W = I）。正交性保证映射是
+    纯旋转/反射，保持向量间距离和角度（几何保真）。
+
+    兼容接口：与 RidgeMapper / RidgePerHeadMapper 完全兼容。
+    """
+
+    def __init__(self, lam: float = 1e-3):
+        """lam：jitter fallback 参数（正交解本身不需要正则化）。"""
+        self.lam = lam
+        self.W: dict[tuple[str, int, int], np.ndarray] = {}
+        self._x_mean: dict[tuple[str, int, int], np.ndarray] = {}
+        self._y_mean: dict[tuple[str, int, int], np.ndarray] = {}
+
+    @property
+    def n_params(self) -> int:
+        return sum(v.size for v in self.W.values())
+
+    def fit(
+        self,
+        kv_t: np.ndarray,
+        kv_s: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ):
+        """训练 per-(layer, head) 正交 Procrustes 映射（§34 阶梯）。
+
+        fit 阶段：中心化 source / target，SVD 分解交叉协方差
+        X_c^T Y_c = U Σ V^T，W = U V^T（正交解）。
+        """
+        _check_shape(kv_t, kv_s)
+        L_s, S, H, D = kv_s.shape
+        L_t = kv_t.shape[0]
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            src_all = np.stack(
+                [_apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers],
+                axis=0,
+            )
+            tgt_all = kv_s[s]
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+            for h in range(H):
+                x = src_h[h].astype(np.float64)
+                y = tgt_h[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_c = x - x_mean
+                y_c = y - y_mean
+                M = x_c.T @ y_c  # (D, D)
+                try:
+                    U, _svals, Vt = np.linalg.svd(M, full_matrices=False)
+                    self.W[(kv_kind, s, h)] = (U @ Vt).astype(np.float64)
+                except np.linalg.LinAlgError:
+                    self.W[(kv_kind, s, h)] = np.eye(D, dtype=np.float64)
+                self._x_mean[(kv_kind, s, h)] = x_mean.ravel().astype(np.float64)
+                self._y_mean[(kv_kind, s, h)] = y_mean.ravel().astype(np.float64)
+
+    def fit_batch(
+        self,
+        samples: list[tuple[np.ndarray, np.ndarray]],
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> None:
+        """fit_batch（list-of-pairs 语义）：跨多个校准样本累积数据后一次拟合。"""
+        _check_shape(samples[0][0], samples[0][1])
+        L_s = samples[0][1].shape[0]
+        H = samples[0][1].shape[2]
+        D = samples[0][1].shape[3]
+        L_t = samples[0][0].shape[0]
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            x_list, y_list = [], []
+            for kv_t, kv_s in samples:
+                S_i = min(kv_t.shape[1], kv_s.shape[1])
+                pos = (
+                    np.arange(S_i, dtype=np.float64)
+                    if positions is None
+                    else positions[:S_i]
+                )
+                src_all = np.stack(
+                    [
+                        _apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos)
+                        for t in teachers
+                    ],
+                    axis=0,
+                )
+                tgt_all = kv_s[s, :S_i]
+                _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+                x_list.append(src_h)
+                y_list.append(tgt_h)
+            x_cat = np.concatenate(x_list, axis=1)
+            y_cat = np.concatenate(y_list, axis=1)
+            for h in range(H):
+                x = x_cat[h].astype(np.float64)
+                y = y_cat[h].astype(np.float64)
+                x_mean = x.mean(axis=0, keepdims=True)
+                y_mean = y.mean(axis=0, keepdims=True)
+                x_c = x - x_mean
+                y_c = y - y_mean
+                M = x_c.T @ y_c
+                try:
+                    U, _svals, Vt = np.linalg.svd(M, full_matrices=False)
+                    self.W[(kv_kind, s, h)] = (U @ Vt).astype(np.float64)
+                except np.linalg.LinAlgError:
+                    self.W[(kv_kind, s, h)] = np.eye(D, dtype=np.float64)
+                self._x_mean[(kv_kind, s, h)] = x_mean.ravel().astype(np.float64)
+                self._y_mean[(kv_kind, s, h)] = y_mean.ravel().astype(np.float64)
+
+    def transform(
+        self,
+        kv_t: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> np.ndarray:
+        """将 Teacher KV 经正交 Procrustes 映射到 Student KV。
+
+        返回：out: (L_s, S, H, D)。映射路径 = (src − mean_x) @ W + mean_y。
+        """
+        _require_kv_kind(
+            kv_kind, {key[0] for key in self.W}, "ProcrustesMapper.transform"
+        )
+        _check_shape(
+            kv_t,
+            np.zeros((len(layer_map),) + kv_t.shape[1:], dtype=kv_t.dtype),
+        )
+        L_s = len(layer_map)
+        L_t, S, H, D = kv_t.shape
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        out = np.zeros((L_s, S, H, D), dtype=np.float64)
+        for s in range(L_s):
+            teachers = layer_map[s]
+            W_stack = np.stack(
+                [self.W[(kv_kind, s, h)] for h in range(H)], axis=0
+            )  # (H, D, D)
+            x_mean_stack = np.stack(
+                [self._x_mean[(kv_kind, s, h)] for h in range(H)], axis=0
+            )  # (H, D)
+            y_mean_stack = np.stack(
+                [self._y_mean[(kv_kind, s, h)] for h in range(H)], axis=0
+            )  # (H, D)
+            for t in teachers:
+                k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)
+                # (src − mean_x) @ W + mean_y
+                x_c = k_unrot.astype(np.float64) - x_mean_stack  # (S, H, D)
+                mapped = np.einsum("shd,hdk->shk", x_c, W_stack)
+                mapped += y_mean_stack
+                out[s] += mapped
+            out[s] /= len(teachers)
+        return out.astype(kv_t.dtype)
+
+
+class CCAMapper:
+    """§34 阶梯第五步：CCA / PLS（§34 A8）。
+
+    路径：§34 第五步（最终步）。通过正则化 CCA 求解 source / target 之间的
+    top-r 典范方向对（A, B），映射 W = A @ B^T 为低秩矩阵（rank = r），
+    实现 PCR 式的维度压缩。
+
+    兼容接口：与 RidgeMapper / RidgePerHeadMapper 完全兼容。
+
+    参数：
+        r: CCA 典范方向数（rank 截断）。
+        lam: 岭回归正则化参数（§13 λ），用于 CCA 协方差矩阵正则化。
+    """
+
+    def __init__(self, r: int = 16, lam: float = 1e-3):
+        self.r = r
+        self.lam = lam
+        # 存储 A (D×r) 和 B (D×r) 分离，n_params = 2*r*D + D
+        self.A: dict[tuple[str, int, int], np.ndarray] = {}
+        self.B: dict[tuple[str, int, int], np.ndarray] = {}
+        self.bias: dict[tuple[str, int, int], np.ndarray] = {}
+
+    @property
+    def n_params(self) -> int:
+        return (
+            sum(v.size for v in self.A.values())
+            + sum(v.size for v in self.B.values())
+            + sum(v.size for v in self.bias.values())
+        )
+
+    def _solve_cca_pair(
+        self, x: np.ndarray, y: np.ndarray, D: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+        """对一对 (N, D) 的 source / target 求解 CCA 映射。
+
+        返回：(A, B, bias, r_actual) 其中 A (D×r)、B (D×r) 为典范方向，
+        bias (D,) 为偏置项。
+        """
+        x_mean = x.mean(axis=0, keepdims=True)
+        y_mean = y.mean(axis=0, keepdims=True)
+        x_c = x - x_mean
+        y_c = y - y_mean
+        n = x_c.shape[0]
+        # 正则化协方差矩阵
+        Cxx = (x_c.T @ x_c + self.lam * np.eye(D, dtype=np.float64)) / max(n, 1)
+        Cyy = (y_c.T @ y_c + self.lam * np.eye(D, dtype=np.float64)) / max(n, 1)
+        Cxy = (x_c.T @ y_c) / max(n, 1)
+        # Cholesky 白化
+        try:
+            Lxx = np.linalg.cholesky(Cxx)
+            Lyy = np.linalg.cholesky(Cyy)
+        except np.linalg.LinAlgError:
+            Cxx += 1e-6 * np.eye(D, dtype=np.float64)
+            Cyy += 1e-6 * np.eye(D, dtype=np.float64)
+            Lxx = np.linalg.cholesky(Cxx)
+            Lyy = np.linalg.cholesky(Cyy)
+        # 白化交叉协方差：M = Lxx^{-1} Cxy Lyy^{-T}
+        temp = np.linalg.solve(Lxx, Cxy)
+        M = np.linalg.solve(Lyy, temp.T).T
+        # SVD
+        U, S, Vt = np.linalg.svd(M, full_matrices=False)
+        r_actual = min(self.r, U.shape[1], Vt.shape[0])
+        U_r = U[:, :r_actual]
+        V_r = Vt[:r_actual, :].T
+        # 还原到原始空间
+        A = np.linalg.solve(Lxx.T, U_r)  # (D, r)
+        B = np.linalg.solve(Lyy.T, V_r)  # (D, r)
+        W = A @ B.T
+        bias = (y_mean - x_mean @ W).ravel()
+        return A, B, bias, r_actual
+
+    def fit(
+        self,
+        kv_t: np.ndarray,
+        kv_s: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ):
+        """训练 per-(layer, head) CCA 映射。"""
+        _check_shape(kv_t, kv_s)
+        L_s, S, H, D = kv_s.shape
+        L_t = kv_t.shape[0]
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            src_all = np.stack(
+                [_apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers],
+                axis=0,
+            )
+            tgt_all = kv_s[s]
+            _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+            for h in range(H):
+                x = src_h[h].astype(np.float64)
+                y = tgt_h[h].astype(np.float64)
+                A, B, bias, _ = self._solve_cca_pair(x, y, D)
+                self.A[(kv_kind, s, h)] = A
+                self.B[(kv_kind, s, h)] = B
+                self.bias[(kv_kind, s, h)] = bias
+
+    def fit_batch(
+        self,
+        samples: list[tuple[np.ndarray, np.ndarray]],
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> None:
+        """fit_batch（list-of-pairs 语义）：跨多个校准样本累积数据后一次拟合。"""
+        _check_shape(samples[0][0], samples[0][1])
+        L_s = samples[0][1].shape[0]
+        H = samples[0][1].shape[2]
+        D = samples[0][1].shape[3]
+        L_t = samples[0][0].shape[0]
+        for s in range(L_s):
+            teachers = (
+                layer_map[s]
+                if s < len(layer_map)
+                else [int(round(s * L_t / L_s))]
+            )
+            x_list, y_list = [], []
+            for kv_t, kv_s in samples:
+                S_i = min(kv_t.shape[1], kv_s.shape[1])
+                pos = (
+                    np.arange(S_i, dtype=np.float64)
+                    if positions is None
+                    else positions[:S_i]
+                )
+                src_all = np.stack(
+                    [
+                        _apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos)
+                        for t in teachers
+                    ],
+                    axis=0,
+                )
+                tgt_all = kv_s[s, :S_i]
+                _, _, src_h, tgt_h = _stack_topk(src_all, tgt_all)
+                x_list.append(src_h)
+                y_list.append(tgt_h)
+            x_cat = np.concatenate(x_list, axis=1)
+            y_cat = np.concatenate(y_list, axis=1)
+            for h in range(H):
+                x = x_cat[h].astype(np.float64)
+                y = y_cat[h].astype(np.float64)
+                A, B, bias, _ = self._solve_cca_pair(x, y, D)
+                self.A[(kv_kind, s, h)] = A
+                self.B[(kv_kind, s, h)] = B
+                self.bias[(kv_kind, s, h)] = bias
+
+    def transform(
+        self,
+        kv_t: np.ndarray,
+        layer_map: list[list[int]],
+        kv_kind: str = "K",
+        positions: np.ndarray | None = None,
+        de_rope_fn: Callable | None = None,
+    ) -> np.ndarray:
+        """将 Teacher KV 经 CCA 映射到 Student KV。
+
+        返回：out: (L_s, S, H, D)。映射路径 = src @ A @ B^T + bias。
+        A (D×r), B (D×r) 分离存储，transform 时合成低秩映射 W = A @ B^T。
+        """
+        _require_kv_kind(
+            kv_kind, {key[0] for key in self.A}, "CCAMapper.transform"
+        )
+        _check_shape(
+            kv_t,
+            np.zeros((len(layer_map),) + kv_t.shape[1:], dtype=kv_t.dtype),
+        )
+        L_s = len(layer_map)
+        L_t, S, H, D = kv_t.shape
+        if positions is None:
+            positions = np.arange(S, dtype=np.float64)
+        out = np.zeros((L_s, S, H, D), dtype=np.float64)
+        for s in range(L_s):
+            teachers = layer_map[s]
+            # A_stack: (H, D, r), B_stack: (H, D, r) → B^T: (H, r, D)
+            A_stack = np.stack(
+                [self.A[(kv_kind, s, h)] for h in range(H)], axis=0
+            )
+            Bt_stack = np.stack(
+                [self.B[(kv_kind, s, h)].T for h in range(H)], axis=0
+            )
+            b_stack = np.stack(
+                [self.bias[(kv_kind, s, h)] for h in range(H)], axis=0
+            )
+            for t in teachers:
+                k_unrot = _apply_or_skip(de_rope_fn, kv_t[t], positions)
+                x = k_unrot.astype(np.float64)  # (S, H, D)
+                # 两步低秩映射：src @ A → (S,H,r)，再 @ B^T → (S,H,D)
+                temp = np.einsum("shd,hdr->shr", x, A_stack)   # (S, H, r)
+                mapped = np.einsum("shr,hrd->shd", temp, Bt_stack)
+                mapped += b_stack
+                out[s] += mapped
+            out[s] /= len(teachers)
+        return out.astype(kv_t.dtype)

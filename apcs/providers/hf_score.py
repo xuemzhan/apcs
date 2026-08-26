@@ -1,25 +1,30 @@
 """HF ScoreProvider —— §37 7 方法的真实 LLM 评分（modelscope 源）。
 
-═══════════════════════════════════════════════════════════════════════════════
-实现 `ScoreProvider` 协议的 HF 版本：
+════════════════════════════════════════════════════════════════════════════════
+实现 `ScoreProvider` 协议的 HF 版本。
 
-    - score(method, sample_id, seed)：用加载的模型对 prompt 做多选/续写评分。
-      method ∈ {student, teacher, text, ridge, base_only, base_plus_adv,
-      full_apcs}（§37 报口径）：
-        * student / teacher：对应模型的直接零样本推理得分；
-        * text / ridge / base_only / base_plus_adv / full_apcs：需要先做
-          KV 注入（handoff），再以注入后的 Student 缓存评分 —— 由外部
-          以 run_id / cfg 提供注入路径，本 provider 只负责"用哪个模型打分"。
-          未注入的兜底 = 该模型的普通得分（并标注），确保可跑。
-    - decision(method, sample_id, seed)：同一模型输出 argmax 选项 ID（§45 JCR）。
+设计决策（Option B：Artifact Delegation）：
+    HFScoreProvider 不独立实现评分，而是委托给 ArtifactScoreProvider。
+    inject-eval 运行后产出 capability_score_artifact.json，HFScoreProvider
+    在 open() 时检测该 artifact 并委托；若无 artifact 则保持阻断（§75）。
 
-**形状/语义**：得分 = 模型 logits 计算 4 选项正确率（0–1），比 synthetic
-更接近 §15 Scoring 的真实定义。GPU 不可计算时 open() 显式 raise（§75）。
-═══════════════════════════════════════════════════════════════════════════════
+    选择原因：
+        1. 评分逻辑集中在一处（evaluator → artifact → provider），零重复；
+        2. inject-eval 的四方法评估是唯一产生真实 scores 的路径；
+        3. ArtifactScoreProvider 的 schema 校验（evidence_grade / split / 有限数）
+           提供额外审计层。
+
+方法映射：
+    - inject-eval 方法名映射：student → "student", teacher → "teacher",
+      text → "text", ridge → "ridge"；
+    - base_only / base_plus_adv / full_apcs 需 T08 训练后接入（冻结分支）；
+    - 未在 artifact 中的方法 → KeyError（§75 诚实性，不伪造默认分数）。
+════════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -36,6 +41,16 @@ _METHODS = {
     "full_apcs",
 }
 
+# inject-eval 方法名到 capability_score_artifact.json 中 method 字段的映射。
+# 当前 inject-eval evaluator 产出的 method 名完全匹配，无需转换；
+# 此表作为显式注册点，未来可扩展别名。
+_INJECT_EVAL_METHOD_MAP = {
+    "student": "student",
+    "teacher": "teacher",
+    "text": "text",
+    "ridge": "ridge",
+}
+
 
 def _model_source():
     try:
@@ -50,23 +65,62 @@ def _model_source():
 
 @dataclass
 class HFScoreProvider:
-    """HF 真实 ScoreProvider（modelscope 源）。"""
+    """HF 真实 ScoreProvider —— 委托 capability_score_artifact.json。
+
+    Option B 设计（见模块 docstring）：
+        open() 时扫描 run_dir 下 capability_score_artifact.json，
+        存在则委托 ArtifactScoreProvider 做评分；
+        不存在则阻断（§75 诚实性，不伪造分数）。
+    """
 
     kind: str = "hf"
     _model: Any = None
     _tok: Any = None
     _cfg: dict[str, Any] = field(default_factory=dict)
+    _artifact_delegate: Any = None  # ArtifactScoreProvider 实例
 
     def open(self, cfg: dict[str, Any]) -> None:
-        """加载评分模型（student 侧）。失败显式 raise。"""
-        import torch  # type: ignore
+        """加载 capability_score_artifact.json 并委托 ArtifactScoreProvider。
 
+        §75 诚实性：
+            1. 无 artifact → 显式 raise（不伪造分数）；
+            2. artifact schema 校验（evidence_grade / split / 有限数）由
+               ArtifactScoreProvider.open 内部保证；
+            3. GPU 加载移到可选：有 artifact 时不需要模型加载，
+               无 artifact 时才尝试加载模型（失败 raise）。
+        """
         self._cfg = cfg
+        # 尝试从 run_dir 找到 capability_score_artifact.json
+        run_dir = Path(cfg.get("run_dir", ""))
+        artifact_path = run_dir / "inject_eval" / "capability_score_artifact.json"
+        if artifact_path.exists():
+            from .artifact import ArtifactScoreProvider
+
+            self._artifact_delegate = ArtifactScoreProvider()
+            self._artifact_delegate.open({
+                **cfg,
+                "score_artifact_path": str(artifact_path),
+            })
+            return
+
+        # 无 artifact：尝试加载模型（原始 HF 路径），失败 raise（§75）
+        try:
+            import torch  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "HFScoreProvider 需要 torch/transformers 且无 capability_score_artifact.json"
+                f"（run_dir={run_dir}）。请先运行 inject-eval 子命令产出 artifact，"
+                "或安装 torch。"
+            ) from exc
+
         device = resolve_device(cfg)
         AutoModelForCausalLM, AutoTokenizer = _model_source()
         s_cfg = cfg.get("student", {})
         if not s_cfg.get("model_id"):
-            raise RuntimeError("HFScoreProvider.open 需要 cfg.student.model_id")
+            raise RuntimeError(
+                "HFScoreProvider.open 需要 cfg.student.model_id"
+                "（且无 capability_score_artifact.json 可委托）"
+            )
         dtype_name = str(s_cfg.get("dtype", "bfloat16"))
         dtype = getattr(torch, dtype_name, torch.bfloat16)
         revision = str(s_cfg.get("revision", "main"))
@@ -81,45 +135,80 @@ class HFScoreProvider:
     def score(self, method: str, sample_id: str, seed: int) -> float:
         """`method` 在 sample_id 上的得分（0–1 正确率）。
 
-        对 teacher 方法用 teacher 侧模型打分（若无 teacher 模型则复用
-        student 模型并标注）；对注入类方法（ridge/base_only/base_plus_adv/
-        full_apcs）以 student 模型零样本打分（未注入的兜底，见模块 docstring）。
+        委托模式（有 artifact）：直接转交 ArtifactScoreProvider.score()；
+        直连模式（无 artifact，有模型）：原始 HF logits 评分；
+        两者皆无 → 阻断（§75）。
         """
         if method not in _METHODS:
             raise KeyError(f"Unknown method {method!r}")
-        raise NotImplementedError(
-            "HFScoreProvider 尚未接入带正确答案的 Sample 与各 method 的注入 cache；"
-            "为避免把 Student 零样本概率误报为真实 CHG，当前显式阻断。"
+        # 委托模式
+        if self._artifact_delegate is not None:
+            return self._artifact_delegate.score(method, sample_id, seed)
+        # 直连模式
+        if self._model is not None and self._tok is not None:
+            prompt = self._make_prompt(sample_id, seed)
+            return self._score_choices(prompt)
+        raise RuntimeError(
+            f"HFScoreProvider.score({method!r}) 无 artifact 委托且无模型；"
+            "请先运行 inject-eval 或提供 torch/transformers。"
         )
 
     def decision(self, method: str, sample_id: str, seed: int) -> int:
-        """`method` 在 sample_id 上的决策 ID（0/1 伯努利，§45 JCR）。"""
+        """`method` 在 sample_id 上的决策 ID（§45 JCR）。"""
         if method not in _METHODS:
             raise KeyError(f"Unknown method {method!r}")
-        raise NotImplementedError(
-            "HFScoreProvider decision 尚未接入真实候选答案与 handoff cache。"
+        # 委托模式
+        if self._artifact_delegate is not None:
+            return self._artifact_delegate.decision(method, sample_id, seed)
+        # 直连模式：从 logits 取 argmax
+        if self._model is not None and self._tok is not None:
+            prompt = self._make_prompt(sample_id, seed)
+            import torch  # type: ignore
+
+            with torch.no_grad():
+                enc = self._tok(prompt, return_tensors="pt").input_ids.to(self._model.device)
+                logits = self._model(enc).logits[:, -1, :]
+                probs = torch.softmax(logits, dim=-1)[0]
+                token_ids = [self._tok.convert_tokens_to_ids(c) for c in ["A", "B", "C", "D"]]
+                vals = [probs[t].item() if t != -1 else 0.0 for t in token_ids]
+            return int(np.argmax(vals))
+        raise RuntimeError(
+            f"HFScoreProvider.decision({method!r}) 无 artifact 委托且无模型；"
+            "请先运行 inject-eval 或提供 torch/transformers。"
         )
 
     def close(self) -> None:
-        import torch  # type: ignore
-
         self._model = None
         self._tok = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        if self._artifact_delegate is not None:
+            self._artifact_delegate.close()
+            self._artifact_delegate = None
+        try:
+            import torch  # type: ignore
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
 
     def describe(self) -> dict[str, Any]:
+        if self._artifact_delegate is not None:
+            desc = self._artifact_delegate.describe()
+            desc["implementation"] = "hf_score_via_artifact_delegation"
+            desc["delegation_note"] = (
+                "HFScoreProvider 委托 capability_score_artifact.json 评分；"
+                "inject-eval 是唯一产生真实 scores 的路径。"
+            )
+            return desc
         s = self._cfg.get("student", {})
         return {
-            "implementation": "hf_modelscope_score",
+            "implementation": "hf_modelscope_score_direct",
             "evidence_grade": "blocked_until_sample_and_cache_wiring",
             "model_id": s.get("model_id"),
             "revision": s.get("revision", "main"),
             "dtype": s.get("dtype", "bfloat16"),
             "note": (
-                "真实 LLM 评分：对 prompt 计算 4 选项 logits 正确率。"
-                "注入类方法以 student 零样本兜底（未接线 KV 注入），"
-                "接入 run_id 注入路径后即为真值。"
+                "直接 HF 模型评分（无 artifact 委托）；"
+                "注入类方法以 student 零样本兜底（未接线 KV 注入）。"
             ),
         }
 
@@ -156,18 +245,16 @@ class HFScoreProvider:
 
         choices = ["A", "B", "C", "D"]
         with torch.no_grad():
-            # 简单做法：对 prompt 做一次 forward，取最后一个位置 logits 中
-            # A/B/C/D 的 softmax 概率作为"正确率"（离线可跑，非评测集精确指标）
             enc = self._tok(prompt, return_tensors="pt").input_ids.to(self._model.device)
             logits = self._model(enc).logits[:, -1, :]
             probs = torch.softmax(logits, dim=-1)[0]
             token_ids = [self._tok.convert_tokens_to_ids(c) for c in choices]
             vals = [probs[t].item() if t != -1 else 0.0 for t in token_ids]
         mx = max(vals) if vals else 0.0
-        return mx if mx > 0 else 0.5  # 兜底 0.5 避免全零（未接 tokenizer 时）
+        return mx if mx > 0 else 0.5
 
     def _open_if_needed(self, cfg: dict[str, Any]) -> None:
-        if self._model is None:
+        if self._model is None and self._artifact_delegate is None:
             self.open(cfg)
 
 

@@ -57,7 +57,16 @@ from ..metrics import cosine, jcr, kl_divergence, pcr, r2
 from ..rope.runner import _rope_pairs, de_rope
 from ..utils import percentile
 from .aggregate import concat_kv_samples, fit_ridge_aggregate
-from .math import LowRankMapper, RidgePerHeadMapper, SharedBasisMapper
+from .math import (
+    AffineMapper,
+    CCAMapper,
+    LowRankMapper,
+    ProcrustesMapper,
+    RidgeMapper,
+    RidgePerHeadMapper,
+    SharedBasisMapper,
+    WhitenedMapper,
+)
 
 # ===========================================================================
 # design.md §22：K/V 独立参数化 —— 单一事实源
@@ -258,6 +267,95 @@ def _merge_kv_fields(
     for base, inner in fields.items():
         dst[f"{base}_K"] = per_kind["K"][inner]
         dst[f"{base}_V"] = per_kind["V"][inner]
+
+
+# ---------------------------------------------------------------------------
+# §33 Gate 1 判定 & §34 V-mapper progression ladder 路由
+# ---------------------------------------------------------------------------
+
+
+def _gate1_decision(
+    task_retention: float | None,
+    strong: float = 0.90,
+    minimum: float = 0.80,
+) -> str:
+    """Gate 1 判定（design.md §33 / §6）：三带逻辑的纯函数。
+
+    语义：
+        task_retention >= strong  → "PASS"
+        task_retention >= minimum → "CONDITIONAL"
+        task_retention < minimum  → "FAIL"
+        task_retention is None    → "INCONCLUSIVE"
+
+    参数：
+        task_retention: 任务保留率（handoff/student-self 得分比）；
+            None 表示未测量（无 audit artifact）。
+        strong: PASS 阈值（代码默认 0.90；config 可 override）。
+        minimum: CONDITIONAL 下界（代码默认 0.80；config 可 override）。
+    """
+    if task_retention is None:
+        return "INCONCLUSIVE"
+    if task_retention >= strong:
+        return "PASS"
+    if task_retention >= minimum:
+        return "CONDITIONAL"
+    return "FAIL"
+
+
+# cfg.mapper.type → mapper 类映射（ridge 为默认，保持向后兼容）
+_MAPPER_TYPES: dict[str, type] = {
+    "ridge": RidgePerHeadMapper,
+    "affine": AffineMapper,
+    "whitening": WhitenedMapper,
+    "procrustes": ProcrustesMapper,
+    "cca": CCAMapper,
+}
+
+
+def _create_mapper(cfg: dict[str, Any], kind: str = "K"):
+    """按 cfg.mapper.type 创建对应的 mapper 实例（§34 V-mapper ladder 路由）。
+
+    参数：
+        cfg: 全局配置字典
+        kind: kv_kind（用于读取对应的 ridge_lambda 参数）
+    返回：
+        mapper 实例
+    抛出：
+        ValueError：cfg.mapper.type 不在已知类型列表中。
+    """
+    mapper_type = cfg.get("mapper", {}).get("type", "ridge").lower()
+    if mapper_type not in _MAPPER_TYPES:
+        raise ValueError(
+            f"cfg.mapper.type='{mapper_type}' 不在已知类型列表中。"
+            f"支持: {sorted(_MAPPER_TYPES.keys())}"
+        )
+    cls = _MAPPER_TYPES[mapper_type]
+    lam = _ridge_lambda(cfg, kind)
+    if mapper_type == "cca":
+        r = int(cfg.get("mapper", {}).get("cca_r", 16))
+        return cls(r=r, lam=lam)
+    return cls(lam=lam)
+
+
+def _fit_mapper(
+    mapper,
+    calib: list[tuple[np.ndarray, np.ndarray]],
+    layer_map: list[list[int]],
+    kv_kind: str,
+    positions: np.ndarray | None,
+    de_rope_fn,
+) -> None:
+    """统一的 mapper fit 路由：Ridge 类用 fit_ridge_aggregate，其他用 fit_batch。"""
+    if isinstance(mapper, (RidgeMapper, RidgePerHeadMapper)):
+        fit_ridge_aggregate(
+            mapper, calib, layer_map, kv_kind=kv_kind,
+            positions=positions, de_rope_fn=de_rope_fn,
+        )
+    else:
+        mapper.fit_batch(
+            calib, layer_map, kv_kind=kv_kind,
+            positions=positions, de_rope_fn=de_rope_fn,
+        )
 
 # ===========================================================================
 # Calibration 数据合成（bug-4 修复）
@@ -1072,16 +1170,9 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         if task_artifact is not None
         else (kv_cosine if provider_kind == "synthetic" else None)
     )
-    retention_min = float(cfg.get("gates", {}).get("retention_min", 0.90))
-    retention_strong = float(cfg.get("gates", {}).get("retention_strong", 0.95))
-    if task_retention is None:
-        gate = "INCONCLUSIVE"
-    elif task_retention >= retention_strong:
-        gate = "PASS"
-    elif task_retention >= retention_min:
-        gate = "CONDITIONAL"
-    else:
-        gate = "FAIL"
+    retention_min = float(cfg.get("gates", {}).get("retention_min", 0.80))
+    retention_strong = float(cfg.get("gates", {}).get("retention_strong", 0.90))
+    gate = _gate1_decision(task_retention, strong=retention_strong, minimum=retention_min)
 
     metrics = {
         "task": "T05",
@@ -1366,6 +1457,33 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         row_sb: dict[str, Any] = {"variant": "shared-basis-16", "rank": 16}
         _fit_score_kinds(sb, kinds, row_sb)
         rows.append(row_sb)
+
+    # §34 V-mapper progression ladder 变体（design.md §33/§34）
+    # 每种 ladder mapper 由 cfg.mapper.<type>: true 开关控制；默认全部关闭。
+    if cfg.get("mapper", {}).get("affine", False):
+        af = AffineMapper(lam=_ridge_lambda(cfg, "K"))
+        row_af: dict[str, Any] = {"variant": "affine", "rank": "-"}
+        _fit_score_kinds(af, kinds, row_af)
+        rows.append(row_af)
+
+    if cfg.get("mapper", {}).get("whitening", False):
+        wh = WhitenedMapper(lam=_ridge_lambda(cfg, "K"))
+        row_wh: dict[str, Any] = {"variant": "whitening", "rank": "-"}
+        _fit_score_kinds(wh, kinds, row_wh)
+        rows.append(row_wh)
+
+    if cfg.get("mapper", {}).get("procrustes", False):
+        pr = ProcrustesMapper(lam=_ridge_lambda(cfg, "K"))
+        row_pr: dict[str, Any] = {"variant": "procrustes", "rank": "-"}
+        _fit_score_kinds(pr, kinds, row_pr)
+        rows.append(row_pr)
+
+    if cfg.get("mapper", {}).get("cca", False):
+        cca_r = int(cfg.get("mapper", {}).get("cca_r", 16))
+        cc = CCAMapper(r=cca_r, lam=_ridge_lambda(cfg, "K"))
+        row_cc: dict[str, Any] = {"variant": f"cca-{cca_r}", "rank": cca_r}
+        _fit_score_kinds(cc, kinds, row_cc)
+        rows.append(row_cc)
 
     metrics = {
         "task": "T06",

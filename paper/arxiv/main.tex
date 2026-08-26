@@ -181,8 +181,11 @@ mapped separately for keys and values:
 \end{align}
 Keys are de-rotated before mapping and re-rotated in the student coordinate
 system.  Values are not de-rotated.  Ridge regression is a useful calibration
-baseline, but the training target should progress from raw KV reconstruction
-to functional behavior:
+baseline; the compatibility base may additionally employ centered affine,
+standardization-then-whitening, orthogonal Procrustes, and canonical
+correlation mappers in a transparent progression ladder
+\citep{heo2026crossmodel}.  The training target should progress from raw KV
+reconstruction to functional behavior:
 \begin{equation}
 \mathcal L_{\mathrm{compat}}=
 \lambda_{\mathrm{task}}\mathcal L_{\mathrm{task}}+
@@ -367,11 +370,17 @@ sequence length is only 70 tokens due to the superseded global-cropping
 protocol.  Real task injection scores, real student queries, end-to-end timing,
 real geometry, multi-turn stability, and a second model pair are absent.  The
 reported values are therefore preliminary engineering and representation
-evidence.  The revised code records per-sample effective lengths, separates
-metric semantics, blocks non-measured verdicts, rejects real T08 execution
-until task supervision is connected, loads real geometry only from explicit
-hidden-state artifacts, and groups generalization runs by model identity and
-revision without discarding repeats.
+evidence.  The revised code expands replay to $\geq32$ samples with
+multi-step decode diagnostics (steps $\in\{1,5,20\}$), replaces synthetic MMLU
+fallback with explicit unavailability, adds tokenizer provenance hashing
+(T00), integrates a data-driven top-$k$ layer alignment path (T03), and
+introduces an inject-eval audit chain that exports per-sample
+\texttt{zero\_prefill\_verified} and \texttt{task\_scoring\_verified} flags
+alongside real injected scores.  It records per-sample effective lengths,
+separates metric semantics, blocks non-measured verdicts, rejects real T08
+execution until task supervision is connected, loads real geometry only from
+explicit hidden-state artifacts, and groups generalization runs by model
+identity and revision without discarding repeats.
 For real-score execution, the revised pipeline accepts only audited held-out
 artifacts with exact sample IDs, verified zero receiver prefill, and verified
 task scoring.  System evidence likewise requires synchronized end-to-end
