@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from apcs.compliance import (
     ComplianceViolation,
@@ -229,7 +230,22 @@ def test_t13_generalization_scans_runs(tmp_path):
         rid = f"pair-{i}"
         (base / rid / "t05").mkdir(parents=True)
         (base / rid / "t05" / "metrics.json").write_text(
-            json.dumps({"mean_retention": ret}), encoding="utf-8"
+            json.dumps(
+                {
+                    "task_retention": ret,
+                    "mean_kv_cosine": ret,
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
+                }
+            ), encoding="utf-8"
+        )
+        (base / rid / "t05" / "config.json").write_text(
+            json.dumps(
+                {
+                    "teacher": {"model_id": f"teacher-{i}"},
+                    "student": {"model_id": f"student-{i}"},
+                }
+            ), encoding="utf-8"
         )
         (base / rid / "t09").mkdir(parents=True)
         (base / rid / "t09" / "metrics.json").write_text(
@@ -237,7 +253,10 @@ def test_t13_generalization_scans_runs(tmp_path):
                 {
                     "per_method": [
                         {"method": "base_plus_adv", "chg": chg, "tgrr": tgrr}
-                    ]
+                    ],
+                    "seeds": [0, 1, 2],
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
                 }
             ),
             encoding="utf-8",
@@ -247,6 +266,55 @@ def test_t13_generalization_scans_runs(tmp_path):
     res = run_generalization(cfg, tmp_path / "out")
     assert res["metrics"]["n_pairs_evaluated"] == 2
     assert res["metrics"]["n_pairs_pass_gate2a"] == 1
+
+
+def test_t13_aggregates_duplicate_pair_runs_without_hiding_failure(tmp_path):
+    """同一模型对的失败复跑必须阻止 pair 通过，不能只选第一条。"""
+    base = tmp_path / "runs"
+    for i, chg in enumerate((0.08, -0.02)):
+        run = base / f"repeat-{i}"
+        (run / "t05").mkdir(parents=True)
+        (run / "t05" / "config.json").write_text(
+            json.dumps(
+                {
+                    "teacher": {"model_id": "teacher", "revision": "abc"},
+                    "student": {"model_id": "student", "revision": "def"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (run / "t05" / "metrics.json").write_text(
+            json.dumps(
+                {
+                    "task_retention": 0.95,
+                    "mean_kv_cosine": 0.97,
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (run / "t09").mkdir()
+        (run / "t09" / "metrics.json").write_text(
+            json.dumps(
+                {
+                    "per_method": [
+                        {"method": "base_plus_adv", "chg": chg, "tgrr": chg}
+                    ],
+                    "seeds": [0, 1, 2],
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    result = run_generalization({"output": {"base_dir": str(base)}}, tmp_path / "out")
+    assert result["metrics"]["n_pairs_evaluated"] == 1
+    row = result["metrics"]["rows"][0]
+    assert row["n_runs"] == 2
+    assert row["gate2a_pass"] is False
+    assert row["chg_mean"] == pytest.approx(0.03)
 
 
 # ---- batch ridge 数学等价性 ----
@@ -429,3 +497,30 @@ def test_t12_metrics_carries_geometry_and_fig7_renders(tmp_path):
     fig7a_cka_heatmap(res["metrics"], out)
     assert out.exists(), "fig7a.png 未生成 → geometry 键缺失导致提前 return"
     assert out.stat().st_size > 1024, f"fig7a.png 过小（{out.stat().st_size} B）→ 渲染异常"
+
+
+def test_t12_real_hidden_states_use_token_geometry(tmp_path):
+    """真实 hidden artifact 的 CKA/有效秩必须基于 token×hidden，而非 PCA 基本身。"""
+    from apcs.geometry.runner import run_geometry_diagnostics
+
+    rng = np.random.default_rng(11)
+    hidden = rng.standard_normal((2, 24, 8))
+    artifact = tmp_path / "hidden.npz"
+    np.savez(artifact, teacher=hidden, student=hidden.copy())
+    run_dir = tmp_path / "geometry"
+    run_dir.mkdir()
+    result = run_geometry_diagnostics(
+        {
+            "teacher": {"num_layers": 2},
+            "student": {"num_layers": 2},
+            "geometry_rank": 3,
+            "hidden_states_path": str(artifact),
+        },
+        run_dir,
+    )
+    rows = result["geometry"]["per_layer"]
+    assert result["geometry"]["placeholder"] is False
+    assert all(row["cka"] == pytest.approx(1.0, abs=1e-9) for row in rows)
+    assert all(row["principal_angle"] == pytest.approx(0.0, abs=1e-7) for row in rows)
+    # 随机 token 表示的有效秩通常高于 geometry_rank=3；若等于 3，说明仍在算 PCA 基。
+    assert all(row["effective_rank_t"] > 3.0 for row in rows)

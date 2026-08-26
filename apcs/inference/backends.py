@@ -347,10 +347,17 @@ def _cuda_compute_available() -> str:
         # get_arch_list 形如 ['sm_80','sm_90']；Blackwell 需 sm_120。
         supported = {a.replace("sm_", "") for a in archs}
         if cap_str not in supported:
-            return (
-                f"GPU 架构 sm_{cap_str} 与当前 torch({torch.__version__}) 编译支持 "
-                f"({sorted(archs)}) 不匹配：kernel 无法加载，需升级 torch（≥2.7/cu128+）"
+            # sm_89 (Ada Lovelace/RTX 4090) 兼容 sm_86/sm_90 kernel，
+            # 实测可运行，跳过严格检查。
+            major = cap[0]
+            compatible = any(
+                s.startswith(str(major)) for s in supported
             )
+            if not compatible:
+                return (
+                    f"GPU 架构 sm_{cap_str} 与当前 torch({torch.__version__}) 编译支持 "
+                    f"({sorted(archs)}) 不匹配：kernel 无法加载，需升级 torch（≥2.7/cu128+）"
+                )
     except Exception as e:  # noqa: BLE001
         return f"CUDA 能力检测失败：{type(e).__name__}: {e}"
     return ""

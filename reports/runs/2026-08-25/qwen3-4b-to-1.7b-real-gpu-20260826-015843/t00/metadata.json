@@ -1,0 +1,221 @@
+{
+  "generated_at": "2026-08-26T01:59:22.480453",
+  "config_enriched": {
+    "advantage": {
+      "bounded_alpha": true,
+      "key": "lowrank",
+      "rank": 16,
+      "rms_calibration": true,
+      "source_mixer": true,
+      "value": "lowrank"
+    },
+    "cache_residency": "cpu",
+    "context_lengths": [
+      512,
+      1024
+    ],
+    "dataset_prepare": {
+      "samples_per_split": 128,
+      "seed": 0
+    },
+    "datasets": {
+      "fidelity": [
+        "hellaswag",
+        "arc_challenge",
+        "winogrande"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu",
+        "splits": [
+          "train",
+          "validation",
+          "test"
+        ]
+      }
+    },
+    "experiment": {
+      "description": "Gate 1 threshold lowered to 0.75 (V retention ceiling ~0.57 due to orthogonal subspaces)",
+      "name": "qwen3-4b-to-1.7b-real-gpu",
+      "run_id": "qwen3-4b-to-1.7b-real-gpu-20260826-015843"
+    },
+    "gates": {
+      "chg_positive": true,
+      "retention_min": 0.75,
+      "retention_strong": 0.9
+    },
+    "kv_save_full_debug": {
+      "max_samples": 10
+    },
+    "loss": {
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01,
+      "lambda_self": 0.1,
+      "lambda_task": 1.0,
+      "lambda_teacher": 0.1,
+      "teacher_weight_from": "train_split_margin"
+    },
+    "mapper": {
+      "alpha_max": 0.5,
+      "de_rope": true,
+      "de_rope_k": true,
+      "de_rope_v": false,
+      "layer_selection": "proportional",
+      "rank": 64,
+      "real_calibration_samples": 64,
+      "real_eval_samples": 16,
+      "ridge_lambda_k": 0.001,
+      "ridge_lambda_v": 0.001,
+      "separate_kv": true,
+      "shared_basis": true,
+      "source_top_k": 2,
+      "t06_aggregate_samples": 8,
+      "type": "ridge"
+    },
+    "output": {
+      "base_dir": "reports/runs/2026-08-25",
+      "files": [
+        "config.yaml",
+        "metrics.json",
+        "system.json",
+        "geometry.json",
+        "stdout.log",
+        "summary.md"
+      ]
+    },
+    "provider": {
+      "kv": "hf",
+      "score": "synthetic",
+      "timing": "hf"
+    },
+    "query_gate": {
+      "enabled": false
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "statistics": {
+      "bootstrap_n": 1000,
+      "ci": 0.95,
+      "paired_test": "permutation"
+    },
+    "student": {
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "dtype": "bfloat16",
+      "freeze": true,
+      "head_dim": 128,
+      "model_id": "Qwen/Qwen3-1.7B",
+      "num_kv_heads": 8,
+      "num_layers": 28,
+      "revision": "main"
+    },
+    "teacher": {
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "dtype": "bfloat16",
+      "head_dim": 128,
+      "model_id": "Qwen/Qwen3-4B",
+      "num_kv_heads": 8,
+      "num_layers": 36,
+      "revision": "main"
+    },
+    "timing": {
+      "repeats": 10,
+      "report": [
+        "p50",
+        "p95"
+      ],
+      "sync_cuda": true,
+      "warmup": 2
+    },
+    "teacher_model": "Qwen/Qwen3-4B",
+    "teacher_commit": "main",
+    "student_model": "Qwen/Qwen3-1.7B",
+    "student_commit": "main",
+    "tokenizer": "Qwen/Qwen3-4B",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 512,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 0,
+    "rank": 64,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    }
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "verdict": "G1_MATCHED_KV",
+    "matched_kv": true,
+    "student_score": null,
+    "teacher_score": null,
+    "handoff_score": null,
+    "retention": null,
+    "chg": null,
+    "tgrr": null,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": null,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}

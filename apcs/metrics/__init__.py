@@ -225,8 +225,11 @@ def principal_angle(a: np.ndarray, b: np.ndarray) -> float:
         a = a.reshape(1, -1)
     if b.ndim == 1:
         b = b.reshape(1, -1)
-    qa, _ = np.linalg.qr(a)  # 列空间正交基
-    qb, _ = np.linalg.qr(b)
+    # a/b 的每一行是特征空间中的一个基向量/样本，因此要对
+    # 转置后的列空间正交化。直接 qr(a) 只会比较“样本坐标空间”，
+    # 对 (rank, hidden) PCA 基会得到失真的近零夹角。
+    qa, _ = np.linalg.qr(a.T, mode="reduced")
+    qb, _ = np.linalg.qr(b.T, mode="reduced")
     prod = qa.T @ qb  # 两个正交基的内积矩阵
     s = np.linalg.svd(prod, compute_uv=False)  # 奇异值 = cos(各 principal angle)
     s = np.clip(s, -1.0, 1.0)  # 数值安全裁剪：防止浮点误差导致 arccos 域外

@@ -155,6 +155,31 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     seeds = cfg.get("seeds", [0, 1, 2])  # §51 固定 3 seeds（默认）
     n_samples = int(cfg.get("t09_n_samples", 32))
     samples = synthetic_teacher_advantage_set(n=n_samples)
+    sample_ids = [s.sample_id for s in samples]
+    provider_kind = cfg.get("provider", {}).get("score", "synthetic").lower()
+    score_provider = None
+    opened_providers = None
+    provider_description: dict[str, Any] = {
+        "evidence_grade": "synthetic",
+        "implementation": "deterministic_simulation",
+    }
+    if provider_kind != "synthetic":
+        from ..providers import open_providers, write_provider_manifest
+
+        opened_providers = open_providers(cfg, need=("score",))
+        score_provider = opened_providers["score"]
+        write_provider_manifest(run_dir, score=score_provider)
+        provider_description = score_provider.describe()
+        if provider_description.get("evidence_grade") != "measured_task":
+            raise RuntimeError(
+                "非合成 ScoreProvider 未通过 measured_task 证据审计"
+            )
+        if not hasattr(score_provider, "sample_ids"):
+            raise RuntimeError("ScoreProvider 必须提供真实 held-out sample_ids()")
+        sample_ids = list(score_provider.sample_ids())[:n_samples]
+        if not sample_ids:
+            raise RuntimeError("ScoreProvider 没有可评估的 held-out sample")
+        n_samples = len(sample_ids)
     # §37 必须比较的 7 种方法（顺序即论文报告顺序）
     methods = [
         "student",
@@ -170,16 +195,27 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # 形状：scores[method] -> list[seed][sample_id] -> (score, decision)
     scores: dict[str, list[list[float]]] = {m: [] for m in methods}
     decisions: dict[str, list[list[int]]] = {m: [] for m in methods}
-    for seed in seeds:
-        for m in methods:
-            score_row, dec_row = [], []
-            for s in samples:
-                # 得分/决策的种子都经 _stable_seed 派生：跨进程可复现
-                seed_for_sample = _stable_seed(seed, m, s.sample_id)
-                score_row.append(_simulate_scores(seed_for_sample, m))
-                dec_row.append(_simulate_decision(seed, m, s.sample_id))
-            scores[m].append(score_row)
-            decisions[m].append(dec_row)
+    try:
+        for seed in seeds:
+            for m in methods:
+                score_row, dec_row = [], []
+                for sample_id in sample_ids:
+                    seed_for_sample = _stable_seed(seed, m, sample_id)
+                    if score_provider is None:
+                        score_row.append(_simulate_scores(seed_for_sample, m))
+                        dec_row.append(_simulate_decision(seed, m, sample_id))
+                    else:
+                        # 非 synthetic 配置必须真正调用 ScoreProvider；未接线时
+                        # provider 显式报错，禁止静默退回 _simulate_scores。
+                        score_row.append(float(score_provider.score(m, sample_id, seed)))
+                        dec_row.append(int(score_provider.decision(m, sample_id, seed)))
+                scores[m].append(score_row)
+                decisions[m].append(dec_row)
+    finally:
+        if opened_providers is not None:
+            for provider in opened_providers.values():
+                if hasattr(provider, "close"):
+                    provider.close()
 
     # 全局聚合（跨 seed 求 mean）：先对 seed 轴平均，再跨 sample 求总均值
     def mean_scores_across_seeds(m: str) -> np.ndarray:
@@ -251,17 +287,25 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "n_samples_per_seed": n_samples,
         "gap_strata": gap_strata_report,  # §48
         # offline demo 自标注（科学诚实性）：得分是合成数据，不是真实测量
-        "offline_demo": True,
+        "offline_demo": provider_description.get("evidence_grade") != "measured_task",
+        "evidence_grade": provider_description.get("evidence_grade", "unknown"),
+        "score_provenance": provider_description,
         "note": (
             "T09 得分为合成数据（offline demo），不可作为真实能力迁移的证据；"
             "design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer"
+            if provider_kind == "synthetic"
+            else "T09 得分由非合成 ScoreProvider 逐方法、逐样本产出。"
         ),
     }
     write_json(run_dir / "metrics.json", metrics)
     md = (
         "# T09 Main Capability\n\n"
-        "> ⚠️ **offline demo**：T09 得分为合成数据，不可作为真实能力迁移的证据；"
-        "design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer。\n\n"
+        + (
+            "> ⚠️ **offline demo**：T09 得分为合成数据，不可作为真实能力迁移的证据；"
+            "design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer。\n\n"
+            if provider_kind == "synthetic" else ""
+        )
+        +
         f"- Student: {s_self:.4f}\n"
         f"- Teacher: {s_teach:.4f}\n"
         f"- Teacher gap: {s_teach - s_self:.4f}\n\n"

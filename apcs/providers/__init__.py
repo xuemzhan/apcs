@@ -196,6 +196,10 @@ def _build_score_provider(cfg: dict[str, Any]) -> ScoreProvider:
         from .hf_score import HFScoreProvider
 
         return HFScoreProvider()
+    if kind == "artifact":
+        from .artifact import ArtifactScoreProvider
+
+        return ArtifactScoreProvider()
     raise ValueError(f"Unknown Score provider kind: {kind!r}")
 
 
@@ -210,6 +214,10 @@ def _build_timing_provider(cfg: dict[str, Any]) -> TimingProvider:
         from .hf_timing import HFTimingProvider
 
         return HFTimingProvider()
+    if kind == "artifact":
+        from .artifact import ArtifactTimingProvider
+
+        return ArtifactTimingProvider()
     raise ValueError(f"Unknown Timing provider kind: {kind!r}")
 
 

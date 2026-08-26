@@ -106,7 +106,16 @@ def test_cli_t11_finds_shared_run_id(tmp_path):
         if not run.is_dir():
             continue
         for task, payload in [
-            ("t05", {"mean_retention": 0.92, "gate1": "PASS"}),
+            (
+                "t05",
+                {
+                    "task_retention": 0.92,
+                    "mean_kv_cosine": 0.92,
+                    "gate1": "PASS",
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
+                },
+            ),
             (
                 "t09",
                 {
@@ -114,6 +123,8 @@ def test_cli_t11_finds_shared_run_id(tmp_path):
                         {"method": "base_plus_adv", "chg": 0.16, "tgrr": 0.53}
                     ],
                     "chg_bootstrap": {"point": 0.16, "ci_low": 0.05, "ci_high": 0.27},
+                    "offline_demo": False,
+                    "evidence_grade": "measured_task",
                 },
             ),
         ]:
@@ -123,7 +134,12 @@ def test_cli_t11_finds_shared_run_id(tmp_path):
             )
         (run / "t10").mkdir(exist_ok=True)
         (run / "t10" / "system.json").write_text(
-            json.dumps({"per_context": [{"psr_a_p50": 0.35}]}), encoding="utf-8"
+            json.dumps(
+                {
+                    "per_context": [{"psr_a_p50": 0.35}],
+                    "timing_evidence": "end_to_end_handoff",
+                }
+            ), encoding="utf-8"
         )
         break
 
@@ -171,7 +187,14 @@ def _write_t11_stub_run(
     run_root = base / run_id
     (run_root / "t05").mkdir(parents=True, exist_ok=True)
     (run_root / "t05" / "metrics.json").write_text(
-        json.dumps({"mean_retention": retention}), encoding="utf-8"
+        json.dumps(
+            {
+                "task_retention": retention,
+                "mean_kv_cosine": retention,
+                "offline_demo": False,
+                "evidence_grade": "measured_task",
+            }
+        ), encoding="utf-8"
     )
     (run_root / "t09").mkdir(parents=True, exist_ok=True)
     (run_root / "t09" / "metrics.json").write_text(
@@ -179,14 +202,21 @@ def _write_t11_stub_run(
             {
                 "per_method": [
                     {"method": "base_plus_adv", "chg": chg, "tgrr": tgrr}
-                ]
+                ],
+                "offline_demo": False,
+                "evidence_grade": "measured_task",
             }
         ),
         encoding="utf-8",
     )
     (run_root / "t10").mkdir(parents=True, exist_ok=True)
     (run_root / "t10" / "system.json").write_text(
-        json.dumps({"per_context": [{"psr_a_p50": psr_a}]}), encoding="utf-8"
+        json.dumps(
+            {
+                "per_context": [{"psr_a_p50": psr_a}],
+                "timing_evidence": "end_to_end_handoff",
+            }
+        ), encoding="utf-8"
     )
 
 

@@ -273,6 +273,12 @@ def run_advantage_train(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         ④ bounded α 逐层限幅注入量 → 最终 C_S* = z + α·(R_K, R_V)
     """
     # ---- 读配置 ----
+    provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
+    if provider_kind != "synthetic":
+        raise RuntimeError(
+            "T08 尚未接入真实任务 loss/advantage labels；已停止用随机 KV "
+            "代替真实 HF 证据。请先导出 held-out 任务评分后再运行 T08。"
+        )
     n_t = cfg["teacher"].get("num_layers", 36)
     n_s = cfg["student"].get("num_layers", 28)
     H = cfg.get("teacher", {}).get("num_kv_heads", 8)
@@ -336,6 +342,10 @@ def run_advantage_train(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "n_layers_teacher": n_t,
         "n_layers_student": n_s,
         "student_frozen": cfg["student"].get("freeze", True),  # §36 全冻结断言
+        "offline_demo": True,
+        "evidence_grade": "synthetic",
+        "alpha_trained": False,
+        "alpha_note": "alpha parameters remain at initialization; no task loss updates them",
         # §47 A1 Rank, A9 RMS, A10 Bounded 三项开关记录
         "ablation_switches": {
             "A1_rank_fixed": 16,

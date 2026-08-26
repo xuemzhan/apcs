@@ -32,6 +32,7 @@ bug-7 修复：旧实现用随机子空间做 placeholder，没说明这是离�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -132,42 +133,76 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     hidden_dim = cfg.get("hidden_dim", 128)
     rank = cfg.get("geometry_rank", 8)   # 投影子空间的维度（主成分个数）
 
-    # 占位：使用合成随机子空间。真实实验从 hidden states PCA。
-    use_placeholder = "hidden_states_path" not in cfg
-    layers_t = []
-    layers_s = []
-    rng = np.random.default_rng(0)
-    for l in range(max(n_t, n_s)):
-        # 每层一个 rank×dim 随机子空间基（Teacher 与 Student 用不同 seed 区间隔离）
-        layers_t.append(_random_subspace(seed=l + 1, dim=hidden_dim, rank=rank))
-        layers_s.append(_random_subspace(seed=10_000 + l, dim=hidden_dim, rank=rank))
+    hidden_states_path = cfg.get("hidden_states_path")
+    use_placeholder = hidden_states_path is None
+    repr_t: list[np.ndarray] = []
+    repr_s: list[np.ndarray] = []
+    if use_placeholder:
+        for l in range(max(n_t, n_s)):
+            # placeholder 也使用“tokens × hidden”表示，与真实路径语义一致。
+            repr_t.append(_random_subspace(seed=l + 1, dim=hidden_dim, rank=max(32, rank)))
+            repr_s.append(_random_subspace(seed=10_000 + l, dim=hidden_dim, rank=max(32, rank)))
+    else:
+        path = Path(str(hidden_states_path))
+        if not path.exists():
+            raise FileNotFoundError(f"hidden_states_path 不存在: {path}")
+        with np.load(path, allow_pickle=False) as payload:
+            if "teacher" not in payload or "student" not in payload:
+                raise ValueError("hidden-states NPZ 必须包含 teacher 和 student 数组")
+            hidden_t = np.asarray(payload["teacher"])
+            hidden_s = np.asarray(payload["student"])
+        if hidden_t.ndim != 3 or hidden_s.ndim != 3:
+            raise ValueError("teacher/student hidden states 必须是 (layers, tokens, hidden)")
+        if hidden_t.shape[2] != hidden_s.shape[2]:
+            raise ValueError("T12 当前要求 Teacher/Student hidden 维度一致")
+        if hidden_t.shape[1] != hidden_s.shape[1]:
+            raise ValueError("T12 CKA 要求 Teacher/Student 使用对齐的 token 样本")
+        n_t, n_s = int(hidden_t.shape[0]), int(hidden_s.shape[0])
+        hidden_dim = int(hidden_t.shape[2])
+        repr_t = [hidden_t[l] for l in range(n_t)]
+        repr_s = [hidden_s[l] for l in range(n_s)]
+
+    def pca_basis(x: np.ndarray) -> np.ndarray:
+        centered = x - x.mean(axis=0, keepdims=True)
+        _, _, vt = np.linalg.svd(centered, full_matrices=False)
+        return vt[: min(rank, vt.shape[0])]
 
     rows = []
     for s in range(n_s):
         # 简化：Student 层 s 与 Teacher 层 round(s * n_t/n_s) 比对（与 T03 一致）
         t = int(round((s + 0.5) * n_t / n_s - 0.5))
         t = max(0, min(n_t - 1, t))   # 夹取到合法 Teacher 层范围
-        a = layers_s[s]   # (rank, dim)
-        b = layers_t[t]
-        # attn-output cosine 近似：把子空间当作 Q/K
-        q = _random_subspace(seed=s * 7 + 1, dim=hidden_dim, rank=rank)
-        attn_cos = _attn_output_cosine(q, a, b)
+        a_raw = np.asarray(repr_s[s], dtype=np.float64)
+        b_raw = np.asarray(repr_t[t], dtype=np.float64)
+        a_basis = pca_basis(a_raw)
+        b_basis = pca_basis(b_raw)
+        # hidden-state artifact 不含真实 Q/K/V；此项仅保留为显式 proxy。
+        q = _random_subspace(seed=s * 7 + 1, dim=hidden_dim, rank=len(a_basis))
+        attn_cos = _attn_output_cosine(q, a_basis, b_basis)
         rows.append(
             GeometryResult(
                 student_layer=s,
                 teacher_layer=t,
-                cka=float(linear_cka(a, b)),                     # 子空间相似度（§40）
-                principal_angle=float(principal_angle(a, b)),    # 主夹角，弧度（§40）
-                effective_rank_t=float(effective_rank(b)),       # Teacher 有效秩
-                effective_rank_s=float(effective_rank(a)),       # Student 有效秩
+                cka=float(linear_cka(a_raw, b_raw)),
+                principal_angle=float(principal_angle(a_basis, b_basis)),
+                effective_rank_t=float(effective_rank(b_raw)),
+                effective_rank_s=float(effective_rank(a_raw)),
                 attn_output_cosine=attn_cos,                     # attention 分布保持度
-                head_correlation=_head_correlation(b),           # head 冗余度（§62 Fig.7d）
+                head_correlation=_head_correlation(b_basis),
             ).__dict__
         )
 
     geo = {
         "placeholder": use_placeholder,
+        "evidence_grade": "placeholder" if use_placeholder else "measured_representation",
         "note": "若 placeholder=True，metrics 由合成子空间生成，请用 hidden_states_path 接入真实模型。",
+        "metric_semantics": {
+            "cka": "centered token hidden states",
+            "principal_angle": "PCA row subspaces",
+            "effective_rank": "centered token hidden states",
+            "attn_output_cosine": "random-Q subspace proxy; real Q/K/V required for task evidence",
+            "head_correlation": "PCA-component correlation; not literal attention heads",
+        },
         "per_layer": rows,
         "mean_cka": float(np.mean([r["cka"] for r in rows])),
         "mean_principal_angle": float(np.mean([r["principal_angle"] for r in rows])),
@@ -184,6 +219,7 @@ def run_geometry_diagnostics(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     metrics = {
         "task": "T12",
         "placeholder": use_placeholder,
+        "evidence_grade": "placeholder" if use_placeholder else "measured_representation",
         "n_layers_compared": len(rows),
         "mean_cka": geo["mean_cka"],
         "mean_principal_angle": geo["mean_principal_angle"],

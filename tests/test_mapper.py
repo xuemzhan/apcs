@@ -8,6 +8,8 @@ bug-4a: Teacher 层数少于 Student 层数是合法场景（由 layer_map / G2 
 """
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -451,7 +453,12 @@ def test_runner_ridge_baseline_separate_kv_metrics(tmp_path):
     assert "retention_K" in metrics, "separate_kv=True 必须输出 retention_K（§22）"
     assert "retention_V" in metrics, "separate_kv=True 必须输出 retention_V（§22）"
     assert "mean_cos_K" in metrics and "mean_cos_V" in metrics
-    assert res["status"] in ("PASS", "FAIL")
+    assert res["status"] == "OK"
+    assert metrics["diagnostic_status"] in {
+        "REPRESENTATION_PASS",
+        "REPRESENTATION_FAIL",
+    }
+    assert "gate" not in metrics
 
 
 # ---- §22 修复回归：held-out 种子空间 / kv_kinds / _merge_kv_fields / G2 警告 ----
@@ -544,3 +551,107 @@ def test_cfg_layers_warns_on_head_mismatch():
         assert any("G2" in str(x.message) for x in w), "head_dim 不一致应触发 G2 警告"
         # 与文档语义一致：runner 按 teacher 维度训练，H 取 max
         assert (n_t, n_s, D) == (4, 2, 16)
+
+
+def test_attention_output_uses_value_tensor():
+    """Q=0 时因果 attention 应输出到当前位置为止的 V 前缀均值。"""
+    from apcs.mapper.runner import _attention_output
+
+    q = np.zeros((3, 1, 2), dtype=np.float64)
+    k = np.array([[[10.0, 0.0]], [[0.0, 10.0]], [[5.0, 5.0]]])
+    v = np.array([[[1.0, 2.0]], [[3.0, 4.0]], [[8.0, 9.0]]])
+    out = _attention_output(q, k, v)
+    expected = np.stack([v[: i + 1].mean(axis=0) for i in range(len(v))], axis=0)
+    np.testing.assert_allclose(out, expected)
+
+
+def test_ridge_aggregate_accepts_variable_length_samples():
+    """变长 prompt 应按样本聚合 Gram，不需要裁到全局最短长度。"""
+    from apcs.mapper.aggregate import fit_ridge_aggregate
+    from apcs.mapper.math import RidgePerHeadMapper
+
+    rng = np.random.default_rng(7)
+    samples = []
+    for seq in (3, 7):
+        teacher = rng.standard_normal((1, seq, 1, 2))
+        student = teacher @ np.array([[2.0, 0.0], [0.0, 0.5]])
+        samples.append((teacher, student))
+    mapper = RidgePerHeadMapper(lam=1e-6)
+    fit_ridge_aggregate(mapper, samples, [[0]], positions=None)
+    pred = mapper.transform(samples[1][0], [[0]])
+    np.testing.assert_allclose(pred, samples[1][1], atol=1e-4)
+
+
+def test_replacement_task_artifact_requires_exact_eval_split(tmp_path):
+    from apcs.mapper.runner import _load_replacement_task_artifact
+
+    artifact = tmp_path / "replacement_scores.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "evidence_grade": "measured_task",
+                "zero_prefill_verified": True,
+                "task_scoring_verified": True,
+                "split": "heldout",
+                "dataset": "unit-test",
+                "records": [
+                    {"sample_id": "eval-0", "student_score": 0.5, "handoff_score": 0.45},
+                    {"sample_id": "eval-1", "student_score": 0.6, "handoff_score": 0.57},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = {"provider": {"replacement_score_artifact_path": str(artifact)}}
+    result = _load_replacement_task_artifact(cfg, {"eval-0", "eval-1"})
+    assert result is not None
+    assert result["task_retention"] == pytest.approx((0.45 + 0.57) / (0.5 + 0.6))
+    with pytest.raises(RuntimeError, match="eval split"):
+        _load_replacement_task_artifact(cfg, {"eval-0"})
+
+
+def test_replacement_real_path_preserves_requested_context_buckets(monkeypatch, tmp_path):
+    """真实变长样本应分别评估每个 context cap，而不是折叠到最大值。"""
+    import apcs.mapper.runner as runner
+
+    rng = np.random.default_rng(19)
+
+    def pair(seq: int):
+        teacher = rng.standard_normal((2, seq, 1, 2))
+        student = teacher[:1] @ np.array([[1.2, 0.0], [0.0, 0.8]])
+        return teacher, student
+
+    splits = {
+        "K": {
+            "calib": [pair(8), pair(5)],
+            "eval": [pair(7), pair(5)],
+        }
+    }
+    stats = {
+        "min": 5,
+        "median": 6.0,
+        "max": 8,
+        "calibration_ids": ["calib-0", "calib-1"],
+        "eval_ids": ["eval-0", "eval-1"],
+    }
+    monkeypatch.setattr(runner, "_real_kv_splits", lambda *args, **kwargs: (splits, stats))
+    cfg = {
+        "teacher": {"num_layers": 2, "num_kv_heads": 1, "head_dim": 2},
+        "student": {"num_layers": 1, "num_kv_heads": 1, "head_dim": 2},
+        "context_lengths": [4, 6],
+        "provider": {"kv": "hf"},
+        "mapper": {
+            "replacement_calib_samples": 2,
+            "replacement_eval_samples": 2,
+            "real_calibration_samples": 2,
+            "real_eval_samples": 2,
+        },
+        "timing": {"repeats": 1, "warmup": 0},
+    }
+    result = runner.run_replacement(cfg, tmp_path)
+    rows = result["metrics"]["retention_per_context"]
+    assert [row["context"] for row in rows] == [4, 6]
+    assert rows[0]["effective_seq_stats"] == {"min": 4, "median": 4.0, "max": 4}
+    assert rows[1]["effective_seq_stats"] == {"min": 5, "median": 5.5, "max": 6}
+    assert result["metrics"]["task_retention"] is None
+    assert result["metrics"]["gate1"] == "INCONCLUSIVE"

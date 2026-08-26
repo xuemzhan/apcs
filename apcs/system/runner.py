@@ -106,17 +106,21 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # GPU 不可用时 open() 显式 raise（§75，不静默回退线性公式）；
     # 否则回退 _simulate_timings 线性公式（offline_demo=True）。
     timing_kind = cfg.get("provider", {}).get("timing", "synthetic").lower()
-    if timing_kind == "hf":
-        from ..providers import providers_ctx
+    if timing_kind in {"hf", "artifact"}:
+        from ..providers import providers_ctx, write_provider_manifest
+
+        with providers_ctx(cfg, need=("timing",)) as ps:
+            timing_description = ps["timing"].describe()
+            write_provider_manifest(run_dir, timing=ps["timing"])
 
         def _measure(ctx: int, seed: int) -> dict[str, float]:
             with providers_ctx(cfg, need=("timing",)) as ps:
                 return ps["timing"].measure(ctx, seed)
 
-        # 当前 HFTimingProvider 仍是 CUDA 代理算子，不是 HandoffPipeline
-        # 端到端测量。必须保持 offline_demo=True，防止代理公式被当成实测。
-        real_timing = False
-        timing_evidence = "cuda_proxy_not_end_to_end"
+        timing_evidence = str(
+            timing_description.get("timing_evidence", "cuda_proxy_not_end_to_end")
+        )
+        real_timing = timing_evidence == "end_to_end_handoff"
     else:
 
         def _measure(ctx: int, seed: int) -> dict[str, float]:
@@ -124,6 +128,7 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
         real_timing = False
         timing_evidence = "synthetic_formula"
+        timing_description = {"evidence_grade": "synthetic"}
 
     per_ctx = []
     for ctx in contexts:
@@ -228,24 +233,31 @@ def run_system_cost(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         #   P50/P95）+ VRAM 实测，offline_demo=False。
         "offline_demo": not real_timing,
         "timing_evidence": timing_evidence,
+        "evidence_grade": (
+            "measured_system"
+            if real_timing
+            else ("proxy" if timing_kind == "hf" else "synthetic")
+        ),
+        "timing_provenance": timing_description,
         "note": (
-            "T10 全部耗时由 _simulate_timings 线性公式生成，VRAM/RAM 为量级估算，"
-            "PSR_A / Cost_B / N_BE 均为推导值而非实测；"
-            "design.md §38/§75 禁止将理论估算作为论文系统收益结果。"
-            if timing_evidence == "synthetic_formula"
-            else "T10 使用 CUDA 代理算子诊断，不是 HandoffPipeline 端到端计时；"
-            "PSR_A / Cost_B / N_BE 仍不可作为真实系统收益证据。"
+            "T10 使用通过审计的 HandoffPipeline 端到端 artifact。"
+            if real_timing
+            else (
+                "T10 全部耗时由 _simulate_timings 线性公式生成，"
+                "PSR_A / Cost_B / N_BE 均为推导值而非实测。"
+                if timing_evidence == "synthetic_formula"
+                else "T10 使用 CUDA 代理算子诊断，不是端到端计时。"
+            )
         ),
     }
     write_json(run_dir / "system.json", metrics)
-    warning = (
-        "> ⚠️ **offline demo**：本任务所有耗时来自线性公式模拟（非 GPU 实测），"
-        "PSR_A / Cost_B / N_BE 均为推导值，不可作为论文系统收益证据"
-        "（design.md §38 / §75）。\n\n"
-        if timing_evidence == "synthetic_formula"
-        else "> ⚠️ **CUDA proxy**：执行了 CUDA 代理算子，但并非 HandoffPipeline "
-        "端到端计时；PSR_A / Cost_B / N_BE 仍不可作为真实系统收益证据。\n\n"
-    )
+    warning = ""
+    if not real_timing:
+        warning = (
+            "> ⚠️ **offline demo**：耗时来自线性公式模拟。\n\n"
+            if timing_evidence == "synthetic_formula"
+            else "> ⚠️ **CUDA proxy**：并非 HandoffPipeline 端到端计时。\n\n"
+        )
     md = (
         "# T10 System Cost\n\n"
         + warning

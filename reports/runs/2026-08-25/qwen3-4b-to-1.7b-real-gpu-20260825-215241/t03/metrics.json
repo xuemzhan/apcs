@@ -1,0 +1,19 @@
+{
+  "task": "T03",
+  "n_teacher_layers": 36,
+  "n_student_layers": 28,
+  "strategy": [
+    "proportional",
+    "last_layer",
+    "data_driven_topk",
+    "geometry_aware_topk"
+  ],
+  "mapping_size_avg": {
+    "proportional": 1.2857142857142858,
+    "last_layer": 2.0,
+    "data_driven_topk": 2.0,
+    "geometry_aware_topk": 2.0
+  },
+  "selected": "proportional",
+  "note": "offline demo 用对角带状合成相似度矩阵；真实实验需 attn-output cosine。"
+}

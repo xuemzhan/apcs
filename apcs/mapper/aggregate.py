@@ -108,12 +108,18 @@ def fit_ridge_aggregate(
         把样本行拼接后 fit ⇒ G = Σ_i Y_i^T Y_i、B = Σ_i Y_i^T X_i。
     因此本函数与"concat 后一次 fit"逐位等价（测试断言 maxdiff < 1e-4）。
     """
-    # 取第一个样本确定几何形状（全部样本共享同一模型对 → 形状一致）
-    kv_t0, kv_s0 = list(samples)[0]
+    # 只实例化一次：传入 generator 时，先 list(samples)[0] 再遍历
+    # samples 会把后续样本静默丢掉。
+    pairs = list(samples)
+    if not pairs:
+        raise ValueError("fit_ridge_aggregate: samples 不能为空")
+    kv_t0, kv_s0 = pairs[0]
     L_s, S, H, D = kv_s0.shape
     L_t = kv_t0.shape[0]
-    if positions is None:
-        positions = np.arange(S, dtype=np.float64)  # 缺省按 S 个 token 从 0 编号
+    if positions is not None and len(positions) != S:
+        raise ValueError(
+            f"positions 长度 {len(positions)} 与首个样本序列长度 {S} 不一致"
+        )
 
     # per-head 语义（RidgePerHeadMapper）→ 每个 (s, h) 一套参数；
     # per-layer 语义（RidgeMapper）→ 每层一套参数（h 固定为 0）
@@ -133,7 +139,21 @@ def fit_ridge_aggregate(
 
     # 逐样本累加 Gram：samples 共享同一 W_t/W_s（同一模型对），每个样本的
     # 贡献是独立的 (D,D) 外积累加 —— 与"concat 后一次 fit"逐位等价
-    for kv_t, kv_s in samples:
+    for kv_t, kv_s in pairs:
+        # 真实 prompt 是变长的。positions=None 时按当前样本生成位置，
+        # 避免为了 Gram 聚合而把所有样本裁到全局最短序列。
+        sample_seq = int(kv_s.shape[1])
+        sample_positions = (
+            np.arange(sample_seq, dtype=np.float64) if positions is None else positions
+        )
+        if kv_t.shape[1] != sample_seq:
+            raise ValueError(
+                "Teacher/Student 样本在聚合前必须已裁成同一序列长度"
+            )
+        if positions is not None and len(positions) != sample_seq:
+            raise ValueError(
+                "显式 positions 只适用于定长样本；变长样本请传 positions=None"
+            )
         for s in range(L_s):
             # Student 层 s 对应的 Teacher 层索引；越界时按比例回退（与 fit 一致）
             teachers = (
@@ -143,7 +163,7 @@ def fit_ridge_aggregate(
             )
             # 对每个教师层先 de-RoPE（§23 强制路径），再 stack 成 (k, S, H, D)
             src_layers = [
-                _apply_or_skip(de_rope_fn, kv_t[t], positions) for t in teachers
+                _apply_or_skip(de_rope_fn, kv_t[t], sample_positions) for t in teachers
             ]
             src_all = np.stack(src_layers, axis=0)  # (k, S, H, D)
             if per_head:

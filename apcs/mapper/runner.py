@@ -102,8 +102,13 @@ def _real_kv_splits(
     n_calib: int,
     n_eval: int,
     requested_seq: int,
-) -> tuple[dict[str, dict[str, list[tuple[np.ndarray, np.ndarray]]]], int]:
-    """从 KVProvider 取一次真实 K|V，并裁成统一、无 padding 的序列长度。"""
+) -> tuple[dict[str, dict[str, list[tuple[np.ndarray, np.ndarray]]]], dict[str, Any]]:
+    """从 KVProvider 取真实 K|V，逐样本裁剪且保留变长序列。
+
+    每个样本只裁到 ``min(requested, teacher_len, student_len)``；不再
+    把整个数据集裁到最短 prompt。这样既不引入 padding，也不会让一个
+    异常短样本把 512/1024-token 实验退化为数十 token。
+    """
     from ..providers import providers_ctx, write_provider_manifest
 
     with providers_ctx(cfg, need=("kv",)) as providers:
@@ -121,16 +126,20 @@ def _real_kv_splits(
         raise RuntimeError(f"真实 KV calibration/eval sample_id 泄漏：{overlap[:10]}")
 
     all_samples = calib_raw + eval_raw
-    seq = min(
-        int(requested_seq),
-        *(min(int(x.kv_t.shape[1]), int(x.kv_s.shape[1])) for x in all_samples),
-    )
-    if seq < 2:
-        raise RuntimeError(f"真实 KV 公共序列长度过短：{seq}")
+
+    def sample_seq(row) -> int:
+        return min(
+            int(requested_seq), int(row.kv_t.shape[1]), int(row.kv_s.shape[1])
+        )
+
+    lengths = [sample_seq(row) for row in all_samples]
+    if min(lengths) < 2:
+        raise RuntimeError(f"真实 KV 样本序列长度过短：{min(lengths)}")
 
     def split_rows(rows, kind: str):
         pairs = []
         for row in rows:
+            seq = sample_seq(row)
             if row.kv_t.shape[-1] % 2 or row.kv_s.shape[-1] % 2:
                 raise ValueError("HF KV 最后一维必须是 K|V 拼接后的偶数")
             dt = row.kv_t.shape[-1] // 2
@@ -151,13 +160,81 @@ def _real_kv_splits(
     manifest = {
         "provider": cfg.get("provider", {}).get("kv", "synthetic"),
         "requested_seq": int(requested_seq),
-        "effective_seq": seq,
+        "effective_seq_min": int(np.min(lengths)),
+        "effective_seq_median": float(np.median(lengths)),
+        "effective_seq_max": int(np.max(lengths)),
+        "effective_seq_per_sample": {
+            row.sample_id: sample_seq(row) for row in all_samples
+        },
         "calibration_ids": sorted(calib_ids),
         "eval_ids": sorted(eval_ids),
         "overlap": overlap,
     }
     write_json(run_dir / "kv_split_manifest.json", manifest)
-    return result, seq
+    seq_stats = {
+        "min": int(np.min(lengths)),
+        "median": float(np.median(lengths)),
+        "max": int(np.max(lengths)),
+        "calibration_ids": sorted(calib_ids),
+        "eval_ids": sorted(eval_ids),
+    }
+    return result, seq_stats
+
+
+def _load_replacement_task_artifact(
+    cfg: dict[str, Any], expected_eval_ids: set[str]
+) -> dict[str, Any] | None:
+    """读取真实注入后的 Student-self/Handoff 配对任务得分。"""
+    import json
+    from pathlib import Path
+
+    value = cfg.get("provider", {}).get(
+        "replacement_score_artifact_path",
+        cfg.get("replacement_score_artifact_path"),
+    )
+    if not value:
+        return None
+    path = Path(str(value))
+    if not path.exists():
+        raise FileNotFoundError(f"replacement task artifact 不存在: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for key, expected in {
+        "evidence_grade": "measured_task",
+        "zero_prefill_verified": True,
+        "task_scoring_verified": True,
+    }.items():
+        if payload.get(key) != expected:
+            raise RuntimeError(f"replacement task artifact 需要 {key}={expected!r}")
+    if payload.get("split") not in {"validation", "heldout", "test"}:
+        raise RuntimeError("replacement task artifact split 必须是 held-out")
+    records = payload.get("records")
+    if not isinstance(records, list) or not records:
+        raise RuntimeError("replacement task artifact.records 必须是非空列表")
+    artifact_ids = {str(row["sample_id"]) for row in records}
+    if artifact_ids != expected_eval_ids:
+        missing = sorted(expected_eval_ids - artifact_ids)
+        extra = sorted(artifact_ids - expected_eval_ids)
+        raise RuntimeError(
+            f"replacement task artifact 与 T05 eval split 不一致: "
+            f"missing={missing[:5]}, extra={extra[:5]}"
+        )
+    self_scores = np.asarray([float(row["student_score"]) for row in records])
+    handoff_scores = np.asarray([float(row["handoff_score"]) for row in records])
+    if not np.all(np.isfinite(self_scores)) or not np.all(np.isfinite(handoff_scores)):
+        raise RuntimeError("replacement task artifact 包含非有限得分")
+    self_mean = float(np.mean(self_scores))
+    handoff_mean = float(np.mean(handoff_scores))
+    return {
+        "path": str(path),
+        "n_samples": len(records),
+        "student_score": self_mean,
+        "handoff_score": handoff_mean,
+        "task_retention": handoff_mean / max(self_mean, 1e-12),
+        "split": payload.get("split"),
+        "dataset": payload.get("dataset"),
+        "zero_prefill_verified": True,
+        "evidence_grade": "measured_task",
+    }
 
 
 def _merge_kv_fields(
@@ -559,7 +636,8 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         - latency_map_ms_p50/p95：fit/transform 计时（§49 协议）
     种子规则：权重 master_seed=0（同一模型对）；校准样本 master_seed=0、
     held-out 评估样本 master_seed=1（Z/噪声完全不相交）。
-    Gate：mean_kv_cosine > 0.5 → PASS（T04 无正式 gate，此为报告性阈值）。
+    T04 只给出表示诊断，不使用正式 gate；KV cosine > 0.5 仅标为
+    ``REPRESENTATION_PASS``，不能与任务级 Gate 1 混淆。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
     # ◆ 内存自适应（架构审查续轮）：默认 n_calib=128 在 4 GB 环境会 OOM，
@@ -601,19 +679,21 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     separate_kv = "V" in kinds
     provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
     real_splits = None
+    real_seq_stats = None
     n_eval_t04 = int(cfg.get("mapper", {}).get("t04_eval_samples", 20))
     if provider_kind != "synthetic":
         n_calib = int(cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib, 16)))
         n_eval_t04 = int(cfg.get("mapper", {}).get("real_eval_samples", min(n_eval_t04, 16)))
-        real_splits, seq = _real_kv_splits(
+        real_splits, real_seq_stats = _real_kv_splits(
             cfg, run_dir, n_calib=n_calib, n_eval=n_eval_t04, requested_seq=seq
         )
-        positions = np.arange(seq, dtype=np.float64)
+        positions = None  # 真实 prompt 保留变长，位置在每个样本内生成
 
     # master_seed=0：权重种子；calib（master_seed=0）与 held-out（master_seed=1）
     # 复用同一组 w_t/w_s，只换 latent Z —— train/eval 同一模型对（§32）
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
     per_kind: dict[str, dict[str, float]] = {}
+    functional_pairs: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {}
     latencies: list[float] = []
     for kind in kinds:
         calib = (
@@ -633,7 +713,8 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
 
         # 在 held-out 样本上评分（§32：校准集与评估集分离；**同一模型对**——
         # 复用上面的 w_t/w_s，只换 latent Z 与噪声）
-        r2_list, cos_list, attn_cos_list, ret_list = [], [], [], []
+        r2_list, cos_list, ret_list = [], [], []
+        functional_pairs[kind] = []
         # held-out 评估：20 个样本，master_seed=1 与校准（=0）的 Z/噪声完全不相交
         eval_samples = (
             real_splits[kind]["eval"]
@@ -646,7 +727,10 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         for i, (kv_t, kv_s) in enumerate(eval_samples):
             t0 = time.perf_counter()
             pred = ridge.transform(kv_t, layer_map, kv_kind=kind,  # §22
-                                   positions=positions, de_rope_fn=kind_de_rope)
+                                   positions=(
+                                       np.arange(kv_t.shape[1], dtype=np.float64)
+                                       if positions is None else positions
+                                   ), de_rope_fn=kind_de_rope)
             latencies.append((time.perf_counter() - t0) * 1000.0)
             m = _score_kv(pred, kv_s)
             r2_list.append(m["r2"])
@@ -655,21 +739,43 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             # 分母 max(..., 1e-6) 防御 self cosine 为 0 的除零边界）
             s_self = _score_kv(kv_s, kv_s)
             ret_list.append(min(1.0, m["cosine"] / max(s_self["cosine"], 1e-6)))
-            # §32 attn-output cosine：用随机 Q 模拟 attn 输出分布相似度
-            rng = np.random.default_rng(i)
-            q = rng.standard_normal((seq, H, D))
-            kt_ref = kv_s  # (L_s, S, H, D)
-            kt_pred = pred
-            # 仅取 Student 层 0 的 attention 输出做代表
-            attn_ref = _attn_output(q, kt_ref[0])
-            attn_pred = _attn_output(q, kt_pred[0])
-            attn_cos_list.append(cosine(attn_ref.reshape(-1, D), attn_pred.reshape(-1, D)))
+            functional_pairs[kind].append((pred, kv_s))
         per_kind[kind] = {
             "mean_r2": float(np.mean(r2_list)),
             "mean_cos": float(np.mean(cos_list)),
-            "mean_attn_cos": float(np.mean(attn_cos_list)),
+            "mean_attn_cos": 0.0,
             "retention": float(np.mean(ret_list)),
         }
+
+    # 功能性指标使用真正的 softmax(QK^T)V。旧实现在 V 分支把
+    # V 同时当作 K 和 V，因此不能解释为 V-only attention retention。
+    joint_attn_cos: list[float] = []
+    if "V" in functional_pairs:
+        k_only_cos: list[float] = []
+        v_only_cos: list[float] = []
+        for i, ((k_pred, k_ref), (v_pred, v_ref)) in enumerate(
+            zip(functional_pairs["K"], functional_pairs["V"])
+        ):
+            sample_seq = int(k_ref.shape[1])
+            q = np.random.default_rng(i).standard_normal((sample_seq, H, D))
+            ref = _attention_output(q, k_ref[0], v_ref[0])
+            k_only = _attention_output(q, k_pred[0], v_ref[0])
+            v_only = _attention_output(q, k_ref[0], v_pred[0])
+            joint = _attention_output(q, k_pred[0], v_pred[0])
+            ref_flat = ref.reshape(-1, D)
+            k_only_cos.append(cosine(ref_flat, k_only.reshape(-1, D)))
+            v_only_cos.append(cosine(ref_flat, v_only.reshape(-1, D)))
+            joint_attn_cos.append(cosine(ref_flat, joint.reshape(-1, D)))
+        per_kind["K"]["mean_attn_cos"] = float(np.mean(k_only_cos))
+        per_kind["V"]["mean_attn_cos"] = float(np.mean(v_only_cos))
+    else:
+        for i, (k_pred, k_ref) in enumerate(functional_pairs["K"]):
+            sample_seq = int(k_ref.shape[1])
+            q = np.random.default_rng(i).standard_normal((sample_seq, H, D))
+            ref = _attention_output(q, k_ref[0], k_ref[0])
+            pred = _attention_output(q, k_pred[0], k_pred[0])
+            joint_attn_cos.append(cosine(ref.reshape(-1, D), pred.reshape(-1, D)))
+        per_kind["K"]["mean_attn_cos"] = float(np.mean(joint_attn_cos))
 
     # §49 P50 / P95（latencies 含每次 fit + 每次 transform 的耗时）
     p50 = percentile(latencies, 0.50) if latencies else 0.0
@@ -677,11 +783,13 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # separate_kv=false 时只有 K → 数值与旧实现一致；true 时取 K/V 平均
     mean_r2 = float(np.mean([v["mean_r2"] for v in per_kind.values()]))
     mean_cos = float(np.mean([v["mean_cos"] for v in per_kind.values()]))
-    mean_attn = float(np.mean([v["mean_attn_cos"] for v in per_kind.values()]))
+    mean_attn = float(np.mean(joint_attn_cos))
     metrics = {
         "task": "T04",
         "n_calib_samples": n_calib,
         "context_length": seq,
+        "requested_context_length": seq,
+        "effective_seq_stats": real_seq_stats,
         "mapper_n_params": ridge.n_params,
         "mean_r2": mean_r2,
         "mean_kv_cosine": mean_cos,
@@ -692,12 +800,20 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "warmup": warmup,
         "data_source": provider_kind,
         "offline_demo": provider_kind == "synthetic",
+        "evidence_grade": (
+            "measured_representation" if provider_kind != "synthetic" else "synthetic"
+        ),
+        "functional_query_source": "deterministic_random_proxy",
+        "functional_evidence_grade": "proxy",
+        "attention_metric_semantics": "softmax(QK^T/sqrt(d))V; K-only/V-only/joint",
         "de_rope_k": _de_rope_for_kind(cfg, "K", de_rope_fn) is not None,
         "de_rope_v": _de_rope_for_kind(cfg, "V", de_rope_fn) is not None,
         "ridge_lambda_k": _ridge_lambda(cfg, "K"),
         "ridge_lambda_v": _ridge_lambda(cfg, "V"),
-        # 报告性阈值：KV cosine > 0.5 视为可恢复（T04 非正式 gate）
-        "gate": "PASS" if mean_cos > 0.5 else "FAIL",
+        # 报告性阈值，不是任务 gate。
+        "diagnostic_status": (
+            "REPRESENTATION_PASS" if mean_cos > 0.5 else "REPRESENTATION_FAIL"
+        ),
     }
     # design.md §22：separate_kv=true 时输出 K/V 各自的 retention/cosine/R² 字段
     _merge_kv_fields(
@@ -718,6 +834,7 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         f"- Mean R²: {metrics['mean_r2']:.4f}\n"
         f"- Mean KV cosine: {metrics['mean_kv_cosine']:.4f}\n"
         f"- Mean attn-output cosine (§32): {metrics['mean_attn_output_cosine']:.4f}\n"
+        f"- Representation diagnostic: {metrics['diagnostic_status']} (not a task gate)\n"
         f"- Map latency p50/p95: {p50:.2f}ms / {p95:.2f}ms (§49)\n"
         + (
             f"- K/V 独立参数化 (§22): retention_K={metrics['retention_K']:.4f}, "
@@ -726,28 +843,48 @@ def run_ridge_baseline(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         )
     )
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")
-    return {"status": metrics["gate"], "metrics": metrics, "summary": summary}
+    return {"status": "OK", "metrics": metrics, "summary": summary}
 
 
-def _attn_output(q: np.ndarray, k: np.ndarray) -> np.ndarray:
-    """近似计算 attn output = softmax(Q K^T / √d) @ V 的"形状相似度"。
+def _attention_output(
+    q: np.ndarray,
+    k: np.ndarray,
+    v: np.ndarray,
+    *,
+    causal: bool = True,
+    key_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    """计算单层多头 attention output，默认按因果语言模型屏蔽未来 KV。
 
-    这里我们没有 V，所以简化为：
-        attn_logits = Q @ K^T / sqrt(d)
-        attn_output ≈ attn_logits @ K (proxy)
-    用于对比 reference vs prediction 的 attention distribution 一致性。
+    ``key_mask`` 是长度 S 的布尔数组，False 位置在所有 query 中
+    不可见。真实评估仍应优先使用模型捕获的 Q 和原生 attention mask。
     """
     S, H, D = q.shape
-    d = np.sqrt(D)
-    # q: (S, H, D) → k: (S, H, D)
-    # logits[i, j, h] = <q[i, h], k[j, h]> / d
-    logits = np.einsum("ihd,jhd->ijh", q, k) / d
-    # softmax over j
+    if k.shape != (S, H, D) or v.shape != (S, H, D):
+        raise ValueError(
+            f"q/k/v 必须同形 (S,H,D)：got q={q.shape}, k={k.shape}, v={v.shape}"
+        )
+    logits = np.einsum("ihd,jhd->ijh", q, k) / np.sqrt(D)
+    visible = np.ones((S, S), dtype=bool)
+    if causal:
+        visible &= np.tril(np.ones((S, S), dtype=bool))
+    if key_mask is not None:
+        mask = np.asarray(key_mask, dtype=bool).reshape(-1)
+        if mask.shape != (S,):
+            raise ValueError(f"key_mask 必须为 ({S},)，got {mask.shape}")
+        visible &= mask[None, :]
+    if np.any(~visible.any(axis=1)):
+        raise ValueError("attention mask 不能让某个 query 没有任何可见 key")
+    logits = np.where(visible[:, :, None], logits, -np.inf)
     logits -= logits.max(axis=1, keepdims=True)
     p = np.exp(logits)
     p /= p.sum(axis=1, keepdims=True)
-    # attn_output ≈ p @ k: (S, H, D)
-    return np.einsum("ijh,jhd->ihd", p, k)
+    return np.einsum("ijh,jhd->ihd", p, v)
+
+
+def _attn_output(q: np.ndarray, k: np.ndarray) -> np.ndarray:
+    """兼容旧调用的 K=V 诊断 proxy；新评估应调用 _attention_output。"""
+    return _attention_output(q, k, k)
 
 
 # ===========================================================================
@@ -759,15 +896,15 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     """T05 Replacement（design.md §33）。
 
     指标体系（§33）：
-        - retention_per_context：每个 context 长度的 handoff/self 保留率
-        - mean_retention / mean_token_agreement：跨 context 汇总
+        - retention_per_context：每个 context 长度的 KV cosine 诊断
+        - task_retention：真实注入后的 handoff/student-self 任务得分比
         - token_agreement：用 argmax 维度的 KV 最后 token 一致率（离线 proxy）
         - latency_p50_ms / p95_ms：fit + transform 计时（§49 协议）
         - gap_strata：按 retention 离散度分 low/medium/high 桶（§48 代理）
     种子规则：权重 master_seed=0；每 context 校准 master_seed=0、
     held-out 评估 master_seed=1。
-    Gate 1（§33）：mean_retention ≥ 0.90 → PASS；0.80–0.90 → CONDITIONAL；
-    < 0.80 → FAIL。
+    Gate 1（§33）：仅以 task_retention 判定；无审计任务 artifact 时为
+    INCONCLUSIVE，禁止用 KV cosine 替代。
     """
     n_t, n_s, H, D = _cfg_layers(cfg)
     layer_map = proportional_mapping(n_t, n_s)
@@ -809,28 +946,44 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     separate_kv = "V" in kinds
     provider_kind = cfg.get("provider", {}).get("kv", "synthetic").lower()
     real_splits = None
+    real_seq_stats = None
     n_eval_kind = int(cfg.get("mapper", {}).get("replacement_eval_samples", 20))
     if provider_kind != "synthetic":
         n_calib_for_all = int(
             cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib_for_all, 16))
         )
         n_eval_kind = int(cfg.get("mapper", {}).get("real_eval_samples", min(n_eval_kind, 16)))
-        real_splits, effective_seq = _real_kv_splits(
+        requested_real_seq = max(contexts)
+        real_splits, real_seq_stats = _real_kv_splits(
             cfg,
             run_dir,
             n_calib=n_calib_for_all,
             n_eval=n_eval_kind,
-            requested_seq=max(contexts),
+            requested_seq=requested_real_seq,
         )
-        # 真实 prompt 长度不一致时统一裁到公共最小长度；禁止零 padding 污染指标。
-        contexts = [effective_seq]
+        # 真实 prompt 按样本保留变长；每个 context 桶在循环内独立裁剪，
+        # 不再把 512/1024/... 全部折叠成最大请求长度。
     # 同一模型对：校准集与 held-out 评估集复用同一组 w_t/w_s（§32）
     w_t, w_s = _shared_model_weights(n_t, n_s, D, master_seed=0)
+
+    def _cap_real_pairs(
+        pairs: list[tuple[np.ndarray, np.ndarray]], cap: int
+    ) -> list[tuple[np.ndarray, np.ndarray]]:
+        capped = []
+        for kv_t, kv_s in pairs:
+            effective = min(int(cap), int(kv_t.shape[1]), int(kv_s.shape[1]))
+            if effective < 2:
+                raise RuntimeError(f"真实 KV 在 context={cap} 时有效长度过短: {effective}")
+            capped.append((kv_t[:, :effective], kv_s[:, :effective]))
+        return capped
+
     for ctx in contexts:
         # ◆ bug-3 修复（聚合校准）：100 个共享 W 的样本聚合后只 fit 一次。
         #   旧实现 `for i in range(100): ridge.fit(...)` 每次覆盖 W，校准 100
         #   样本只剩最后一组的影响 —— retention 被严重低估。
-        positions = np.arange(ctx, dtype=np.float64)
+        positions = (
+            None if real_splits is not None else np.arange(ctx, dtype=np.float64)
+        )
         per_kind_ret: dict[str, float] = {}
         per_kind_ta: dict[str, float] = {}
         for kind in kinds:
@@ -838,7 +991,7 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             #   所有 ctx 复用同一值；cfg.mapper.replacement_calib_samples 覆盖则优先。
             n_calib_kind = n_calib_for_all
             calib = (
-                real_splits[kind]["calib"]
+                _cap_real_pairs(real_splits[kind]["calib"], int(ctx))
                 if real_splits is not None
                 else _synth_calibration_set(
                     n_t, n_s, ctx, H, D, n_calib_kind, master_seed=0, noise=0.05,
@@ -855,7 +1008,7 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             retentions = []
             tas = []
             eval_pairs = (
-                real_splits[kind]["eval"]
+                _cap_real_pairs(real_splits[kind]["eval"], int(ctx))
                 if real_splits is not None
                 else _synth_calibration_set(
                     n_t, n_s, ctx, H, D, n_eval_kind, master_seed=1, noise=0.05,
@@ -864,7 +1017,10 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             )
             for kv_t, kv_s in eval_pairs:
                 pred = ridge.transform(kv_t, layer_map, kv_kind=kind,  # §22
-                                       positions=positions, de_rope_fn=kind_de_rope)
+                                       positions=(
+                                           np.arange(kv_t.shape[1], dtype=np.float64)
+                                           if positions is None else positions
+                                       ), de_rope_fn=kind_de_rope)
                 # §33 score / retention
                 s_self = _score_kv(kv_s, kv_s)
                 s_hand = _score_kv(pred, kv_s)
@@ -882,6 +1038,16 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
             "retention": float(np.mean(list(per_kind_ret.values()))),
             "token_agreement": float(np.mean(list(per_kind_ta.values()))),
         }
+        if real_splits is not None:
+            effective_lengths = [
+                int(pair[0].shape[1])
+                for pair in _cap_real_pairs(real_splits[kinds[0]]["eval"], int(ctx))
+            ]
+            row["effective_seq_stats"] = {
+                "min": int(np.min(effective_lengths)),
+                "median": float(np.median(effective_lengths)),
+                "max": int(np.max(effective_lengths)),
+            }
         # design.md §22：separate_kv=true 时输出 K/V 各自的 retention / TA
         _merge_kv_fields(
             row, 
@@ -894,11 +1060,25 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     # （离线模拟：用 retention 的离散度做 strata）
     gap_strata = _gap_strata(rows)
 
-    # Gate 1 判定（§33）：跨所有 context 的平均 retention
-    ret = float(np.mean([r["retention"] for r in rows]))
-    if ret >= 0.90:
+    # 表示级 KV cosine 与真实任务 retention 分开命名和门控。
+    kv_cosine = float(np.mean([r["retention"] for r in rows]))
+    task_artifact = None
+    if provider_kind != "synthetic":
+        task_artifact = _load_replacement_task_artifact(
+            cfg, set(real_seq_stats["eval_ids"])
+        )
+    task_retention = (
+        float(task_artifact["task_retention"])
+        if task_artifact is not None
+        else (kv_cosine if provider_kind == "synthetic" else None)
+    )
+    retention_min = float(cfg.get("gates", {}).get("retention_min", 0.90))
+    retention_strong = float(cfg.get("gates", {}).get("retention_strong", 0.95))
+    if task_retention is None:
+        gate = "INCONCLUSIVE"
+    elif task_retention >= retention_strong:
         gate = "PASS"
-    elif ret >= 0.80:
+    elif task_retention >= retention_min:
         gate = "CONDITIONAL"
     else:
         gate = "FAIL"
@@ -907,7 +1087,15 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "task": "T05",
         "contexts": [r["context"] for r in rows],
         "retention_per_context": rows,
-        "mean_retention": ret,
+        "mean_retention": task_retention,
+        "mean_kv_cosine": kv_cosine,
+        "task_retention": task_retention,
+        "metric_semantics": {
+            "mean_kv_cosine": "mapped KV representation diagnostic",
+            "task_retention": "handoff task score / student-self task score",
+            "mean_retention": "legacy alias of task_retention",
+        },
+        "task_score_provenance": task_artifact,
         "mean_token_agreement": float(np.mean(token_agree_list)),
         "latency_p50_ms": percentile(latencies, 0.50),
         "latency_p95_ms": percentile(latencies, 0.95),
@@ -916,7 +1104,17 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         "gap_strata": gap_strata,
         "gate1": gate,
         "data_source": provider_kind,
-        "offline_demo": provider_kind == "synthetic",
+        "offline_demo": task_artifact is None,
+        "evidence_grade": (
+            "measured_task"
+            if task_artifact is not None
+            else (
+                "measured_representation_only"
+                if provider_kind != "synthetic"
+                else "synthetic"
+            )
+        ),
+        "effective_seq_stats": real_seq_stats,
         "de_rope_k": _de_rope_for_kind(cfg, "K", de_rope_fn) is not None,
         "de_rope_v": _de_rope_for_kind(cfg, "V", de_rope_fn) is not None,
         "ridge_lambda_k": _ridge_lambda(cfg, "K"),
@@ -932,14 +1130,19 @@ def run_replacement(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     summary = (
         "# T05 Replacement\n\n"
         f"- Contexts: {[r['context'] for r in rows]}\n"
-        f"- Mean retention: {ret:.4f}\n"
-        f"- Mean token agreement: {metrics['mean_token_agreement']:.4f}\n"
+        f"- Mean KV cosine diagnostic: {kv_cosine:.4f}\n"
+        f"- Task retention: {task_retention if task_retention is not None else 'not measured'}\n"
+        f"- Feature-argmax agreement proxy: {metrics['mean_token_agreement']:.4f}\n"
         f"- Latency p50/p95: {metrics['latency_p50_ms']:.2f}ms / {metrics['latency_p95_ms']:.2f}ms\n"
         f"- Gap strata (§48): {gap_strata}\n"
         f"- **Gate 1: {gate}**\n"
     )
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")
-    return {"status": gate, "metrics": metrics, "summary": summary}
+    return {
+        "status": "OK" if gate == "INCONCLUSIVE" else gate,
+        "metrics": metrics,
+        "summary": summary,
+    }
 
 
 def _token_agreement(kv_ref: np.ndarray, kv_pred: np.ndarray) -> float:

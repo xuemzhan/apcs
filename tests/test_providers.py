@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
+import pytest
 
 from apcs.io import load_config
 from apcs.providers import (
@@ -180,3 +181,197 @@ def test_hf_kv_single_card_role_lifecycle(monkeypatch):
     assert len(rows) == 2
     assert events == ["load:teacher", "release:teacher", "load:student", "release:student"]
     assert all(row.split == "test" for row in rows)
+
+
+def test_artifact_score_provider_accepts_audited_heldout_records(tmp_path):
+    artifact = tmp_path / "scores.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "evidence_grade": "measured_task",
+                "zero_prefill_verified": True,
+                "task_scoring_verified": True,
+                "split": "heldout",
+                "dataset": "unit-test",
+                "records": [
+                    {
+                        "method": "student",
+                        "sample_id": "eval-0",
+                        "seed": 0,
+                        "score": 0.5,
+                        "decision": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _cfg()
+    cfg["provider"] = {"score": "artifact", "score_artifact_path": str(artifact)}
+    with providers_ctx(cfg, need=("score",)) as providers:
+        score = providers["score"]
+        assert score.sample_ids() == ["eval-0"]
+        assert score.score("student", "eval-0", 0) == pytest.approx(0.5)
+        assert score.describe()["evidence_grade"] == "measured_task"
+
+
+def test_artifact_score_provider_rejects_unverified_prefill(tmp_path):
+    artifact = tmp_path / "scores.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "evidence_grade": "measured_task",
+                "zero_prefill_verified": False,
+                "task_scoring_verified": True,
+                "split": "heldout",
+                "records": [
+                    {
+                        "method": "student",
+                        "sample_id": "eval-0",
+                        "seed": 0,
+                        "score": 0.5,
+                        "decision": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _cfg()
+    cfg["provider"] = {"score": "artifact", "score_artifact_path": str(artifact)}
+    with pytest.raises(RuntimeError, match="zero_prefill_verified"):
+        open_providers(cfg, need=("score",))
+
+
+def test_artifact_timing_provider_accepts_end_to_end_records(tmp_path):
+    artifact = tmp_path / "timing.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "timing_evidence": "end_to_end_handoff",
+                "cuda_synchronized": True,
+                "warmup": 2,
+                "repeats": 10,
+                "vram_mb": 1234,
+                "records": [
+                    {
+                        "context": 1024,
+                        "seed": 0,
+                        "teacher_prefill": 10,
+                        "student_prefill": 8,
+                        "map": 1,
+                        "load": 1,
+                        "query": 2,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _cfg()
+    cfg["provider"] = {"timing": "artifact", "timing_artifact_path": str(artifact)}
+    with providers_ctx(cfg, need=("timing",)) as providers:
+        timing = providers["timing"]
+        assert timing.measure(1024, 0)["map"] == pytest.approx(1.0)
+        assert timing.measure_vram() == 1234
+        assert timing.describe()["timing_evidence"] == "end_to_end_handoff"
+
+
+def test_t09_artifact_provider_is_reachable_measured_path(tmp_path):
+    from apcs.capability.main import run_main_capability
+
+    methods = [
+        "student", "teacher", "text", "ridge", "base_only", "base_plus_adv", "full_apcs"
+    ]
+    bases = {
+        "student": 0.50,
+        "teacher": 0.80,
+        "text": 0.51,
+        "ridge": 0.52,
+        "base_only": 0.54,
+        "base_plus_adv": 0.60,
+        "full_apcs": 0.61,
+    }
+    records = []
+    for method in methods:
+        for sample_id in ("eval-0", "eval-1", "eval-2", "eval-3"):
+            for seed in (0, 1, 2):
+                records.append(
+                    {
+                        "method": method,
+                        "sample_id": sample_id,
+                        "seed": seed,
+                        "score": bases[method],
+                        "decision": 1,
+                    }
+                )
+    artifact = tmp_path / "t09_scores.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "evidence_grade": "measured_task",
+                "zero_prefill_verified": True,
+                "task_scoring_verified": True,
+                "split": "heldout",
+                "records": records,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _cfg()
+    cfg.update(
+        {
+            "seeds": [0, 1, 2],
+            "t09_n_samples": 4,
+            "provider": {"score": "artifact", "score_artifact_path": str(artifact)},
+        }
+    )
+    result = run_main_capability(cfg, tmp_path)
+    assert result["metrics"]["offline_demo"] is False
+    assert result["metrics"]["evidence_grade"] == "measured_task"
+    assert result["metrics"]["n_samples_per_seed"] == 4
+
+
+def test_t10_artifact_provider_emits_end_to_end_evidence(tmp_path):
+    from apcs.system.runner import run_system_cost
+
+    records = []
+    for seed in (0, 1, 2):
+        records.append(
+            {
+                "context": 1024,
+                "seed": seed,
+                "teacher_prefill": 10 + seed,
+                "student_prefill": 8 + seed,
+                "map": 1,
+                "load": 1,
+                "query": 2,
+            }
+        )
+    artifact = tmp_path / "t10_timings.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "timing_evidence": "end_to_end_handoff",
+                "cuda_synchronized": True,
+                "warmup": 2,
+                "repeats": 10,
+                "vram_mb": 1234,
+                "records": records,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _cfg()
+    cfg.update(
+        {
+            "seeds": [0, 1, 2],
+            "context_lengths_extended": [1024],
+            "timing": {"warmup": 2, "repeats": 10},
+            "provider": {"timing": "artifact", "timing_artifact_path": str(artifact)},
+        }
+    )
+    result = run_system_cost(cfg, tmp_path)
+    assert result["metrics"]["offline_demo"] is False
+    assert result["metrics"]["timing_evidence"] == "end_to_end_handoff"
+    assert result["metrics"]["evidence_grade"] == "measured_system"

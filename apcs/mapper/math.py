@@ -545,10 +545,10 @@ class RidgePerHeadMapper:
     """
 
     def __init__(self, lam: float = 1e-3):
-        """lam：Ridge L2 正则系数（同 RidgeMapper，默认 1e-3）。"""
+        """lam：Ridge L2 正则系数（默认 1e-3）。"""
         self.lam = lam
-        # design.md §22：键含 kv_kind 维度 —— (kv_kind, s, h)；第三维是真实
-        # head 索引（与 RidgeMapper 恒为 0 不同，每个 head 独立一个矩阵）
+        # design.md §22：键含 kv_kind 维度 —— (kv_kind, s, 0)；第三维恒为 0
+        # （per-layer 语义，所有 head 共享一个 W）
         self.W: dict[tuple[str, int, int], np.ndarray] = {}
 
     @property
