@@ -1,0 +1,368 @@
+{
+  "split": "calibration",
+  "n_prompts": 30,
+  "timestamp": "2026-08-28T23:12:15.668781",
+  "hash": "413b43f2204e1b5435d42fffe673a13fbc39077f847447f8bb2ab2054f442ebf",
+  "prompts": [
+    {
+      "id": "cal_001",
+      "domain": "factual",
+      "question": "What is the capital of France?",
+      "choices": [
+        "Paris",
+        "London",
+        "Berlin",
+        "Madrid"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_002",
+      "domain": "science",
+      "question": "What is the chemical symbol for water?",
+      "choices": [
+        "H2O",
+        "CO2",
+        "NaCl",
+        "O2"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_003",
+      "domain": "mathematical",
+      "question": "What is 2 + 2?",
+      "choices": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_004",
+      "domain": "reasoning",
+      "question": "If all dogs are animals, and all animals need food, then all dogs need food. This is:",
+      "choices": [
+        "Inductive",
+        "Deductive",
+        "Abductive",
+        "Analogical"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_005",
+      "domain": "history",
+      "question": "In which year did WWII end?",
+      "choices": [
+        "1943",
+        "1944",
+        "1945",
+        "1946"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_006",
+      "domain": "geography",
+      "question": "What is the largest continent?",
+      "choices": [
+        "Africa",
+        "Asia",
+        "Europe",
+        "North America"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_007",
+      "domain": "language",
+      "question": "What is a synonym for 'happy'?",
+      "choices": [
+        "Sad",
+        "Joyful",
+        "Angry",
+        "Tired"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_008",
+      "domain": "common_sense",
+      "question": "What do you use to write on paper?",
+      "choices": [
+        "Fork",
+        "Pen",
+        "Hammer",
+        "Spoon"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_009",
+      "domain": "technical",
+      "question": "What does CPU stand for?",
+      "choices": [
+        "Central Processing Unit",
+        "Computer Personal Unit",
+        "Central Program Utility",
+        "Computer Processing Unit"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_010",
+      "domain": "creative",
+      "question": "What color is the sky on a clear day?",
+      "choices": [
+        "Green",
+        "Blue",
+        "Red",
+        "Yellow"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_011",
+      "domain": "factual",
+      "question": "What is the largest ocean?",
+      "choices": [
+        "Atlantic",
+        "Indian",
+        "Arctic",
+        "Pacific"
+      ],
+      "answer": "D"
+    },
+    {
+      "id": "cal_012",
+      "domain": "science",
+      "question": "What planet is closest to the Sun?",
+      "choices": [
+        "Venus",
+        "Earth",
+        "Mercury",
+        "Mars"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_013",
+      "domain": "mathematical",
+      "question": "What is 10 - 5?",
+      "choices": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_014",
+      "domain": "reasoning",
+      "question": "If it rains, the ground gets wet. The ground is wet. Therefore:",
+      "choices": [
+        "It rained",
+        "It might have rained",
+        "The ground is always wet",
+        "None of the above"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_015",
+      "domain": "history",
+      "question": "Who was the first president of the USA?",
+      "choices": [
+        "Lincoln",
+        "Washington",
+        "Jefferson",
+        "Adams"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_016",
+      "domain": "geography",
+      "question": "What is the capital of Japan?",
+      "choices": [
+        "Seoul",
+        "Beijing",
+        "Tokyo",
+        "Bangkok"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_017",
+      "domain": "language",
+      "question": "What is the plural of 'child'?",
+      "choices": [
+        "Childs",
+        "Children",
+        "Childes",
+        "Childies"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_018",
+      "domain": "common_sense",
+      "question": "What do you use to cut food?",
+      "choices": [
+        "Spoon",
+        "Fork",
+        "Knife",
+        "Plate"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_019",
+      "domain": "technical",
+      "question": "What does RAM stand for?",
+      "choices": [
+        "Random Access Memory",
+        "Read Access Memory",
+        "Random Average Memory",
+        "Read Average Memory"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_020",
+      "domain": "creative",
+      "question": "What season comes after winter?",
+      "choices": [
+        "Summer",
+        "Fall",
+        "Spring",
+        "Winter"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_021",
+      "domain": "factual",
+      "question": "What is the hardest natural substance?",
+      "choices": [
+        "Gold",
+        "Iron",
+        "Diamond",
+        "Silver"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_022",
+      "domain": "science",
+      "question": "What gas do plants absorb?",
+      "choices": [
+        "Oxygen",
+        "Nitrogen",
+        "Carbon Dioxide",
+        "Hydrogen"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_023",
+      "domain": "mathematical",
+      "question": "What is 3 \u00d7 4?",
+      "choices": [
+        "7",
+        "10",
+        "12",
+        "14"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_024",
+      "domain": "reasoning",
+      "question": "All birds can fly. A penguin is a bird. Therefore:",
+      "choices": [
+        "Penguins can fly",
+        "Penguins cannot fly",
+        "The premise is wrong",
+        "None of the above"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_025",
+      "domain": "history",
+      "question": "In which century did Columbus discover America?",
+      "choices": [
+        "14th",
+        "15th",
+        "16th",
+        "17th"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_026",
+      "domain": "geography",
+      "question": "What is the longest river?",
+      "choices": [
+        "Amazon",
+        "Nile",
+        "Mississippi",
+        "Yangtze"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "cal_027",
+      "domain": "language",
+      "question": "What is an antonym for 'big'?",
+      "choices": [
+        "Large",
+        "Huge",
+        "Small",
+        "Tall"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "cal_028",
+      "domain": "common_sense",
+      "question": "What do you use to open a door?",
+      "choices": [
+        "Key",
+        "Fork",
+        "Pen",
+        "Spoon"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_029",
+      "domain": "technical",
+      "question": "What does HTML stand for?",
+      "choices": [
+        "Hyper Text Markup Language",
+        "High Tech Modern Language",
+        "Home Tool Markup Language",
+        "Hyperlink Text Mode Language"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "cal_030",
+      "domain": "creative",
+      "question": "What is the opposite of 'hot'?",
+      "choices": [
+        "Warm",
+        "Cold",
+        "Cool",
+        "Mild"
+      ],
+      "answer": "B"
+    }
+  ]
+}

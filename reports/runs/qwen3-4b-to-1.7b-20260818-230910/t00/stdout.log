@@ -1,4 +1,0 @@
-2026-08-18 23:09:15,450 | INFO    | modelscope_hub.download | Downloading 1 files from Qwen/Qwen3-4B@master
-Downloading:   0%|                                                                                                                                | 0/1 [00:00<?, ?file/s]Downloading: 100%|#####################################################################################################################| 1/1 [00:00<00:00, 18315.74file/s]
-2026-08-18 23:09:18,407 | INFO    | modelscope_hub.download | Downloading 1 files from Qwen/Qwen3-1.7B@master
-Downloading:   0%|                                                                                                                                | 0/1 [00:00<?, ?file/s]Downloading: 100%|######################################################################################################################| 1/1 [00:00<00:00, 2801.81file/s]

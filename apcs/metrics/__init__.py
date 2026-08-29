@@ -285,3 +285,40 @@ def bootstrap_ci(
     low = float(np.quantile(samples, alpha))
     high = float(np.quantile(samples, 1.0 - alpha))
     return point, low, high
+
+
+def permutation_p(
+    values: Iterable[float],
+    n_perm: int = 1000,
+    alternative: str = "greater",
+    rng: np.random.Generator | None = None,
+) -> float:
+    """配对符号翻转置换检验（§51 补充）：H0 = 逐样本差值的均值为 0。
+
+    参数：
+        values: 逐样本 paired diff（如 per-sample CHG = handoff - student）
+        n_perm: 置换次数
+        alternative: "greater"（单侧，均值 > 0）、"less"、"two-sided"
+        rng: 可复现随机源（默认种子 0）
+    返回：
+        p 值。空输入 → 1.0。
+
+    方法：对每条 diff 随机赋 ±号（符号翻转保持配对结构），统计置换后的
+    均值分布中极端于观测均值的比例。这是配对设计的精确置换检验近似，
+    与 bootstrap_ci（§51）共同构成 inject-eval 的显著性证据链。
+    """
+    rng = rng or np.random.default_rng(0)
+    arr = np.asarray(list(values), dtype=np.float64)
+    if arr.size == 0:
+        return 1.0
+    obs = float(np.mean(arr))
+    signs = rng.choice(np.array([-1.0, 1.0]), size=(n_perm, arr.size))
+    perm_means = (arr[None, :] * signs).mean(axis=1)  # (n_perm,)
+    if alternative == "greater":
+        extreme = perm_means >= obs
+    elif alternative == "less":
+        extreme = perm_means <= obs
+    else:
+        extreme = np.abs(perm_means) >= abs(obs)
+    # +1 修正：把观测本身计入分母，避免 p=0 的过度声明（§75 诚实性）
+    return float((int(extreme.sum()) + 1) / (n_perm + 1))

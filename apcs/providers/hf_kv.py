@@ -51,6 +51,7 @@ class HFKVProvider:
     _teacher: Any = None
     _student: Any = None
     _tok: Any = None
+    _tok_student: Any = None
     _cfg: dict[str, Any] = field(default_factory=dict)
     _device: str = ""
     _model_cls: Any = None
@@ -91,6 +92,18 @@ class HFKVProvider:
         self._tok = AutoTokenizer.from_pretrained(
             t_cfg["model_id"], revision=revision
         )
+        # ◆ D4 修复：student 侧使用自己的 tokenizer。此前 teacher/student
+        # 共用 teacher tokenizer —— 同族模型（Qwen3 系列 vocab 一致）无碍，
+        # 但跨词表模型对会把 teacher token id 直接喂给 student（语义错位）。
+        # 词表一致时 student tokenizer 加载失败则回退共享（如实降级）。
+        self._tok_student = None
+        try:
+            self._tok_student = AutoTokenizer.from_pretrained(
+                s_cfg["model_id"], revision=str(s_cfg.get("revision", "main"))
+            )
+        except Exception as e:  # noqa: BLE001
+            self._tok_student = self._tok
+            print(f"[hf_kv] student tokenizer 加载失败，回退 teacher tokenizer: {e}")
 
     def iter_calibration(
         self, n_samples: int, seed: int
@@ -196,10 +209,12 @@ class HFKVProvider:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    def _capture_role(self, model, prompts: list[str]) -> list[np.ndarray]:
+    def _capture_role(self, model, prompts: list[str], role: str = "teacher") -> list[np.ndarray]:
+        # ◆ D4 修复：按角色选 tokenizer（teacher/student 词表可能不同）
+        tok = self._tok if role == "teacher" else getattr(self, "_tok_student", None) or self._tok
         values = []
         for prompt in prompts:
-            ids = self._tok(prompt, return_tensors="pt").input_ids.to(model.device)
+            ids = tok(prompt, return_tensors="pt").input_ids.to(model.device)
             values.append(capture_kv_pair(model, ids).astype(np.float32, copy=False))
         return values
 
@@ -211,7 +226,7 @@ class HFKVProvider:
 
         self._teacher = self._load_role("teacher")
         try:
-            teacher_values = self._capture_role(self._teacher, prompts)
+            teacher_values = self._capture_role(self._teacher, prompts, role="teacher")
         finally:
             teacher_model = self._teacher
             self._teacher = None
@@ -219,7 +234,7 @@ class HFKVProvider:
 
         self._student = self._load_role("student")
         try:
-            student_values = self._capture_role(self._student, prompts)
+            student_values = self._capture_role(self._student, prompts, role="student")
         finally:
             student_model = self._student
             self._student = None

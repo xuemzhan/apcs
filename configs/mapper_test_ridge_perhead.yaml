@@ -1,0 +1,55 @@
+context_lengths:
+- 512
+datasets:
+  fidelity:
+  - hellaswag
+  - arc_challenge
+  - winogrande
+  teacher_advantage:
+    primary: mmlu
+experiment:
+  name: mapper-ridge_perhead
+  run_id: ${experiment.name}-${run.timestamp}
+inject_eval:
+  ablation_modes:
+  - kv_both
+  max_samples: 20
+  seed: 0
+mapper:
+  de_rope: true
+  de_rope_k: true
+  de_rope_v: false
+  inject_eval: true
+  inject_eval_calib_samples: 20
+  layer_selection: proportional
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
+  separate_kv: true
+  type: ridge
+output:
+  base_dir: reports/runs
+provider:
+  kv: hf
+  score: synthetic
+  timing: hf
+seeds:
+- 0
+student:
+  attention_implementation: sdpa
+  device_map: cuda:0
+  dtype: float16
+  freeze: true
+  head_dim: 128
+  model_id: Qwen/Qwen3-1.7B
+  num_kv_heads: 8
+  num_layers: 28
+  revision: main
+teacher:
+  attention_implementation: sdpa
+  device_map: cuda:0
+  dtype: float16
+  head_dim: 128
+  model_id: Qwen/Qwen3-4B
+  num_kv_heads: 8
+  num_layers: 36
+  revision: main

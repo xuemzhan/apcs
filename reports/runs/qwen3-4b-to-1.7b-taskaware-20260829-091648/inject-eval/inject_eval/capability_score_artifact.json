@@ -1,0 +1,712 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4B",
+    "student_model_id": "Qwen/Qwen3-1.7B",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false
+  },
+  "omitted_methods": [
+    "base_only",
+    "base_plus_adv",
+    "full_apcs"
+  ],
+  "omitted_reason": "advantage branch frozen (T08); methods not yet trained",
+  "method_accuracy": {
+    "teacher": {
+      "accuracy": 0.85,
+      "correct": 17,
+      "total": 20,
+      "score_mean": 0.7809207201554706
+    },
+    "student": {
+      "accuracy": 0.5,
+      "correct": 10,
+      "total": 20,
+      "score_mean": 0.6907364408198028
+    },
+    "text": {
+      "accuracy": 0.5,
+      "correct": 10,
+      "total": 20,
+      "score_mean": 0.6907364408198028
+    },
+    "ridge_kv_both": {
+      "accuracy": 0.45,
+      "correct": 9,
+      "total": 20,
+      "score_mean": 0.7945504111113353
+    }
+  },
+  "records": [
+    {
+      "method": "teacher",
+      "sample_id": "hs-43338",
+      "seed": 0,
+      "score": 0.41064518400459765,
+      "decision": 1,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-7906",
+      "seed": 0,
+      "score": 0.6820430877373455,
+      "decision": 0,
+      "correct": false
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-27840",
+      "seed": 0,
+      "score": 0.9643913090906095,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-35309",
+      "seed": 0,
+      "score": 0.8512832159636228,
+      "decision": 3,
+      "correct": false
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-19035",
+      "seed": 0,
+      "score": 0.7598806386773065,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-1798",
+      "seed": 0,
+      "score": 0.9812205324342268,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-2804",
+      "seed": 0,
+      "score": 0.8752458270388106,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-5219",
+      "seed": 0,
+      "score": 0.9550601404918608,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-41498",
+      "seed": 0,
+      "score": 0.46361922933245897,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-33557",
+      "seed": 0,
+      "score": 0.76589672979503,
+      "decision": 0,
+      "correct": false
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-3076",
+      "seed": 0,
+      "score": 0.570127631368525,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-10727",
+      "seed": 0,
+      "score": 0.4948648443328976,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-26015",
+      "seed": 0,
+      "score": 0.6069530003942399,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-32596",
+      "seed": 0,
+      "score": 0.8970341039532123,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-47667",
+      "seed": 0,
+      "score": 0.9779793515924741,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-21027",
+      "seed": 0,
+      "score": 0.9290874873626027,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-2458",
+      "seed": 0,
+      "score": 0.9834350190570905,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-6848",
+      "seed": 0,
+      "score": 0.9321969691922685,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-26566",
+      "seed": 0,
+      "score": 0.9753656923303453,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-25248",
+      "seed": 0,
+      "score": 0.542084408959887,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-43338",
+      "seed": 0,
+      "score": 0.7934873537144012,
+      "decision": 1,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-43338",
+      "seed": 0,
+      "score": 0.7934873537144012,
+      "decision": 1,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-43338",
+      "seed": 0,
+      "score": 0.4541547691131394,
+      "decision": 1,
+      "correct": true,
+      "ppl": 47.507712078962925
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-7906",
+      "seed": 0,
+      "score": 0.8497267880042,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-7906",
+      "seed": 0,
+      "score": 0.8497267880042,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-7906",
+      "seed": 0,
+      "score": 0.8999234197251167,
+      "decision": 3,
+      "correct": false,
+      "ppl": 135.2173814793338
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-27840",
+      "seed": 0,
+      "score": 0.8197556819716284,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-27840",
+      "seed": 0,
+      "score": 0.8197556819716284,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-27840",
+      "seed": 0,
+      "score": 0.6651296814179685,
+      "decision": 0,
+      "correct": false,
+      "ppl": 108.80087812215814
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-35309",
+      "seed": 0,
+      "score": 0.7323506048171384,
+      "decision": 3,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-35309",
+      "seed": 0,
+      "score": 0.7323506048171384,
+      "decision": 3,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-35309",
+      "seed": 0,
+      "score": 0.7670129359363398,
+      "decision": 3,
+      "correct": false,
+      "ppl": 193.11495568508485
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-19035",
+      "seed": 0,
+      "score": 0.3765630463520012,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-19035",
+      "seed": 0,
+      "score": 0.3765630463520012,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-19035",
+      "seed": 0,
+      "score": 0.8530670713503303,
+      "decision": 3,
+      "correct": true,
+      "ppl": 93.9976809371213
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-1798",
+      "seed": 0,
+      "score": 0.5160380965079938,
+      "decision": 3,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-1798",
+      "seed": 0,
+      "score": 0.5160380965079938,
+      "decision": 3,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-1798",
+      "seed": 0,
+      "score": 0.8556821321223732,
+      "decision": 0,
+      "correct": true,
+      "ppl": 298.34307862299494
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-2804",
+      "seed": 0,
+      "score": 0.660017379767949,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-2804",
+      "seed": 0,
+      "score": 0.660017379767949,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-2804",
+      "seed": 0,
+      "score": 0.6868856554037561,
+      "decision": 3,
+      "correct": true,
+      "ppl": 60.74256150928441
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-5219",
+      "seed": 0,
+      "score": 0.7912438478864193,
+      "decision": 2,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-5219",
+      "seed": 0,
+      "score": 0.7912438478864193,
+      "decision": 2,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-5219",
+      "seed": 0,
+      "score": 0.9934342350593295,
+      "decision": 0,
+      "correct": true,
+      "ppl": 215.95840737395133
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-41498",
+      "seed": 0,
+      "score": 0.42912906690361513,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-41498",
+      "seed": 0,
+      "score": 0.42912906690361513,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-41498",
+      "seed": 0,
+      "score": 0.987694935898988,
+      "decision": 0,
+      "correct": false,
+      "ppl": 43.0491280436526
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-33557",
+      "seed": 0,
+      "score": 0.4756232227077502,
+      "decision": 0,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-33557",
+      "seed": 0,
+      "score": 0.4756232227077502,
+      "decision": 0,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-33557",
+      "seed": 0,
+      "score": 0.6014895810179955,
+      "decision": 3,
+      "correct": false,
+      "ppl": 70.23761428870883
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-3076",
+      "seed": 0,
+      "score": 0.6300648535028485,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-3076",
+      "seed": 0,
+      "score": 0.6300648535028485,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-3076",
+      "seed": 0,
+      "score": 0.9930698075797181,
+      "decision": 0,
+      "correct": false,
+      "ppl": 54.53286871510437
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-10727",
+      "seed": 0,
+      "score": 0.8783271647639365,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-10727",
+      "seed": 0,
+      "score": 0.8783271647639365,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-10727",
+      "seed": 0,
+      "score": 0.612599084908516,
+      "decision": 0,
+      "correct": false,
+      "ppl": 235.91822504586767
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-26015",
+      "seed": 0,
+      "score": 0.5597852418327208,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-26015",
+      "seed": 0,
+      "score": 0.5597852418327208,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-26015",
+      "seed": 0,
+      "score": 0.4897236075830798,
+      "decision": 0,
+      "correct": true,
+      "ppl": 68.44946093699306
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-32596",
+      "seed": 0,
+      "score": 0.5740691183274232,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-32596",
+      "seed": 0,
+      "score": 0.5740691183274232,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-32596",
+      "seed": 0,
+      "score": 0.6197357868062816,
+      "decision": 0,
+      "correct": true,
+      "ppl": 30.74376085561211
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-47667",
+      "seed": 0,
+      "score": 0.9834734952543679,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-47667",
+      "seed": 0,
+      "score": 0.9834734952543679,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-47667",
+      "seed": 0,
+      "score": 0.9940405972291981,
+      "decision": 0,
+      "correct": false,
+      "ppl": 58.12289246856194
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-21027",
+      "seed": 0,
+      "score": 0.7636993000434653,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-21027",
+      "seed": 0,
+      "score": 0.7636993000434653,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-21027",
+      "seed": 0,
+      "score": 0.9932004858719724,
+      "decision": 3,
+      "correct": false,
+      "ppl": 99.58582740289346
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-2458",
+      "seed": 0,
+      "score": 0.742413360796399,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-2458",
+      "seed": 0,
+      "score": 0.742413360796399,
+      "decision": 2,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-2458",
+      "seed": 0,
+      "score": 0.9157464709585702,
+      "decision": 0,
+      "correct": false,
+      "ppl": 341.94765475192725
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-6848",
+      "seed": 0,
+      "score": 0.3998645557767744,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-6848",
+      "seed": 0,
+      "score": 0.3998645557767744,
+      "decision": 0,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-6848",
+      "seed": 0,
+      "score": 0.748646660047454,
+      "decision": 3,
+      "correct": false,
+      "ppl": 62.13862823762072
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-26566",
+      "seed": 0,
+      "score": 0.9957507148611816,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-26566",
+      "seed": 0,
+      "score": 0.9957507148611816,
+      "decision": 3,
+      "correct": true
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-26566",
+      "seed": 0,
+      "score": 0.8572474235394645,
+      "decision": 3,
+      "correct": true,
+      "ppl": 293.4841781938469
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-25248",
+      "seed": 0,
+      "score": 0.8433459226038394,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-25248",
+      "seed": 0,
+      "score": 0.8433459226038394,
+      "decision": 1,
+      "correct": false
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-25248",
+      "seed": 0,
+      "score": 0.9025238806571153,
+      "decision": 3,
+      "correct": true,
+      "ppl": 129.7378901821079
+    }
+  ]
+}

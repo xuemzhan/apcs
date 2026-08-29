@@ -1,0 +1,305 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4b",
+    "student_model_id": "Qwen/Qwen3-1.7b",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "f3051e1dba5b99c3dd2881e5d3162c0959a3e391",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 30,
+    "n_eval_samples": 30,
+    "calib_sample_ids": [
+      "hs-3871",
+      "arc-Mercury_417154",
+      "hs-48527",
+      "hs-42025",
+      "arc-ACTAAP_2012_7_10",
+      "arc-Mercury_183908",
+      "arc-Mercury_7212730",
+      "hs-19083",
+      "arc-TIMSS_2007_4_pg18",
+      "arc-AKDE&ED_2012_8_45",
+      "hs-11278",
+      "arc-Mercury_7219100",
+      "arc-Mercury_7081025",
+      "arc-Mercury_7283588",
+      "arc-Mercury_SC_416518",
+      "arc-AKDE&ED_2012_4_22",
+      "arc-Mercury_SC_406987",
+      "hs-566",
+      "hs-43223",
+      "arc-Mercury_7160983",
+      "hs-35119",
+      "hs-40845",
+      "hs-6252",
+      "hs-33350",
+      "hs-1805",
+      "arc-Mercury_SC_401354",
+      "hs-49896",
+      "arc-Mercury_7091980",
+      "hs-14170",
+      "arc-ACTAAP_2015_5_6"
+    ],
+    "eval_sample_ids": [
+      "hs-24098",
+      "arc-CSZ_2005_5_CSZ10383",
+      "hs-34433",
+      "arc-MEA_2016_8_1",
+      "hs-25862",
+      "hs-26216",
+      "hs-18086",
+      "hs-46749",
+      "arc-MDSA_2011_8_25",
+      "hs-16108",
+      "hs-6760",
+      "arc-Mercury_7214603",
+      "arc-Mercury_7213273",
+      "arc-Mercury_SC_410891",
+      "hs-11242",
+      "arc-MSA_2015_8_31",
+      "arc-Mercury_7145530",
+      "hs-36100",
+      "arc-Mercury_7120698",
+      "arc-CSZ20740",
+      "hs-7705",
+      "arc-CSZ_2004_5_CSZ20414",
+      "hs-16960",
+      "hs-22336",
+      "hs-41334",
+      "hs-11817",
+      "arc-Mercury_SC_413300",
+      "arc-Mercury_SC_400519",
+      "arc-Mercury_SC_407137",
+      "hs-9043"
+    ],
+    "rope_align": "rotated",
+    "ablation_modes": [
+      "self_kv",
+      "native",
+      "kv_both"
+    ]
+  },
+  "records": [
+    {
+      "sample_id": "hs-24098",
+      "student_score": 0.4208168151166332,
+      "handoff_score": 0.4283978765283146,
+      "student_gold_prob": 0.3713695358959431,
+      "handoff_gold_prob": 0.4283978765283146
+    },
+    {
+      "sample_id": "arc-CSZ_2005_5_CSZ10383",
+      "student_score": 0.9998455882651017,
+      "handoff_score": 0.9996796457647134,
+      "student_gold_prob": 0.9998455882651017,
+      "handoff_gold_prob": 1.2799624958749931e-06
+    },
+    {
+      "sample_id": "hs-34433",
+      "student_score": 0.5458484714136975,
+      "handoff_score": 0.49573426601377446,
+      "student_gold_prob": 0.2598628293424514,
+      "handoff_gold_prob": 0.49573426601377446
+    },
+    {
+      "sample_id": "arc-MEA_2016_8_1",
+      "student_score": 0.9996186137051205,
+      "handoff_score": 0.9995497000287548,
+      "student_gold_prob": 0.9996186137051205,
+      "handoff_gold_prob": 0.9995497000287548
+    },
+    {
+      "sample_id": "hs-25862",
+      "student_score": 0.8753760946874035,
+      "handoff_score": 0.5284890453119133,
+      "student_gold_prob": 0.8753760946874035,
+      "handoff_gold_prob": 0.12358103283355783
+    },
+    {
+      "sample_id": "hs-26216",
+      "student_score": 0.795612164238171,
+      "handoff_score": 0.4104021307138162,
+      "student_gold_prob": 0.08651880907488275,
+      "handoff_gold_prob": 0.15097850650256794
+    },
+    {
+      "sample_id": "hs-18086",
+      "student_score": 0.7446471366773987,
+      "handoff_score": 0.6830864772655071,
+      "student_gold_prob": 0.03375607712702076,
+      "handoff_gold_prob": 0.6830864772655071
+    },
+    {
+      "sample_id": "hs-46749",
+      "student_score": 0.9026237959852157,
+      "handoff_score": 0.5664539311959946,
+      "student_gold_prob": 0.9026237959852157,
+      "handoff_gold_prob": 0.09690884121599226
+    },
+    {
+      "sample_id": "arc-MDSA_2011_8_25",
+      "student_score": 0.9980482013077457,
+      "handoff_score": 0.7806657467935848,
+      "student_gold_prob": 0.9980482013077457,
+      "handoff_gold_prob": 0.1943230688184767
+    },
+    {
+      "sample_id": "hs-16108",
+      "student_score": 0.7691774172467539,
+      "handoff_score": 0.6902561021491378,
+      "student_gold_prob": 0.7691774172467539,
+      "handoff_gold_prob": 0.027292008796467808
+    },
+    {
+      "sample_id": "hs-6760",
+      "student_score": 0.986044925594696,
+      "handoff_score": 0.42072392648777557,
+      "student_gold_prob": 0.0003459793430231535,
+      "handoff_gold_prob": 0.26328230565410743
+    },
+    {
+      "sample_id": "arc-Mercury_7214603",
+      "student_score": 0.8292236224092229,
+      "handoff_score": 0.535273256222336,
+      "student_gold_prob": 0.8292236224092229,
+      "handoff_gold_prob": 0.12614914227246926
+    },
+    {
+      "sample_id": "arc-Mercury_7213273",
+      "student_score": 0.9897776387075223,
+      "handoff_score": 0.5937751747371743,
+      "student_gold_prob": 0.9897776387075223,
+      "handoff_gold_prob": 0.19428249389701935
+    },
+    {
+      "sample_id": "arc-Mercury_SC_410891",
+      "student_score": 0.9178139553290063,
+      "handoff_score": 0.9969635711538395,
+      "student_gold_prob": 0.9178139553290063,
+      "handoff_gold_prob": 0.0015708065771277752
+    },
+    {
+      "sample_id": "hs-11242",
+      "student_score": 0.9037149297958591,
+      "handoff_score": 0.9149117872181726,
+      "student_gold_prob": 0.011156058544048766,
+      "handoff_gold_prob": 0.0071790811635180545
+    },
+    {
+      "sample_id": "arc-MSA_2015_8_31",
+      "student_score": 0.9963312354858614,
+      "handoff_score": 0.9172049260014712,
+      "student_gold_prob": 0.9963312354858614,
+      "handoff_gold_prob": 0.07921076186034781
+    },
+    {
+      "sample_id": "arc-Mercury_7145530",
+      "student_score": 0.9998367723824366,
+      "handoff_score": 0.5461858857646423,
+      "student_gold_prob": 3.88963789439443e-06,
+      "handoff_gold_prob": 0.4090743269119633
+    },
+    {
+      "sample_id": "hs-36100",
+      "student_score": 0.7424754280289672,
+      "handoff_score": 0.4011660473089928,
+      "student_gold_prob": 0.14393542716878083,
+      "handoff_gold_prob": 0.28446932433078065
+    },
+    {
+      "sample_id": "arc-Mercury_7120698",
+      "student_score": 0.9238748352480568,
+      "handoff_score": 0.8648552283919497,
+      "student_gold_prob": 0.9238748352480568,
+      "handoff_gold_prob": 0.0012504451737399807
+    },
+    {
+      "sample_id": "arc-CSZ20740",
+      "student_score": 0.8196025899301019,
+      "handoff_score": 0.5040838879917083,
+      "student_gold_prob": 0.8196025899301019,
+      "handoff_gold_prob": 0.26563354236385345
+    },
+    {
+      "sample_id": "hs-7705",
+      "student_score": 0.9889599564061539,
+      "handoff_score": 0.5922721646182784,
+      "student_gold_prob": 5.212652317666247e-06,
+      "handoff_gold_prob": 0.010032614808664471
+    },
+    {
+      "sample_id": "arc-CSZ_2004_5_CSZ20414",
+      "student_score": 0.8917567722933053,
+      "handoff_score": 0.8834890669999463,
+      "student_gold_prob": 0.0761158040895379,
+      "handoff_gold_prob": 0.10676153121633487
+    },
+    {
+      "sample_id": "hs-16960",
+      "student_score": 0.6651035542958253,
+      "handoff_score": 0.5451203404832283,
+      "student_gold_prob": 0.12018175829102416,
+      "handoff_gold_prob": 0.026407889983548122
+    },
+    {
+      "sample_id": "hs-22336",
+      "student_score": 0.9793784826437001,
+      "handoff_score": 0.6093780731302616,
+      "student_gold_prob": 0.9793784826437001,
+      "handoff_gold_prob": 0.2540265743128787
+    },
+    {
+      "sample_id": "hs-41334",
+      "student_score": 0.7013237726929702,
+      "handoff_score": 0.32923988875796384,
+      "student_gold_prob": 0.7013237726929702,
+      "handoff_gold_prob": 0.1427149280207731
+    },
+    {
+      "sample_id": "hs-11817",
+      "student_score": 0.979926272912074,
+      "handoff_score": 0.9992877464543439,
+      "student_gold_prob": 0.004296453165574109,
+      "handoff_gold_prob": 0.000531517195825143
+    },
+    {
+      "sample_id": "arc-Mercury_SC_413300",
+      "student_score": 0.9947134086636097,
+      "handoff_score": 0.5582047152277285,
+      "student_gold_prob": 0.9947134086636097,
+      "handoff_gold_prob": 0.441576274928781
+    },
+    {
+      "sample_id": "arc-Mercury_SC_400519",
+      "student_score": 0.8283444621187869,
+      "handoff_score": 0.9921182448709116,
+      "student_gold_prob": 0.08201720849368149,
+      "handoff_gold_prob": 7.113851042237069e-05
+    },
+    {
+      "sample_id": "arc-Mercury_SC_407137",
+      "student_score": 0.9980792931023985,
+      "handoff_score": 0.9392178582764261,
+      "student_gold_prob": 1.7367551851772814e-05,
+      "handoff_gold_prob": 0.0007822908249718565
+    },
+    {
+      "sample_id": "hs-9043",
+      "student_score": 0.5292506796949447,
+      "handoff_score": 0.6439922665596295,
+      "student_gold_prob": 0.20245642825327975,
+      "handoff_gold_prob": 0.31631837353803743
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4b",
+    "student_model_id": "Qwen/Qwen3-0.6b",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "f3051e1dba5b99c3dd2881e5d3162c0959a3e391",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 20,
+    "n_eval_samples": 20,
+    "calib_sample_ids": [
+      "hs-36100",
+      "hs-41334",
+      "hs-33350",
+      "hs-16108",
+      "hs-9043",
+      "hs-18086",
+      "hs-7705",
+      "hs-16960",
+      "hs-34433",
+      "hs-48527",
+      "hs-566",
+      "hs-11242",
+      "hs-42025",
+      "hs-1805",
+      "hs-3871",
+      "hs-26216",
+      "hs-49896",
+      "hs-25862",
+      "hs-11817",
+      "hs-6760"
+    ],
+    "eval_sample_ids": [
+      "hs-14170",
+      "hs-35119",
+      "hs-11278",
+      "hs-46749",
+      "hs-6252",
+      "hs-19083",
+      "hs-43223",
+      "hs-40845",
+      "hs-24098",
+      "hs-22336",
+      "hs-7128",
+      "hs-21624",
+      "hs-45977",
+      "hs-837",
+      "hs-19255",
+      "hs-14159",
+      "hs-22114",
+      "hs-32375",
+      "hs-13412",
+      "hs-48761"
+    ],
+    "rope_align": "unrotated",
+    "ablation_modes": [
+      "native",
+      "kv_both"
+    ]
+  },
+  "records": [
+    {
+      "sample_id": "hs-14170",
+      "student_score": 0.7570172867037224,
+      "handoff_score": 0.9339826495708957,
+      "student_gold_prob": 0.22030459003632816,
+      "handoff_gold_prob": 0.03915714314402038
+    },
+    {
+      "sample_id": "hs-35119",
+      "student_score": 0.338692799579465,
+      "handoff_score": 0.7494426253546002,
+      "student_gold_prob": 0.2229895145960306,
+      "handoff_gold_prob": 0.016949990342318918
+    },
+    {
+      "sample_id": "hs-11278",
+      "student_score": 0.5662470367561437,
+      "handoff_score": 0.9339104341622968,
+      "student_gold_prob": 0.5662470367561437,
+      "handoff_gold_prob": 0.9339104341622968
+    },
+    {
+      "sample_id": "hs-46749",
+      "student_score": 0.691773432640329,
+      "handoff_score": 0.8147715501964682,
+      "student_gold_prob": 0.12068269460176377,
+      "handoff_gold_prob": 0.11113217597367363
+    },
+    {
+      "sample_id": "hs-6252",
+      "student_score": 0.38629205828263324,
+      "handoff_score": 0.7067152114901826,
+      "student_gold_prob": 0.24843654505602883,
+      "handoff_gold_prob": 0.15343607367535947
+    },
+    {
+      "sample_id": "hs-19083",
+      "student_score": 0.3935626981373956,
+      "handoff_score": 0.7096490660200524,
+      "student_gold_prob": 0.3555542678220853,
+      "handoff_gold_prob": 0.07792806827760118
+    },
+    {
+      "sample_id": "hs-43223",
+      "student_score": 0.5560025543455042,
+      "handoff_score": 0.8843165610018334,
+      "student_gold_prob": 0.24289952692319655,
+      "handoff_gold_prob": 0.8843165610018334
+    },
+    {
+      "sample_id": "hs-40845",
+      "student_score": 0.5679817367226355,
+      "handoff_score": 0.7954866451359173,
+      "student_gold_prob": 0.2570114186741385,
+      "handoff_gold_prob": 0.03861849401556735
+    },
+    {
+      "sample_id": "hs-24098",
+      "student_score": 0.6045438007862914,
+      "handoff_score": 0.7975662812344084,
+      "student_gold_prob": 0.17320469883736364,
+      "handoff_gold_prob": 0.04378193075705417
+    },
+    {
+      "sample_id": "hs-22336",
+      "student_score": 0.48682721074068847,
+      "handoff_score": 0.5020783503577652,
+      "student_gold_prob": 0.48682721074068847,
+      "handoff_gold_prob": 0.13200221251497263
+    },
+    {
+      "sample_id": "hs-7128",
+      "student_score": 0.36398575275173445,
+      "handoff_score": 0.5179974754043845,
+      "student_gold_prob": 0.0851138460877864,
+      "handoff_gold_prob": 0.05589125168338083
+    },
+    {
+      "sample_id": "hs-21624",
+      "student_score": 0.5574227874188934,
+      "handoff_score": 0.5400179984929495,
+      "student_gold_prob": 0.2781085474234167,
+      "handoff_gold_prob": 0.02340455343202333
+    },
+    {
+      "sample_id": "hs-45977",
+      "student_score": 0.41204453385912004,
+      "handoff_score": 0.9341573727336369,
+      "student_gold_prob": 0.08603250460770222,
+      "handoff_gold_prob": 0.018572391820748355
+    },
+    {
+      "sample_id": "hs-837",
+      "student_score": 0.49172942934898756,
+      "handoff_score": 0.938580749855424,
+      "student_gold_prob": 0.09311787138390715,
+      "handoff_gold_prob": 0.03274990769902273
+    },
+    {
+      "sample_id": "hs-19255",
+      "student_score": 0.8096733373526432,
+      "handoff_score": 0.8563589148208177,
+      "student_gold_prob": 0.014771869004184316,
+      "handoff_gold_prob": 0.8563589148208177
+    },
+    {
+      "sample_id": "hs-14159",
+      "student_score": 0.5468673261828583,
+      "handoff_score": 0.8689967732668585,
+      "student_gold_prob": 0.25332543712692,
+      "handoff_gold_prob": 0.8689967732668585
+    },
+    {
+      "sample_id": "hs-22114",
+      "student_score": 0.4540575622205828,
+      "handoff_score": 0.3899200934614293,
+      "student_gold_prob": 0.15876779548543987,
+      "handoff_gold_prob": 0.14121969941108212
+    },
+    {
+      "sample_id": "hs-32375",
+      "student_score": 0.5365066320732549,
+      "handoff_score": 0.8759413720315242,
+      "student_gold_prob": 0.05250246777515279,
+      "handoff_gold_prob": 0.0074900869913343306
+    },
+    {
+      "sample_id": "hs-13412",
+      "student_score": 0.695010316864491,
+      "handoff_score": 0.9910103289529244,
+      "student_gold_prob": 0.25668071022982997,
+      "handoff_gold_prob": 0.0007816919247205564
+    },
+    {
+      "sample_id": "hs-48761",
+      "student_score": 0.956823042226595,
+      "handoff_score": 0.990574579613605,
+      "student_gold_prob": 0.002859452532344663,
+      "handoff_gold_prob": 0.0012394793448048237
+    }
+  ]
+}

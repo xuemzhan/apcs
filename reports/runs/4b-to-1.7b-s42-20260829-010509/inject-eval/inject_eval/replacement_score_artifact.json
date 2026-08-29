@@ -1,0 +1,120 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4B",
+    "student_model_id": "Qwen/Qwen3-1.7b",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false
+  },
+  "records": [
+    {
+      "sample_id": "hs-36100",
+      "student_score": 0.7016680328217716,
+      "handoff_score": 0.8312995968221599
+    },
+    {
+      "sample_id": "hs-41334",
+      "student_score": 0.5744179775271625,
+      "handoff_score": 0.8684123286010352
+    },
+    {
+      "sample_id": "hs-33350",
+      "student_score": 0.5833279349605845,
+      "handoff_score": 0.9721281673643718
+    },
+    {
+      "sample_id": "hs-16108",
+      "student_score": 0.7531425226264992,
+      "handoff_score": 0.7687786725469644
+    },
+    {
+      "sample_id": "hs-9043",
+      "student_score": 0.533445273892987,
+      "handoff_score": 0.8297477327914442
+    },
+    {
+      "sample_id": "hs-18086",
+      "student_score": 0.7808163604618236,
+      "handoff_score": 0.45875207349510705
+    },
+    {
+      "sample_id": "hs-7705",
+      "student_score": 0.8353414382830386,
+      "handoff_score": 0.8369063492248967
+    },
+    {
+      "sample_id": "hs-16960",
+      "student_score": 0.7702847239086772,
+      "handoff_score": 0.5968855508479893
+    },
+    {
+      "sample_id": "hs-34433",
+      "student_score": 0.4259274649353862,
+      "handoff_score": 0.9262125936639567
+    },
+    {
+      "sample_id": "hs-48527",
+      "student_score": 0.9517080651894825,
+      "handoff_score": 0.7615319569692263
+    },
+    {
+      "sample_id": "hs-566",
+      "student_score": 0.7989758512577373,
+      "handoff_score": 0.7612755144844554
+    },
+    {
+      "sample_id": "hs-11242",
+      "student_score": 0.9412383677393069,
+      "handoff_score": 0.8941143086561021
+    },
+    {
+      "sample_id": "hs-42025",
+      "student_score": 0.6841383537401928,
+      "handoff_score": 0.9248036411550951
+    },
+    {
+      "sample_id": "hs-1805",
+      "student_score": 0.35480383656936176,
+      "handoff_score": 0.9056955234291282
+    },
+    {
+      "sample_id": "hs-3871",
+      "student_score": 0.42043820840851553,
+      "handoff_score": 0.2948029472764803
+    },
+    {
+      "sample_id": "hs-26216",
+      "student_score": 0.7279343884880589,
+      "handoff_score": 0.8202150404706278
+    },
+    {
+      "sample_id": "hs-49896",
+      "student_score": 0.8954986316156113,
+      "handoff_score": 0.6203258192645636
+    },
+    {
+      "sample_id": "hs-25862",
+      "student_score": 0.7427936207210438,
+      "handoff_score": 0.7884815464941157
+    },
+    {
+      "sample_id": "hs-11817",
+      "student_score": 0.4958306704579089,
+      "handoff_score": 0.9880788307242482
+    },
+    {
+      "sample_id": "hs-6760",
+      "student_score": 0.9985943407795063,
+      "handoff_score": 0.9974075904120144
+    }
+  ]
+}

@@ -123,11 +123,14 @@ def fit_ridge_aggregate(
 
     # per-head 语义（RidgePerHeadMapper）→ 每个 (s, h) 一套参数；
     # per-layer 语义（RidgeMapper）→ 每层一套参数（h 固定为 0）
-    per_head = isinstance(mapper, RidgePerHeadMapper)
+    # TaskAwareRidgeMapper 的 Phase A 是 per-head ridge（.W/.lam 同构），
+    # 鸭子类型识别以避免循环 import
+    per_head = isinstance(mapper, RidgePerHeadMapper) or hasattr(mapper, "fit_task_aware")
     if not (per_head or isinstance(mapper, RidgeMapper)):
         raise TypeError(
-            "fit_ridge_aggregate 仅支持 RidgeMapper / RidgePerHeadMapper；"
-            f"got {type(mapper).__name__}。ALS 类 mapper 请用 concat_kv_samples"
+            "fit_ridge_aggregate 仅支持 RidgeMapper / RidgePerHeadMapper / "
+            f"TaskAwareRidgeMapper；got {type(mapper).__name__}。"
+            "ALS/Affine 类 mapper 请用 fit_batch 或 concat_kv_samples"
             "拼接后一次 fit（见 runner.py T06 注释）。"
         )
 

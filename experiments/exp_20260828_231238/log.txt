@@ -1,0 +1,27 @@
+[2026-08-28 23:12:40,726] INFO: Experiment started: exp_20260828_231238
+[2026-08-28 23:12:40,726] INFO: Git hash: f3051e1dba5b99c3dd2881e5d3162c0959a3e391
+[2026-08-28 23:12:40,727] INFO: Config: {
+  "seed": 42,
+  "n_calibration": 30,
+  "n_heldout": 20,
+  "scoring_method": "full_text",
+  "models": {
+    "teacher": "Qwen3-4B",
+    "student": "Qwen3-1.7B"
+  }
+}
+[2026-08-28 23:12:40,727] INFO: Starting experiment with 5 prompts
+[2026-08-28 23:12:40,727] INFO: Saved 5 all prompts to experiments/exp_20260828_231238/all_prompts.json
+[2026-08-28 23:12:40,727] INFO: Running method: student_baseline
+[2026-08-28 23:12:40,728] INFO: Method student_baseline completed: mean_score=0.6374, time=0.00s
+[2026-08-28 23:12:40,728] INFO: Running method: native
+[2026-08-28 23:12:40,728] INFO: Method native completed: mean_score=0.5867, time=0.00s
+[2026-08-28 23:12:40,728] INFO: Running method: ridge_kv
+[2026-08-28 23:12:40,728] INFO: Method ridge_kv completed: mean_score=0.5661, time=0.00s
+[2026-08-28 23:12:40,728] INFO: Running method: v_only
+[2026-08-28 23:12:40,729] INFO: Method v_only completed: mean_score=0.5083, time=0.00s
+[2026-08-28 23:12:40,729] INFO: Running method: k_only
+[2026-08-28 23:12:40,729] INFO: Method k_only completed: mean_score=0.5239, time=0.00s
+[2026-08-28 23:12:40,729] INFO: Running method: random_proj
+[2026-08-28 23:12:40,729] INFO: Method random_proj completed: mean_score=0.5566, time=0.00s
+[2026-08-28 23:12:40,950] INFO: Results saved to experiments/exp_20260828_231238/results.json

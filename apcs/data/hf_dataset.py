@@ -196,17 +196,27 @@ _LOCAL_CACHE: dict[str, dict[str, str]] = {
         "validation": "/workspace/.cache/datasets/winogrande/winogrande_xl/0.0.0/01e74176c63542e6b0bcb004dcdea22d94fb67b5/winogrande-validation.arrow",
         "test": "/workspace/.cache/datasets/winogrande/winogrande_xl/0.0.0/01e74176c63542e6b0bcb004dcdea22d94fb67b5/winogrande-test.arrow",
     },
+    "mmlu": {
+        "test": "/workspace/.cache/datasets/cais___mmlu/all/0.0.0/apcs_mmlu_all/mmlu-test.arrow",
+    },
 }
 
 
 def _load_from_local_cache(name: str, split: str):
-    """从本地 .arrow 缓存加载 Dataset；缓存不存在则返回 None。"""
+    """从本地 .arrow 缓存加载 Dataset；缓存不存在则返回 None。
+
+    读取失败（缺文件 / Dataset 读取异常 / 测试环境假模块）时同样返回 None，
+    由调用方回退到 HF Hub —— 本地缓存只是加速/离线回退，不是强约束。
+    """
     from pathlib import Path
     cache_map = _LOCAL_CACHE.get(name, {})
     arrow_path = cache_map.get(split)
     if arrow_path and Path(arrow_path).exists():
-        ds_mod = _import_datasets()
-        return ds_mod.Dataset.from_file(arrow_path)
+        try:
+            ds_mod = _import_datasets()
+            return ds_mod.Dataset.from_file(arrow_path)
+        except Exception:
+            return None
     return None
 
 
@@ -267,14 +277,18 @@ def load_mmlu(n: int, split: str = "train", seed: int = 0) -> list[Sample]:
     （§75 诚实性 + §52.4 防『偷偷切数据』）。
     """
     ds_mod = _import_datasets()
-    ds = None
-    try:
-        ds = ds_mod.load_dataset("cais/mmlu", "all", split="test", trust_remote_code=True)
-    except Exception:
+    # 本地缓存优先（modelscope.cn 拉取的 cais/mmlu "all" → test 基线），
+    # HF 仅作 fallback：cais/mmlu 与 hails/mmlu_no_train 均不可用时
+    # 直接拒绝，不合成假数据（§75 诚实性 + §52.4 防『偷偷切数据』）。
+    ds = _load_from_local_cache("mmlu", split="test")
+    if ds is None:
         try:
-            ds = ds_mod.load_dataset("hails/mmlu_no_train", split="test", trust_remote_code=True)
+            ds = ds_mod.load_dataset("cais/mmlu", "all", split="test", trust_remote_code=True)
         except Exception:
-            pass
+            try:
+                ds = ds_mod.load_dataset("hails/mmlu_no_train", split="test", trust_remote_code=True)
+            except Exception:
+                pass
     if ds is not None:
         ds = _select_split(ds, split, seed=seed, n=n)
         return _stamp_split([_normalize_mmlu(r) for r in ds], split)

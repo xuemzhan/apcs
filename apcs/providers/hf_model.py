@@ -59,12 +59,13 @@ def _cuda_compute_available() -> str:
 def resolve_device(cfg: dict[str, Any]) -> str:
     """从 cfg 解析 device，并校验 GPU 可计算（不可用则显式 raise）。
 
-    device 默认 "cuda:0"（若 cfg.teacher.device_map 指定则用之）；
+    device 默认 "cuda:0"（若 cfg.teacher.device_map 指定则用之）。
+    ◆ D4 修复：保留用户指定的设备索引（"cuda:1" → "cuda:1"），
+    不再强制折叠到 cuda:0；仅把裸 "cuda" 规范化为 "cuda:0"。
     校验失败抛 RuntimeError，附可读原因（§75 诚实性）。
     """
-    device = str(
-        cfg.get("teacher", {}).get("device_map", "cuda:0")
-    ).split(":")[0] + ":0"
+    raw = str(cfg.get("teacher", {}).get("device_map", "cuda:0"))
+    device = raw if ":" in raw else (raw + ":0" if raw.startswith("cuda") else "cuda:0")
     reason = _cuda_compute_available()
     if reason:
         raise RuntimeError(

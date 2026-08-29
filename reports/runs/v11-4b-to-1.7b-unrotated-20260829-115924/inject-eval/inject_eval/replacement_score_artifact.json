@@ -1,0 +1,214 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": false,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4b",
+    "student_model_id": "Qwen/Qwen3-1.7b",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "f3051e1dba5b99c3dd2881e5d3162c0959a3e391",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 20,
+    "n_eval_samples": 20,
+    "calib_sample_ids": [
+      "hs-36100",
+      "hs-41334",
+      "hs-33350",
+      "hs-16108",
+      "hs-9043",
+      "hs-18086",
+      "hs-7705",
+      "hs-16960",
+      "hs-34433",
+      "hs-48527",
+      "hs-566",
+      "hs-11242",
+      "hs-42025",
+      "hs-1805",
+      "hs-3871",
+      "hs-26216",
+      "hs-49896",
+      "hs-25862",
+      "hs-11817",
+      "hs-6760"
+    ],
+    "eval_sample_ids": [
+      "hs-14170",
+      "hs-35119",
+      "hs-11278",
+      "hs-46749",
+      "hs-6252",
+      "hs-19083",
+      "hs-43223",
+      "hs-40845",
+      "hs-24098",
+      "hs-22336",
+      "hs-7128",
+      "hs-21624",
+      "hs-45977",
+      "hs-837",
+      "hs-19255",
+      "hs-14159",
+      "hs-22114",
+      "hs-32375",
+      "hs-13412",
+      "hs-48761"
+    ],
+    "rope_align": "unrotated",
+    "ablation_modes": [
+      "native",
+      "kv_both"
+    ]
+  },
+  "records": [
+    {
+      "sample_id": "hs-14170",
+      "student_score": 0.43624308573691084,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.19817235346072937,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-35119",
+      "student_score": 0.9348542109677751,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.9348542109677751,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-11278",
+      "student_score": 0.946391942678737,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.022873992099684163,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-46749",
+      "student_score": 0.8553974019282103,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.8553974019282103,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-6252",
+      "student_score": 0.42276226136884043,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.0838997380406333,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-19083",
+      "student_score": 0.9660397843344786,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.018255292134694956,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-43223",
+      "student_score": 0.8912207281046337,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.8912207281046337,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-40845",
+      "student_score": 0.8607108925555685,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.8607108925555685,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-24098",
+      "student_score": 0.7844068699801283,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.7844068699801283,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-22336",
+      "student_score": 0.8022454162066213,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.8022454162066213,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-7128",
+      "student_score": 0.4565178549640001,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.023313170001602657,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-21624",
+      "student_score": 0.4950194275444449,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.31712135037005706,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-45977",
+      "student_score": 0.4943355534992955,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.3241931709255979,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-837",
+      "student_score": 0.4951744016071365,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.2713331840080385,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-19255",
+      "student_score": 0.7828757821295635,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.003981760427194176,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-14159",
+      "student_score": 0.39978213394982837,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.08645894989426797,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-22114",
+      "student_score": 0.554754679005775,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.01107248825653765,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-32375",
+      "student_score": 0.9145728317440263,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.9145728317440263,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-13412",
+      "student_score": 0.9974799754006678,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.9974799754006678,
+      "handoff_gold_prob": null
+    },
+    {
+      "sample_id": "hs-48761",
+      "student_score": 0.949546611432816,
+      "handoff_score": 0.0,
+      "student_gold_prob": 0.020652980012968912,
+      "handoff_gold_prob": null
+    }
+  ]
+}

@@ -54,6 +54,28 @@ def _rope_pairs(head_dim: int, theta: float = 10000.0) -> np.ndarray:
     return theta ** (-i / head_dim)
 
 
+def _locate_positions_axis(
+    orig_shape: tuple[int, ...], positions: np.ndarray
+) -> int:
+    """定位 positions (S,) 对齐的序列维（◆ apply_rope/de_rope 修复的公共 helper）。
+
+    规则（KV 张量约定：dim0=层、dim1=序列）：
+        - ndim ≤ 3（(S,D)/(S,H,D)）：优先 dim0；
+        - ndim ≥ 4（(L,S,H,D)）：优先 dim1 —— L==S 时按上述约定取 dim1；
+        - 首选轴不匹配时在其余前导轴中搜索；全部不匹配 → raise。
+    """
+    n_pos = int(np.asarray(positions).reshape(-1).shape[0])
+    preferred = 1 if len(orig_shape) >= 4 else 0
+    if orig_shape[preferred] == n_pos:
+        return preferred
+    for axis, sz in enumerate(orig_shape[:-1]):
+        if sz == n_pos:
+            return axis
+    raise ValueError(
+        f"positions 长度 {n_pos} 与输入形状 {orig_shape} 的任何前导维都不匹配"
+    )
+
+
 def apply_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np.ndarray:
     """对最后一维按配对 (2i, 2i+1) 做旋转。
 
@@ -78,10 +100,13 @@ def apply_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np
     # 即把 d 维向量拆成 d/2 个二维平面，每个平面内做独立旋转。
     x_pairs = x.reshape(*orig_shape[:-1], half, 2)
 
-    # positions: (S,)
-    # 需要把它广播到 (*orig_shape[:-1], half)
-    # 即把 positions reshape 为 (S, 1, 1, ..., 1)，共 (n-1) 个 1
-    pos = positions.reshape(-1, *([1] * (x.ndim - 1)))  # (S, 1, ..., 1)
+    # positions: (S,) —— 对齐到序列维。
+    # ◆ 修复：此前硬编码对齐 dim0，4D 输入 (L, S, H, D) 时 S 在 dim1，
+    #   广播形状不匹配直接崩溃。现自动定位长度匹配的序列维（优先 dim0）。
+    pos_axis = _locate_positions_axis(orig_shape, positions)
+    shape = [1] * x.ndim  # pos ndim == x.ndim，末维 1 与 inv_freq 广播
+    shape[pos_axis] = positions.shape[0]
+    pos = positions.reshape(*shape)  # 序列维为 S，其余为 1
     pos = np.broadcast_to(pos, (*orig_shape[:-1], half))
     # 旋转角 = 位置 pos × 频率 inv_freq：同一 token 的第 i 个平面旋转 pos·inv_freq[i] 弧度
     angles = pos * inv_freq
@@ -111,7 +136,11 @@ def de_rope(x: np.ndarray, positions: np.ndarray, inv_freq: np.ndarray) -> np.nd
     half = head_dim // 2
     # 与 apply_rope 相同的拆平面/广播/角度计算（shape 约定一致）
     x_pairs = x.reshape(*orig_shape[:-1], half, 2)
-    pos = positions.reshape(-1, *([1] * (x.ndim - 1)))
+    # ◆ 同 apply_rope 的序列维定位修复（4D (L,S,H,D) 场景）
+    pos_axis = _locate_positions_axis(orig_shape, positions)
+    shape = [1] * x.ndim
+    shape[pos_axis] = positions.shape[0]
+    pos = positions.reshape(*shape)
     pos = np.broadcast_to(pos, (*orig_shape[:-1], half))
     angles = pos * inv_freq
     cos = np.cos(angles)
