@@ -23,11 +23,8 @@
 \title{Cache Translation Across Heterogeneous LLMs:\\
 An Audit with Identity Controls and Oracle Bounds}
 
-\author{%
-  Anonymous\\
-  \normalsize Draft, compiled \today\\
-  \normalsize Code and all run artifacts: \texttt{apcs} repository (all runs recorded in the repository)
-}
+\author{}
+\date{}
 \date{}
 
 \begin{document}
@@ -57,10 +54,10 @@ student reaches parity ($+0.010$, CI $[-0.08,+0.10]$). Oracle probes show a
 monotone decline as teacher content replaces student content in early and
 mid layers, robust to translator quality, and a perplexity--accuracy decoupling: a translator that restores
 near-native fluency (PPL 23.7 versus 21.2) still leaves accuracy at 0.267
-versus 0.500. We conclude that the teacher's answer-relevant advantage does
-not survive KV-space translation under zero re-prefill: it lives in the
-teacher's weights, not in its cache. We release the audit protocol as a
-required checklist for cache-translation claims.
+versus 0.500. The teacher's answer-relevant advantage, in short, does not survive
+KV-space translation under zero re-prefill: it sits in the teacher's
+parameters, where the cache does not carry it. The audit protocol doubles as
+a checklist that a future cache-translation claim can run in one evaluation.
 \end{abstract}
 
 \section{Introduction}
@@ -95,14 +92,13 @@ We evaluate cache translation as an audit with three gated hypotheses.
 \textbf{H1 (mechanics)} asks whether a foreign cache is consumed without loss;
 its instrument is an identity control that injects the student's own cache
 through the full pipeline. \textbf{H2 (mapping)} asks whether any translator
-reaches replacement level; its instrument is a ladder of five mapper families
+reaches replacement level; its instrument is a ladder of six mapper families
 under a disjoint calibration ladder of 30 to 200 examples, including a
 residual-anchored translator (RAT) that we derive from the two models' own
 projections and a shared vocabulary alignment. \textbf{H3 (exploitability)}
 asks whether the teacher's cache contains any student-readable advantage at
 all; its instrument is an oracle probe that mixes teacher-cache content into
-the student's own cache at controlled fractions and layer windows, which upper
-bounds every translator that could be trained. Figure~\ref{fig:framework}
+the student's own cache at controlled fractions and layer windows. Figure~\ref{fig:framework}
 shows the gates and the instruments.
 
 % Results preview: three verdicts.
@@ -120,25 +116,21 @@ principled negative: with $75\%$ student cache and only $25\%$ teacher content,
 accuracy already drops from $0.500$ to $0.367$, the decline is monotone in the
 teacher fraction, and replacing the top third of layers is the only harmless
 configuration. A translator that restores near-native fluency (PPL 23.7
-versus 21.2 for the identity control) still leaves accuracy at 0.267. The
-teacher's advantage does not ride in its cache.
+versus 21.2 for the identity control) still leaves accuracy at 0.267. A cache can read fluently and still miss the answer; the deficit is not a fluency problem.
 
 % Contributions.
-Our contributions are threefold.
-\begin{enumerate}
-\item \textbf{An audit framework.} Identity controls, disjoint
-calibration/evaluation splits, gold-probability metrics with bootstrap
-intervals and permutation tests, and oracle probes that bound exploitability
-without training anything (Section~\ref{sec:method}).
-\item \textbf{A bounded design space.} Five mapper families, a calibration
-ladder, component ablations, and a residual-anchored translator derived from
-the two models' projections and shared vocabulary, all under one protocol
-(Section~\ref{sec:method} and Section~\ref{sec:results}).
-\item \textbf{A verdict with consequences.} Mechanics passes, replacement
-fails for the strong student and holds for the weak one, and exploitability
-is bounded at zero; perplexity cannot substitute for accuracy as evidence
-(Section~\ref{sec:results} and Section~\ref{sec:implications}).
-\end{enumerate}
+Three things fall out of the audit. The first is a framework: identity
+controls, disjoint calibration/evaluation splits, gold-probability metrics
+with bootstrap intervals and permutation tests, and oracle probes that bound
+exploitability without training anything (Section~\ref{sec:method}). The
+second is a bounded design space: six mapper families, a calibration ladder,
+component ablations, and a residual-anchored translator derived from the two
+models' projections and a shared vocabulary, all under one protocol
+(Section~\ref{sec:method}, Section~\ref{sec:results}). The third is a verdict
+with consequences: mechanics passes, replacement fails for the strong student
+and holds for the weak one, exploitability is bounded at zero, and perplexity
+cannot stand in for accuracy as evidence (Section~\ref{sec:results},
+Section~\ref{sec:implications}).
 
 \begin{figure}[t]
 \centering
@@ -267,8 +259,8 @@ memory view assigns the factual capacity of a model to its feed-forward
 weights~\citep{ffnmemory2021}. This line supports the intuition that a frozen
 student can absorb injected information, which makes the H3 null result
 informative rather than tautological: the failure is not that frozen students
-cannot be steered, but that the teacher's cache does not carry the steering
-signal in student-readable form. It also suggests where transferable signal
+cannot be steered. It is that the teacher's cache never delivers the steering
+signal in a form the student can read. It also suggests where transferable signal
 might live: in residual-stream directions and mid-layer task vectors, not in
 KV entries.
 
@@ -306,7 +298,7 @@ the last layer summarizes the cache \\
 HCache~\citep{hcache2025} & hidden states & translator & no & states
 determine caches \\
 \midrule
-This paper & full cache (zero re-prefill) & five families incl.\ RAT & no &
+This paper & full cache (zero re-prefill) & six families incl.\ RAT & no &
 \emph{none}: identity control + oracle bounds \\
 \bottomrule
 \end{tabular}
@@ -370,7 +362,7 @@ cache even under \texttt{use\_cache=False}, which silently pollutes
 co-located measurements.
 
 \subsection{Mapper Ladder}
-We audit five families under one interface. \textbf{Ridge (per-head)}: a
+We audit six families under one interface. \textbf{Ridge (per-head)}: a
 $128\times128$ ridge map per student layer and head with Gram aggregation
 over variable-length calibration samples. \textbf{Affine (per-head)}: the
 same with mean centering and an intercept, fit in closed form over
@@ -437,9 +429,9 @@ reproduces the offline run bit-for-bit.
 \includegraphics[width=0.72\textwidth]{figures/fig2_mapper_landscape.pdf}
 \caption{The mapper landscape for Qwen3-4B$\to$1.7B under the unified audit
 protocol: gold-probability CHG over the student's own prefill, with 95\%
-bootstrap CIs. No family reaches zero; more calibration data moves affine
-mapping from $-0.138$ to $-0.239$; $\lambda$ is inert over two orders of
-magnitude; the architecture-anchored RAT sits inside the same band.}
+bootstrap CIs. No family reaches zero; calibration budget moves affine mapping by only
+$0.005$ on a fixed evaluation set; the architecture-anchored RAT and the
+nonlinear MLP sit inside the same band.}
 \label{fig:landscape}
 \end{figure}
 
@@ -477,23 +469,22 @@ RAT, c=200, 0.6B & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.120, +0.038$] \\
 \end{table}
 
 Figure~\ref{fig:landscape} and Table~\ref{tab:main} give the landscape.
-Three regularities hold across all families. First, centering is the largest
-single gain: moving from per-head ridge ($-0.296$) to per-head affine
-($-0.138$) halves the deficit, which confirms that the teacher/student value
-distributions differ by location and scale before they differ by content
-(the measured teacher/student norm ratios are $1.58\times$ for keys and
-$7.44\times$ for values). Second, the calibration budget is inert. Under a controlled comparison
-that fixes the evaluation set ($n{=}100$) and varies only the calibration
-budget, affine mapping yields CHG $-0.249$ at $c{=}30$ and $-0.244$ at
-$c{=}200$: a difference of $0.005$. The mapper has converged; more
-calibration data cannot close a gap that is set by the information content
-of the translated cache, not by estimation variance. Third, structure and function class change little: per-layer merging
-($-0.275$), task-aware fine-tuning ($-0.216$), RAT ($-0.221$ to $-0.268$),
-and a per-head MLP mapper with two GELU layers ($-0.303$ at $c{=}30$,
-$-0.236$ at $c{=}200$) all sit inside the same band. Nonlinearity does not
-help; the bottleneck is not the function class. The strong student never
+Centering is the single biggest gain: per-head ridge ($-0.296$) drops to
+per-head affine ($-0.138$), roughly halving the deficit. The teacher and
+student value distributions differ in location and scale before they differ
+in content, which is exactly what the measured norm ratios say ($1.58\times$
+for keys, $7.44\times$ for values). The calibration budget, by contrast,
+buys nothing. Holding the evaluation set fixed ($n{=}100$) and varying only
+the calibration budget, affine mapping yields CHG $-0.249$ at $c{=}30$ and
+$-0.244$ at $c{=}200$, a difference of $0.005$. The mapper has converged, and
+more data cannot close a gap that is set by the information content of the
+translated cache rather than by estimation variance. Structure and function
+class change little either: per-layer merging ($-0.275$), task-aware
+fine-tuning ($-0.216$), RAT ($-0.221$ to $-0.268$), and a per-head MLP mapper
+with two GELU layers ($-0.303$ at $c{=}30$, $-0.236$ at $c{=}200$) all sit
+inside the same band. Nonlinearity does not help. The strong student never
 approaches its own prefill ($0.503$); the best mapper reaches $0.365$. The
-weak 0.6B student tells the opposite story: affine at $c{=}200$ gives
+weak 0.6B student tells the opposite story. Affine at $c{=}200$ gives
 $+0.010$ $[-0.081, +0.102]$, statistically indistinguishable from its own
 prefill, which is replacement-level service for a weak student.
 
@@ -528,7 +519,7 @@ content, gold probability already falls from $0.5031$ to $0.3798$; the decay
 is monotone through $\alpha{=}0.75$. Window injection localizes the damage:
 replacing the top third of layers is indistinguishable from the student
 ($0.5022$ versus $0.5031$), while the middle and bottom thirds are strongly
-harmful ($0.2653$, $0.2242$). The reading is architectural. Answer-relevant
+harmful ($0.2653$, $0.2242$). The pattern points to the architecture. Answer-relevant
 routing runs through early and mid layers, exactly where the teacher's cache
 is least compatible; the top layers, where the translated content is least
 damaging, are not where the answer is decided.
@@ -584,8 +575,8 @@ cache and therefore unavailable to any translator, however nonlinear. The
 student's corresponding value $W_V^S R\, h$ depends on that invisible
 component, so $V_S$ is not a function of $V_T$: the mapping task is
 intrinsically underdetermined, and a learned translator can at best track the
-conditional mean. Second, the teacher's advantage over the student lives in
-weights, not in caches: FFN layers carry the model's factual
+conditional mean. Second, the teacher's advantage over the student sits in its
+parameters. FFN layers carry the model's factual
 associations~\citep{ffnmemory2021}, and the capability gap between Qwen3-4B
 and 1.7B is a gap in these parameters, which a cache does not transport. The
 oracle probes make the consequence concrete: even with the student's own
@@ -593,36 +584,35 @@ cache holding $75\%$ of the mass, the teacher's $25\%$ contribution degrades
 the answer. MoT's own design corroborates the analysis: its reported quality
 includes a target-side replay with a correction loss, which is exactly the
 upper-layer correction that strict zero re-prefill denies. Under a cold
-start, the translator's output is the whole story, and the whole story does
-not contain the teacher's capability.
+start the translator's output is all the student gets, and that output does
+not carry the teacher's capability.
 
 \section{Implications for Cache-Translation Research}
 \label{sec:implications}
 
-\textbf{For claims.} Any cache-translation evaluation should ship an identity
-control, a gold-probability metric with intervals, and an oracle probe. A
-pipeline delta over a student baseline is not evidence of translation; a
-perplexity gain is not evidence of capability. Our instruments are one
-evaluation run each and compose with any serving stack.
+Any future cache-translation evaluation should ship three instruments: an
+identity control, a gold-probability metric with intervals, and an oracle
+probe. A pipeline delta over a student baseline is not evidence of
+translation, and a perplexity gain is not evidence of capability. Each
+instrument costs one evaluation run and composes with any serving stack.
 
-\textbf{For deployment.} Two regimes survive the audit. For weak students
-relative to the teacher (here 0.6B under 4B), translated injection reaches
-parity with self-prefill, so cached handoff saves the student's prefill at no
-measured quality cost. Top-layer injection is harmless; if a system must
-spend translation capacity, the top layers are where it can be spent, though
-our probes also show that spending it there buys nothing. For strong
-students, cache translation is currently a net negative, and the honest
-alternative is the text channel: the teacher's summary of the context scores
-$0.413$ against the student's $0.508$ full-text baseline, so compression
-loses less than translation loses on the strong student.
+For deployment, two regimes survive the audit. When the student is weak
+relative to the teacher (0.6B under 4B here), translated injection reaches
+parity with self-prefill, so a cached handoff saves the student's prefill at
+no measured quality cost. Top-layer injection is harmless, which means a
+system that must spend translation capacity can spend it there, though our
+probes also show it buys nothing there. For strong students, cache
+translation is currently a net negative, and the honest fallback is the text
+channel: the teacher's summary of the context scores $0.413$ against the
+student's $0.508$ full-text baseline, so compression loses less than
+translation does on the strong student.
 
-\textbf{For the direction.} The survivable versions of the idea relocate
-work from the cache to weights or to the replay: allow a target-side
-correction pass as MoT does, train student-side adapters, or translate in a
-shared latent space anchored by task vectors rather than per-entry caches.
-Each option trades away part of the cold-start guarantee, and each should be
-re-audited with the identity control before its delta is attributed to
-translation.
+The survivable versions of the idea move work off the cache and onto the
+weights or the replay: allow a target-side correction pass the way MoT does,
+train student-side adapters, or translate through a shared latent space
+anchored by task vectors instead of per-entry caches. Each option gives up
+part of the cold-start guarantee, and each deserves a fresh identity control
+before its delta gets attributed to translation.
 
 \section{Limitations}
 Our audit covers one model family (Qwen3), two pairs, and two multiple-choice
@@ -641,16 +631,17 @@ sign across seeds 42, 43, and 44 ($-0.14$, $-0.47$, $-0.46$), with seed 42
 being the most favorable case.
 
 \section{Conclusion}
-Cache translation promises to move a teacher's work into a smaller model. The
-audit separates that promise into three testable parts. The mechanism works:
-an identity control reproduces the student's own prefill exactly. The map
-does not: five mapper families, a calibration ladder, and an
+Cache translation promises to move a teacher's work into a smaller model,
+and the audit separates that promise into three testable parts. The
+mechanism holds up: an identity control reproduces the student's own prefill
+exactly. The map does not: six mapper families, a calibration ladder, and an
 architecture-anchored translator all leave the strong student below its own
-prefill, and the weak student at parity. The reason is not the map: oracle
-probes bound the student-readable advantage of the teacher's cache at zero,
-and a near-native-perplexity cache still fails the task. The teacher's
-capability is in its weights. We release the audit framework so that the
-next cache-translation claim can be checked in one run.
+prefill and the weak student at parity. The map, moreover, is not where the
+problem sits. Oracle probes bound the student-readable advantage of the
+teacher's cache at zero, and a near-native-perplexity cache still fails the
+task. The teacher's capability is in its parameters. The audit framework is
+packaged so that the next cache-translation claim can be checked in a single
+run.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
