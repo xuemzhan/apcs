@@ -512,3 +512,131 @@ def test_affine_layer_kv_independence():
     assert not np.allclose(mk.W[("K", 0, 0)], mv.W[("V", 0, 0)])
     with pytest.raises(KeyError):
         mk.transform(kv_t, lm, kv_kind="V")
+
+
+# ---------------------------------------------------------------------------
+# v1.4: RAT（残差锚定翻译器）与 Oracle 探针
+# ---------------------------------------------------------------------------
+
+def _build_synth_world(seed=0):
+    """合成"模型对"：共享隐变量 z、已知跨模型映射 R0、embedding 锚可恢复 R0。"""
+    rng = np.random.default_rng(seed)
+    H, D = 4, 8
+    hid_t, hid_s = 32, 24
+    L_t, L_s = 4, 3
+    R0 = rng.standard_normal((hid_t, hid_s))
+    W_V_t = {l: rng.standard_normal((H * D, hid_t)) * 0.3 for l in range(L_t)}
+    W_V_s = {l: rng.standard_normal((H * D, hid_s)) * 0.3 for l in range(L_s)}
+    W_K_t = {l: rng.standard_normal((H * D, hid_t)) * 0.3 for l in range(L_t)}
+    W_K_s = {l: rng.standard_normal((H * D, hid_s)) * 0.3 for l in range(L_s)}
+    E_t = rng.standard_normal((64, hid_t))
+    E_s = E_t @ R0
+    wt, ws = {}, {}
+    for l in range(L_t):
+        wt[f"model.layers.{l}.self_attn.v_proj.weight"] = W_V_t[l]
+        wt[f"model.layers.{l}.self_attn.k_proj.weight"] = W_K_t[l]
+    for l in range(L_s):
+        ws[f"model.layers.{l}.self_attn.v_proj.weight"] = W_V_s[l]
+        ws[f"model.layers.{l}.self_attn.k_proj.weight"] = W_K_s[l]
+    wt["model.embed_tokens.weight"] = E_t
+    ws["model.embed_tokens.weight"] = E_s
+
+    def make_pairs(n, S, offset=0):
+        pairs = []
+        for i in range(n):
+            z = rng.standard_normal((S, hid_t)) + offset
+            vt = np.stack([(z @ W_V_t[l].T).reshape(S, H, D) for l in range(L_t)])
+            vs = np.stack([((z @ R0) @ W_V_s[l].T).reshape(S, H, D) for l in range(L_s)])
+            pairs.append((vt, vs))
+        return pairs
+
+    lm = [[min(i, L_t - 1)] for i in range(L_s)]
+    return dict(rng=rng, R0=R0, wt=wt, ws=ws, lm=lm, make_pairs=make_pairs,
+                H=H, D=D, L_s=L_s)
+
+
+def test_embedding_anchor_recovers_linear_map():
+    from apcs.mapper.rat import embedding_procrustes
+
+    w = _build_synth_world(seed=1)
+    R = embedding_procrustes(
+        w["wt"]["model.embed_tokens.weight"], w["ws"]["model.embed_tokens.weight"]
+    )
+    rel = float(np.abs(R - w["R0"]).max() / np.abs(w["R0"]).max())
+    assert rel < 1e-4, rel
+
+
+def test_rat_head_matching_recovers_alignment():
+    from apcs.mapper.rat import hungarian_head_matching
+
+    rng = np.random.default_rng(2)
+    D = 8
+    base = rng.standard_normal((4, D))          # 4 个"真实"头方向
+    perm_true = np.array([2, 0, 3, 1])
+    t_means = base.copy()
+    s_means = base[perm_true] + rng.standard_normal((4, D)) * 1e-6  # 学生头=教师头的置换
+    perm = hungarian_head_matching(t_means, s_means)
+    np.testing.assert_array_equal(perm, perm_true)
+
+
+def test_rat_beats_noanchor_under_rank_budget(tmp_path, monkeypatch):
+    """核心假设：受限秩预算下，架构解析锚优于纯数据校正。"""
+    import apcs.mapper.rat as rat_mod
+
+    w = _build_synth_world(seed=3)
+    monkeypatch.setattr(
+        rat_mod, "_load_tensor",
+        lambda md, key: (w["wt"] if "teacher" in str(md) else w["ws"])[key],
+    )
+    monkeypatch.setattr(rat_mod, "_resolve_model_dir", lambda p: p)
+    (tmp_path / "teacher_dir").mkdir(exist_ok=True)
+    (tmp_path / "student_dir").mkdir(exist_ok=True)
+    calib = w["make_pairs"](24, 32)
+    test = w["make_pairs"](8, 32)
+
+    errs = {}
+    for name, kw in [("rat", dict(rank=4)),
+                     ("noanchor", dict(rank=4, use_embedding_anchor=False)),
+                     ("analytic_only", dict(rank=0))]:
+        m = rat_mod.RATMapper(lam=1e-4, head_match=True, sink_override=False, **kw)
+        m.setup_weights(tmp_path / "teacher_dir", tmp_path / "student_dir")
+        m.fit_batch(calib, w["lm"], kv_kind="V")
+        errs[name] = float(np.mean([
+            np.linalg.norm(m.transform(vt, w["lm"], kv_kind="V") - vs)
+            / np.linalg.norm(vs) for vt, vs in test
+        ]))
+    assert errs["rat"] < errs["noanchor"], errs
+    assert errs["analytic_only"] < errs["noanchor"], errs
+
+
+def test_rat_interface_and_sink(tmp_path, monkeypatch):
+    import apcs.mapper.rat as rat_mod
+
+    w = _build_synth_world(seed=4)
+    monkeypatch.setattr(
+        rat_mod, "_load_tensor",
+        lambda md, key: (w["wt"] if "teacher" in str(md) else w["ws"])[key],
+    )
+    monkeypatch.setattr(rat_mod, "_resolve_model_dir", lambda p: p)
+    (tmp_path / "teacher_dir").mkdir(exist_ok=True)
+    (tmp_path / "student_dir").mkdir(exist_ok=True)
+    m = rat_mod.RATMapper(lam=1e-3, rank=8, head_match=True, sink_override=True)
+    m.setup_weights(tmp_path / "teacher_dir", tmp_path / "student_dir")
+    calib = w["make_pairs"](6, 16)
+    m.fit_batch(calib, w["lm"], kv_kind="V")
+    vt, vs = calib[0]
+    out = m.transform(vt, w["lm"], kv_kind="V")
+    assert out.shape == vs.shape
+    # sink 覆盖：position 0 应等于学生校准均值
+    sink0 = np.stack([kv_s[:, 0, :, :] for _, kv_s in calib]).mean(axis=0)
+    np.testing.assert_allclose(out[:, 0, :, :], sink0, atol=1e-5)
+    with pytest.raises(KeyError):
+        m.transform(vt, w["lm"], kv_kind="K")  # 未 fit 的 kind 禁止静默回退
+
+
+def test_probe_modes_gated(tmp_path):
+    """探针模式必须在 probe_mode=true 时才可用（防误用于部署结论）。"""
+    ev = InjectionEvaluator(_make_cfg(), tmp_path)
+    assert ev._probe_mode is False
+    ev2 = InjectionEvaluator(_make_cfg(probe_mode=True), tmp_path)
+    assert ev2._probe_mode is True
