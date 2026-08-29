@@ -109,3 +109,4 @@ output/pdf/*.bbl
 output/pdf/*.blg
 output/pdf/*.out
 archive/
+paper/cache_audit/project_context.md
