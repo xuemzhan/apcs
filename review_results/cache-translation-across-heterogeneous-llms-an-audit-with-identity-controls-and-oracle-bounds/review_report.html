@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Review Report — /workspace/apcs/paper/cache_audit/arxiv/main.tex</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1f2329;
+    --muted: #5f6675;
+    --border: #e1e4ea;
+    --accent: #2f5fef;
+    --major: #c0392b;
+    --moderate: #d97706;
+    --minor: #6b7280;
+    --code-bg: #f4f5f8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans", "Microsoft YaHei", Roboto, sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    min-height: 100vh;
+  }
+  nav.toc {
+    background: #f8f9fb;
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  nav.toc h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  nav.toc ul { list-style: none; padding: 0; margin: 0; }
+  nav.toc li { margin: 6px 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+  nav.toc a:hover { color: var(--accent); }
+  main {
+    padding: 36px 48px 80px;
+    max-width: 960px;
+    width: 100%;
+  }
+  h1 {
+    font-size: 26px;
+    margin: 0 0 4px;
+    line-height: 1.3;
+  }
+  .meta-bar {
+    border: 1px solid var(--border);
+    background: #fafbfc;
+    padding: 12px 16px;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 13.5px;
+    margin: 16px 0 24px;
+  }
+  .meta-bar code {
+    color: var(--fg);
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12.5px;
+  }
+  h2 {
+    font-size: 19px;
+    margin: 32px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    margin: 22px 0 8px;
+  }
+  blockquote {
+    margin: 8px 0;
+    padding: 8px 14px;
+    background: #f7f8fa;
+    border-left: 3px solid var(--accent);
+    color: var(--fg);
+  }
+  code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 16px;
+    font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #f4f5f8; font-weight: 600; }
+  .issue {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 12px 0;
+  }
+  .issue h3 { margin-top: 0; }
+  .issue-meta {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .severity-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 6px;
+  }
+  .severity-major { background: var(--major); }
+  .severity-moderate { background: var(--moderate); }
+  .severity-minor { background: var(--minor); }
+  .issue-quote {
+    background: #fdf6e3;
+    border-left: 3px solid #d97706;
+    padding: 6px 10px;
+    font-size: 13.5px;
+    margin: 6px 0;
+  }
+  ul.committee-list { padding-left: 22px; }
+  .committee-section {
+    border-left: 3px solid var(--accent);
+    padding: 8px 14px;
+    margin: 12px 0;
+    background: #f8f9fb;
+  }
+  .committee-section h3 { margin: 0 0 6px; }
+  .ribbon-bundle {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 10px 0;
+  }
+  .ribbon-bundle .pill {
+    background: var(--code-bg);
+    color: var(--fg);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  .anchor-link {
+    color: var(--muted);
+    text-decoration: none;
+    margin-left: 6px;
+    font-size: 13px;
+  }
+  .anchor-link:hover { color: var(--accent); }
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+    padding-top: 16px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Overall Assessment">
+    <h2>OVERALL ASSESSMENT</h2>
+    <ul>
+      
+      <li><a href="#overall-assessment">Overall Assessment</a></li>
+      
+      <li><a href="#committee">Academic Pre-Review Committee</a></li>
+      
+      <li><a href="#paper-summary">Paper Summary</a></li>
+      
+      <li><a href="#major-issues">Major Issues</a></li>
+      
+      <li><a href="#moderate-issues">Moderate Issues</a></li>
+      
+      <li><a href="#decision-signals">Decision Signals</a></li>
+      
+    </ul>
+  </nav>
+  <main>
+    <h1>Deep Review Report</h1>
+    <div class="meta-bar">
+      <div>
+        Paper: <code>/workspace/apcs/paper/cache_audit/arxiv/main.tex</code>
+        &nbsp;|&nbsp; Language: EN
+        &nbsp;|&nbsp; Mode: deep-review
+      </div>
+      <div>
+        Generated: 2026-08-29 19:24
+        
+        
+      </div>
+      
+      <div>
+        Artifacts: <code>/workspace/apcs/review_results/cache-translation-across-heterogeneous-llms-an-audit-with-identity-controls-and-oracle-bounds</code>
+      </div>
+      
+    </div>
+
+    <section id="overall-assessment">
+      <h2>Overall Assessment<a class="anchor-link" href="#overall-assessment">§</a></h2>
+      <p>Deep review found 1 major, 3 moderate, 0 minor issues. The highest-priority concerns are: Abstract and conclusion claims need explicit evidence traceability; Cross-section numeric consistency should be reconciled.</p>
+      <div class="ribbon-bundle">
+        <span class="pill">Major: 1</span>
+        <span class="pill">Moderate: 3</span>
+        <span class="pill">Minor: 0</span>
+      </div>
+    </section>
+
+    
+    <section id="committee">
+      <h2>Academic Pre-Review Committee<a class="anchor-link" href="#committee">§</a></h2>
+      
+      <div class="committee-section">
+        <h3>Editor (Desk Reject Screen)</h3>
+        <pre>## Editor Pre-Screen (1-10)
+
+Score: 6.1/10
+Verdict: Pass to Review
+
+### Desk-Reject Triggers (if any)
+- Abstract and conclusion claims need explicit evidence traceability
+
+### Top 3 Reasons (no hedging)
+1. Abstract and conclusion claims need explicit evidence traceability
+
+### Fast Fixes (within 1-2 days)
+- Clarify abstract to address abstract and conclusion claims need explicit evidence traceability.
+- Clarify abstract to address cross-section numeric consistency should be reconciled.
+- Clarify related_work to address novelty claim should be grounded against the closest prior work.</pre>
+      </div>
+      
+      <div class="committee-section">
+        <h3>Reviewer 1 (Theory Contribution)</h3>
+        <pre>## Theory Contribution Review
+
+### 3 Fatal Theory Holes
+1. (abstract) Abstract and conclusion claims need explicit evidence traceability — At least one headline claim was detected. Deep review should check whether experiments and conclusion language trace back to the same bounded evidence base.
+2. (related_work) Novelty claim should be grounded against the closest prior work — The paper positions itself against prior work, but the current wording should make the closest comparator and the real novelty delta explicit instead of relying on broad superiority language.
+
+### Concrete Moves
+- Tighten the paper's theoretical positioning in abstract to resolve abstract and conclusion claims need explicit evidence traceability.
+- Tighten the paper's theoretical positioning in related_work to resolve novelty claim should be grounded against the closest prior work.</pre>
+      </div>
+      
+      <div class="committee-section">
+        <h3>Reviewer 3 (Literature Dialogue)</h3>
+        <pre>## Literature Dialogue Review
+
+### Closest Prior Work Risks
+- (related_work) Novelty claim should be grounded against the closest prior work — The paper positions itself against prior work, but the current wording should make the closest comparator and the real novelty delta explicit instead of relying on broad superiority language.
+
+### Gap Claim Risks
+- The claimed gap should be defended more explicitly: Novelty claim should be grounded against the closest prior work.
+
+### Fast Fixes
+- Name the closest prior comparator in related_work and explain the real novelty delta.</pre>
+      </div>
+      
+      <div class="committee-section">
+        <h3>Reviewer 2 (Methodology & Transparency)</h3>
+        <pre>## Methodology Transparency Review (SRQR-aware)
+
+### MUST-FIX (submission blockers)
+- No methodology blocker was surfaced by the fallback pass.
+
+### SHOULD-FIX (quality improvements)
+- (abstract) "Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at ." — Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.
+- (method) "Student self-prefill is the baseline the handoff must not degrade." — Comparative evaluation language was detected. Deep review should verify that baseline tuning, data splits, and reporting conventions are described symmetrically.
+
+### SRQR Checklist Deltas
+- Sampling rationale: clarify how the evidence base supports the paper's strongest claims.
+- Data collection details (time/place/duration): add context when results depend on specific settings.
+- Coding process (stages, coders, disagreement resolution): specify if qualitative or hybrid analysis is used.
+- Saturation: state whether the evidence scope is exhaustive or bounded.
+- Triangulation: explain whether multiple evidence sources were reconciled.
+- Reflexivity: acknowledge researcher choices that shape interpretation.</pre>
+      </div>
+      
+      <div class="committee-section">
+        <h3>Reviewer 4 (Logic Chain)</h3>
+        <pre>## Logic Chain Review
+
+### Breakpoints
+- (abstract) Abstract and conclusion claims need explicit evidence traceability — At least one headline claim was detected. Deep review should check whether experiments and conclusion language trace back to the same bounded evidence base.
+
+### Structural Fix Moves
+- Add one explicit bridge sentence in abstract so the argument chain closes cleanly.</pre>
+      </div>
+      
+      <div class="committee-section">
+        <h3>Committee Consensus</h3>
+        <pre>## Committee Consensus
+
+Overall Score: 5.4/10
+Editor Verdict: Pass to Review
+
+### Score Formula
+- base 9.0
+- minus 1.5 * major (1)
+- minus 0.7 * moderate (3)
+- minus 0.2 * minor (0)
+- floor 1.0
+- desk reject cap 4.0
+
+### Top 3 Issues To Fix First
+1. Abstract and conclusion claims need explicit evidence traceability
+2. Cross-section numeric consistency should be reconciled
+3. Comparison protocol should make fairness assumptions explicit</pre>
+      </div>
+      
+    </section>
+    
+
+    
+    <section id="paper-summary">
+      <h2>Paper Summary<a class="anchor-link" href="#paper-summary">§</a></h2>
+      <pre># Paper Summary: Cache Translation Across Heterogeneous LLMs:\\ An Audit with Identity Controls and Oracle Bounds
+
+## Research Question
+- Cache translation maps the key-value (KV) cache that a large teacher model forms over a context into the cache space of a smaller student model, so that the student answers without re-prefilling the context
+
+## Core Thesis
+- We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.
+
+## Headline Claims
+- We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.
+
+## Section Map
+- abstract (36-61): 251 words
+- introduction (63-193): 925 words
+- method (310-343): 273 words
+- method_2 (344-413): 545 words
+- result (414-558): 1089 words
+- discussion (559-584): 243 words
+- conclusion (627-643): 116 words
+
+## Closure Targets
+- No closure target was extracted automatically.</pre>
+    </section>
+    
+
+    
+    
+    <section id="major-issues">
+      <h2>Major Issues<a class="anchor-link" href="#major-issues">§</a></h2>
+      
+      <article class="issue">
+        <h3><span class="severity-tag severity-major">Major</span>M1: Abstract and conclusion claims need explicit evidence traceability</h3>
+        <div class="issue-meta">
+          Type: claim_accuracy
+          &nbsp;|&nbsp; Source: [LLM]
+          &nbsp;|&nbsp; Confidence: low
+          &nbsp;|&nbsp; Section: abstract
+          
+            &nbsp;|&nbsp; Related Sections: abstract, results, conclusion
+          
+          
+            &nbsp;|&nbsp; Quote Verified: no
+          
+        </div>
+        
+        <p>At least one headline claim was detected. Deep review should check whether experiments and conclusion language trace back to the same bounded evidence base.</p>
+      </article>
+      
+    </section>
+    
+    
+    
+    <section id="moderate-issues">
+      <h2>Moderate Issues<a class="anchor-link" href="#moderate-issues">§</a></h2>
+      
+      <article class="issue">
+        <h3><span class="severity-tag severity-moderate">Moderate</span>S1: Cross-section numeric consistency should be reconciled</h3>
+        <div class="issue-meta">
+          Type: presentation
+          &nbsp;|&nbsp; Source: [LLM]
+          &nbsp;|&nbsp; Confidence: medium
+          &nbsp;|&nbsp; Section: abstract
+          
+            &nbsp;|&nbsp; Related Sections: abstract, introduction, method
+          
+          
+            &nbsp;|&nbsp; Quote Verified: no
+          
+        </div>
+        
+        <div class="issue-quote">Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at .</div>
+        
+        <p>Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.</p>
+      </article>
+      
+      <article class="issue">
+        <h3><span class="severity-tag severity-moderate">Moderate</span>S2: Comparison protocol should make fairness assumptions explicit</h3>
+        <div class="issue-meta">
+          Type: methodology
+          &nbsp;|&nbsp; Source: [LLM]
+          &nbsp;|&nbsp; Confidence: medium
+          &nbsp;|&nbsp; Section: method
+          
+            &nbsp;|&nbsp; Related Sections: method
+          
+          
+            &nbsp;|&nbsp; Quote Verified: no
+          
+        </div>
+        
+        <div class="issue-quote">Student self-prefill is the baseline the handoff must not degrade.</div>
+        
+        <p>Comparative evaluation language was detected. Deep review should verify that baseline tuning, data splits, and reporting conventions are described symmetrically.</p>
+      </article>
+      
+      <article class="issue">
+        <h3><span class="severity-tag severity-moderate">Moderate</span>S3: Novelty claim should be grounded against the closest prior work</h3>
+        <div class="issue-meta">
+          Type: claim_accuracy
+          &nbsp;|&nbsp; Source: [LLM]
+          &nbsp;|&nbsp; Confidence: low
+          &nbsp;|&nbsp; Section: related_work
+          
+            &nbsp;|&nbsp; Related Sections: related_work, results
+          
+          
+            &nbsp;|&nbsp; Quote Verified: no
+          
+        </div>
+        
+        <p>The paper positions itself against prior work, but the current wording should make the closest comparator and the real novelty delta explicit instead of relying on broad superiority language.</p>
+      </article>
+      
+    </section>
+    
+    
+
+    <section id="decision-signals">
+      <h2>Decision Signals<a class="anchor-link" href="#decision-signals">§</a></h2>
+      <ul>
+        <li>Committee Score: 5.4/10</li>
+        <li>Editor Verdict: Pass to Review</li>
+        <li>Reviewer Recommendation: Major Revision</li>
+        <li>Issue Bundle: 1 major / 3 moderate / 0 minor</li>
+      </ul>
+    </section>
+
+    <footer>
+      paper-audit · generated 2026-08-29 19:24
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,19 @@
+[
+  {
+    "title": "Cross-section numeric consistency should be reconciled",
+    "quote": "Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at .",
+    "explanation": "Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.",
+    "comment_type": "presentation",
+    "severity": "moderate",
+    "confidence": "medium",
+    "source_kind": "llm",
+    "source_section": "abstract",
+    "related_sections": [
+      "abstract",
+      "introduction",
+      "method"
+    ],
+    "review_lane": "notation_and_numeric_consistency",
+    "gate_blocker": false
+  }
+]

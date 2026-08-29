@@ -3,44 +3,47 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: plainnat.bst
 Database file #1: references.bib
+Warning--empty booktitle in interlat2025
+Warning--empty booktitle in kvcomm2025
 You've used 20 entries,
             2773 wiz_defined-function locations,
-            686 strings with 8909 characters,
-and the built_in function-call counts, 10792 in all, are:
-= -- 831
+            684 strings with 8738 characters,
+and the built_in function-call counts, 10758 in all, are:
+= -- 825
 > -- 966
 < -- 4
 + -- 323
 - -- 303
-* -- 925
-:= -- 1746
-add.period$ -- 70
+* -- 923
+:= -- 1740
+add.period$ -- 68
 call.type$ -- 20
 change.case$ -- 158
 chr.to.int$ -- 20
-cite$ -- 40
-duplicate$ -- 444
-empty$ -- 737
+cite$ -- 42
+duplicate$ -- 442
+empty$ -- 733
 format.name$ -- 328
-if$ -- 2195
+if$ -- 2185
 int.to.chr$ -- 1
 int.to.str$ -- 1
 missing$ -- 20
-newline$ -- 118
+newline$ -- 116
 num.names$ -- 80
-pop$ -- 357
+pop$ -- 361
 preamble$ -- 1
 purify$ -- 138
 quote$ -- 0
 skip$ -- 347
 stack$ -- 0
 substring$ -- 40
-swap$ -- 32
+swap$ -- 30
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 220
-warning$ -- 0
+warning$ -- 2
 while$ -- 60
 width$ -- 0
-write$ -- 267
+write$ -- 261
+(There were 2 warnings)

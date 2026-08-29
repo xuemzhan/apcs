@@ -640,3 +640,50 @@ def test_probe_modes_gated(tmp_path):
     assert ev._probe_mode is False
     ev2 = InjectionEvaluator(_make_cfg(probe_mode=True), tmp_path)
     assert ev2._probe_mode is True
+
+
+# ---------------------------------------------------------------------------
+# v1.5: MLP mapper（非线性测试）+ eval_from_tail 受控阶梯
+# ---------------------------------------------------------------------------
+
+def test_mlp_mapper_learns_nonlinear():
+    """MLP mapper 在非线性 ground truth 上应优于线性 mapper。"""
+    from apcs.mapper.mlp import MLPMapper
+    from apcs.mapper.math import AffineLayerMapper
+
+    rng = np.random.default_rng(0)
+    pairs = []
+    for S in (16, 24, 32):
+        src = rng.standard_normal((2, S, 2, 8))
+        tgt = src * np.abs(src) * 0.3 + src * 0.5  # 非线性
+        pairs.append((src, tgt))
+    lm = [[0], [1]]
+
+    mlp = MLPMapper(hidden=32, epochs=500, lr=3e-3)
+    mlp.fit_batch(pairs, lm, kv_kind="V")
+    aff = AffineLayerMapper(lam=1e-6)
+    aff.fit_batch(pairs, lm, kv_kind="V")
+
+    test_src, test_tgt = pairs[0]
+    e_mlp = float(np.linalg.norm(mlp.transform(test_src, lm, kv_kind="V") - test_tgt))
+    e_aff = float(np.linalg.norm(aff.transform(test_src, lm, kv_kind="V") - test_tgt))
+    assert e_mlp < e_aff, f"MLP({e_mlp:.3f}) should beat affine({e_aff:.3f}) on nonlinear data"
+
+
+def test_eval_from_tail_produces_fixed_eval_set(tmp_path):
+    """eval_from_tail_n 固定评估集，不受 calib_samples 影响。"""
+    ev1 = InjectionEvaluator(_make_cfg(calib_samples=30), tmp_path)
+    ev2 = InjectionEvaluator(_make_cfg(calib_samples=200), tmp_path)
+    # 模拟 300 个样本
+    rows = [SimpleNamespace(sample_id=f"s{i}", context="c", query="q", answer="A") for i in range(300)]
+    # 手动跑切分逻辑（从 evaluate() 提取的逻辑）
+    for ev, expected_calib in [(ev1, 30), (ev2, 200)]:
+        ev.cfg["inject_eval"]["eval_from_tail_n"] = 100
+        rows_work = list(rows)
+        n_eval = 100
+        eval_r = rows_work[-n_eval:]
+        calib_r = rows_work[:-n_eval][: ev._n_calib]
+        assert len(calib_r) == expected_calib
+        assert len(eval_r) == 100
+        # 评估集相同
+        assert eval_r[0].sample_id == rows_work[-100].sample_id

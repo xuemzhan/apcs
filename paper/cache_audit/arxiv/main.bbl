@@ -26,10 +26,7 @@ L.~M. Dery, Z.~Yahav, H.~Prior, Q.~Feng, J.~Shen, and A.~Szlam.
 \bibitem[Du et~al.(2025)]{interlat2025}
 Xiao Du et~al.
 \newblock Interlat: Latent-space message passing between language models.
-\newblock In \emph{Open-source implementation (GitHub:
-  XiaoDu-flying/Interlat)}, 2025.
-\newblock Title and venue verified via OpenAlex; bibliographic details as
-  indexed.
+\newblock 2025.
 
 \bibitem[Fu et~al.(2025)Fu, Min, Zhang, Yan, Dai, Ouyang, and Wang]{c2c2025}
 Tianyu Fu, Zhen Min, Hang Zhang, Jun Yan, Guohao Dai, Wanli Ouyang, and
@@ -106,13 +103,10 @@ Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
 \newblock \doi{10.48550/arxiv.2304.08467}.
 
 \bibitem[Shi et~al.(2025)]{kvcomm2025}
-Rongzhi Shi et~al.
+Zheng Shi et~al.
 \newblock {KVComm}: Selecting and sharing knowledge-rich {KV} cache layers
   between language models.
-\newblock In \emph{Open-source implementation (GitHub: Zephyroam/KVComm)},
-  2025.
-\newblock Title and venue verified via OpenAlex; bibliographic details as
-  indexed.
+\newblock 2025.
 
 \bibitem[Xiao et~al.(2023)Xiao, Tian, Chen, Han, and Lewis]{streamingsink2023}
 Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis.

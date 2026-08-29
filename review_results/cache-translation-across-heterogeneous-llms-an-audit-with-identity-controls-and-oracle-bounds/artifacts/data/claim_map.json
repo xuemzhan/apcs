@@ -1,0 +1,45 @@
+{
+  "headline_claims": [
+    "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache."
+  ],
+  "closure_targets": [],
+  "section_claims": {
+    "abstract": [
+      "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache."
+    ]
+  },
+  "claim_candidates": [
+    {
+      "id": "abstract:1",
+      "section_key": "abstract",
+      "claim": "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.",
+      "evidence_anchor": [],
+      "claim_strength": "unsupported",
+      "missing_evidence": [
+        "add an evidence anchor or soften the claim boundary"
+      ],
+      "allowed_wording": "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.",
+      "forbidden_wording": [
+        "unqualified conclusion without visible evidence"
+      ]
+    }
+  ],
+  "section_claim_candidates": {
+    "abstract": [
+      {
+        "id": "abstract:1",
+        "section_key": "abstract",
+        "claim": "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.",
+        "evidence_anchor": [],
+        "claim_strength": "unsupported",
+        "missing_evidence": [
+          "add an evidence anchor or soften the claim boundary"
+        ],
+        "allowed_wording": "We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.",
+        "forbidden_wording": [
+          "unqualified conclusion without visible evidence"
+        ]
+      }
+    ]
+  }
+}

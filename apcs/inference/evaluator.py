@@ -676,6 +676,17 @@ class InjectionEvaluator:
             s_id = self.cfg.get("student", {}).get("model_id", "")
             self._mapper_k.setup_weights(t_id, s_id)
             self._mapper_v.setup_weights(t_id, s_id)
+        elif mapper_type == "mlp":
+            from ..mapper.mlp import MLPMapper as _MLP
+            m_cfg = self.cfg.get("mapper", {})
+            common = dict(
+                lam=_ridge_lambda(self.cfg, "K"),
+                hidden=int(m_cfg.get("mlp_hidden", 64)),
+                epochs=int(m_cfg.get("mlp_epochs", 200)),
+                lr=float(m_cfg.get("mlp_lr", 1e-3)),
+            )
+            self._mapper_k = _MLP(**common)
+            self._mapper_v = _MLP(**common)
         else:  # default: ridge (per-head)
             self._mapper_k = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "V"))
@@ -1377,19 +1388,27 @@ class InjectionEvaluator:
         # 两者同分布（同一用户数据集顺序切分）但样本互斥。
         # P0.2: calib_shuffle=true 时按 seed 随机置换后再切分 —— 提供
         # 校准种子方差（mapper 拟合依赖抽到哪些校准样本）。
+        # A2 修正: eval_from_tail=true 时评估集固定为末尾 n_eval 样本，
+        # 增大 calib_samples 不改变评估集 —— 受控规模阶梯。
         rows_work = list(rows)
         if bool(self.cfg.get("inject_eval", {}).get("calib_shuffle", False)):
             rng_sh = np.random.default_rng(self._seed)
             perm = rng_sh.permutation(len(rows_work))
             rows_work = [rows_work[i] for i in perm]
+        n_eval_fixed = int(self.cfg.get("inject_eval", {}).get("eval_from_tail_n", 0))
         if self._calib_split and len(rows_work) >= 4:
-            n_calib_split = self._n_calib if self._n_calib > 0 else max(1, len(rows_work) // 2)
-            n_calib_split = min(n_calib_split, len(rows_work) - 1)  # 至少留 1 行评估
-            calib_rows = rows_work[:n_calib_split]
-            eval_rows = rows_work[n_calib_split:]
+            if n_eval_fixed > 0 and len(rows_work) > n_eval_fixed:
+                eval_rows = rows_work[-n_eval_fixed:]
+                calib_rows = rows_work[:-n_eval_fixed]
+                if self._n_calib > 0 and len(calib_rows) > self._n_calib:
+                    calib_rows = calib_rows[: self._n_calib]
+            else:
+                n_calib_split = self._n_calib if self._n_calib > 0 else max(1, len(rows_work) // 2)
+                n_calib_split = min(n_calib_split, len(rows_work) - 1)
+                calib_rows = rows_work[:n_calib_split]
+                eval_rows = rows_work[n_calib_split:]
             calib_eval_disjoint = True
         else:
-            # 旧行为回退（样本过少）；provenance 如实标注 disjoint=False
             calib_rows = rows_work
             eval_rows = rows_work
             calib_eval_disjoint = False

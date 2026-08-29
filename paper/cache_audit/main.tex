@@ -44,15 +44,17 @@ framework and two instruments that prior evaluations omit. First, an
 translation-and-injection pipeline: it reproduces the student's own prefill
 exactly (per-sample logit cosine $1.000$), which isolates mechanics from
 mapping. Second, \emph{oracle probes} mix teacher-cache content into the
-student's own cache and bound what any translator could extract. Across five
-mapper families (per-head ridge, affine, per-layer affine, task-aware, and a
-residual-anchored translator built from the two models' own projections), a
-200-example calibration ladder, and 21 recorded GPU runs, no configuration
+student's own cache and bound what any translator could extract. Across six
+mapper families (per-head ridge, affine, per-layer affine, task-aware, a
+residual-anchored translator, and a per-head MLP), a controlled calibration
+ladder on a fixed evaluation set, and 28 recorded GPU runs, no configuration
 makes the strong student exceed its own prefill: gold-probability change
-spans $-0.14$ to $-0.30$ against a self-kv control at $+0.000$. The weak
+spans $-0.14$ to $-0.47$ against a self-kv control at $+0.000$. Calibration
+budget is inert (CHG $-0.249$ at $c{=}30$ vs $-0.244$ at $c{=}200$ on the
+same evaluation set), and nonlinearity does not help. The weak
 student reaches parity ($+0.010$, CI $[-0.08,+0.10]$). Oracle probes show a
-monotone decline as teacher content replaces student content in early and mid
-layers, and a perplexity--accuracy decoupling: a translator that restores
+monotone decline as teacher content replaces student content in early and
+mid layers, robust to translator quality, and a perplexity--accuracy decoupling: a translator that restores
 near-native fluency (PPL 23.7 versus 21.2) still leaves accuracy at 0.267
 versus 0.500. We conclude that the teacher's answer-relevant advantage does
 not survive KV-space translation under zero re-prefill: it lives in the
@@ -332,9 +334,11 @@ scoring suffix is recorded but never accepted as evidence of capability
 Figure~\ref{fig:framework} states the three hypotheses with their instruments
 and gates. \textbf{H1}: the identity injection matches the student's own
 prefill per sample (gate: mean logit cosine $= 1$ within float tolerance).
-\textbf{H2}: some $g_\theta$ reaches replacement level (gate: $\chg > 0$ with
-CI excluding zero, across the mapper ladder at calibration budgets up to 200
-examples). \textbf{H3}: the teacher's cache contains student-readable
+\textbf{H2}: some $g_\theta$ reaches replacement level (gate: gold CHG
+$\geq 0$ with the CI lower bound above a small tolerance $-\epsilon$; a
+stricter \emph{gain} gate additionally requires the CI lower bound $> 0$).
+Replacement asks only that the student is not degraded; gain asks that the
+teacher's cache provides a measurable lift. \textbf{H3}: the teacher's cache contains student-readable
 advantage (gate: some oracle probe configuration with teacher content
 improves over the student's own cache). H3's probe is decisive because it
 does not depend on training a translator; it directly measures what a frozen
@@ -399,8 +403,9 @@ $\alpha \in \{0.25, 0.5, 0.75\}$ with $\alpha{=}0$ the student's own cache.
 \textbf{Window probe}: translated content in only the bottom, middle, or top
 third of student layers, student content elsewhere. Because every
 configuration keeps the student's own cache dominant or localized, any
-improvement over $\alpha{=}0$ is a lower bound on what a perfect translator
-could deliver; monotone degradation bounds exploitability at zero. Probes are
+improvement over $\alpha{=}0$ would indicate exploitable teacher-cache
+content; monotone degradation under the tested translators rules out
+exploitable content in this regime. Probes are
 flagged non-deployable (they require the student's own prefill) and exist
 only as measurement instruments.
 
@@ -474,14 +479,16 @@ single gain: moving from per-head ridge ($-0.296$) to per-head affine
 ($-0.138$) halves the deficit, which confirms that the teacher/student value
 distributions differ by location and scale before they differ by content
 (the measured teacher/student norm ratios are $1.58\times$ for keys and
-$7.44\times$ for values). Second, the ladder is non-monotone in data: at
-200 calibration examples the affine map degrades to $-0.239$ from $-0.138$ at
-30, and $\lambda$ over $[10^{-3}, 10^{-1}]$ changes nothing. The per-head
-linear hypothesis saturates; more data drives the estimator to the best
-linear approximation, which is worse than the strongly shrunk 30-example
-solution. Third, structure changes little: per-layer merging ($-0.275$),
-task-aware fine-tuning ($-0.216$), and RAT ($-0.268$ at $c{=}30$,
-$-0.221$ at $c{=}200$) sit inside the same band. The strong student never
+$7.44\times$ for values). Second, the calibration budget is inert. Under a controlled comparison
+that fixes the evaluation set ($n{=}100$) and varies only the calibration
+budget, affine mapping yields CHG $-0.249$ at $c{=}30$ and $-0.244$ at
+$c{=}200$: a difference of $0.005$. The mapper has converged; more
+calibration data cannot close a gap that is set by the information content
+of the translated cache, not by estimation variance. Third, structure and function class change little: per-layer merging
+($-0.275$), task-aware fine-tuning ($-0.216$), RAT ($-0.221$ to $-0.268$),
+and a per-head MLP mapper with two GELU layers ($-0.303$ at $c{=}30$,
+$-0.236$ at $c{=}200$) all sit inside the same band. Nonlinearity does not
+help; the bottleneck is not the function class. The strong student never
 approaches its own prefill ($0.503$); the best mapper reaches $0.365$. The
 weak 0.6B student tells the opposite story: affine at $c{=}200$ gives
 $+0.010$ $[-0.081, +0.102]$, statistically indistinguishable from its own
@@ -521,9 +528,13 @@ replacing the top third of layers is indistinguishable from the student
 harmful ($0.2653$, $0.2242$). The reading is architectural. Answer-relevant
 routing runs through early and mid layers, exactly where the teacher's cache
 is least compatible; the top layers, where the translated content is least
-damaging, are not where the answer is decided. Under the most favorable
-conditions any translator could hope for, the teacher's cache adds nothing
-and subtracts much. Exploitability is bounded at zero.
+damaging, are not where the answer is decided.
+The probes were run with two translators: the RAT mapper reported above and
+the affine mapper (the best in the ladder, gold $0.365$). Both show the same
+monotone decline. With affine at $\alpha{=}0.25$, gold CHG is $-0.086$
+(CI $[-0.18, +0.00]$); at $\alpha{=}0.75$, $-0.211$ (CI $[-0.41, -0.02]$).
+The verdict is robust to translator quality: even the best available mapper
+produces content that the frozen student cannot exploit.
 
 \subsection{Perplexity and Accuracy Decouple}
 \label{sec:decoupling}
@@ -621,8 +632,10 @@ pullbacks of the residual stream; the synthetic validation confirms the
 mathematics, and the real-model failure is itself an audit finding. We did
 not re-implement MoT's full replay pipeline; our claims concern the
 zero-re-prefill regime that its predecessors and our deployment target
-share. All runs use one hardware and one seed per configuration; the
-multi-seed sweep in the appendix-scale runs showed the same signs.
+share. The mapper-ladder results use a single seed per configuration; a
+three-seed sweep of the best mapper (affine, $c{=}30$) confirms the negative
+sign across seeds 42, 43, and 44 ($-0.14$, $-0.47$, $-0.46$), with seed 42
+being the most favorable case.
 
 \section{Conclusion}
 Cache translation promises to move a teacher's work into a smaller model. The
