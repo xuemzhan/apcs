@@ -1,0 +1,122 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{mot2026}
+\citation{c2c2025}
+\citation{lsc2026}
+\citation{kvcomm2025}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{streamingsink2023}
+\citation{cachegen2024}
+\citation{cacheblend2025}
+\citation{kvsharer2024}
+\citation{c2c2025}
+\citation{lsc2026}
+\citation{mot2026}
+\citation{kvcomm2025}
+\citation{interlat2025}
+\citation{hcache2025}
+\@writefile{toc}{\contentsline {section}{\numberline {2}A Survey of Cache-Level Communication Between Models}{2}{section.2}\protected@file@percent }
+\newlabel{sec:survey}{{2}{2}{A Survey of Cache-Level Communication Between Models}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}KV Reuse Within a Single Model}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Cross-Model Cache Translation}{2}{subsection.2.2}\protected@file@percent }
+\citation{stitching2021}
+\citation{relrep2022}
+\citation{platonic2024}
+\citation{aristotelian2026,perfectplatonic2025}
+\citation{vec2vec2025}
+\citation{taskvectors2023}
+\citation{gist2023}
+\citation{tunedlens2023}
+\citation{ffnmemory2021}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The three-hypothesis audit as a decision pipeline. Each hypothesis carries a dedicated instrument and a gate; H2's failure routes the audit to H3's oracle probes, which bound every translator without training one.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:framework}{{1}{3}{The three-hypothesis audit as a decision pipeline. Each hypothesis carries a dedicated instrument and a gate; H2's failure routes the audit to H3's oracle probes, which bound every translator without training one}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Cross-Model Representation Alignment}{3}{subsection.2.3}\protected@file@percent }
+\citation{c2c2025}
+\citation{lsc2026}
+\citation{mot2026}
+\citation{kvcomm2025}
+\citation{interlat2025}
+\citation{hcache2025}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. None of the cited evaluations uses an identity control or an exploitability probe.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:related}{{1}{4}{Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. None of the cited evaluations uses an identity control or an exploitability probe}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Frozen-Model Controllability}{4}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}What the Survey Does Not Establish}{4}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}The Three-Hypothesis Audit Framework}{4}{section.3}\protected@file@percent }
+\newlabel{sec:framework}{{3}{4}{The Three-Hypothesis Audit Framework}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Setup}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Hypotheses, Instruments, Gates}{5}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Audit Methodology}{5}{section.4}\protected@file@percent }
+\newlabel{sec:method}{{4}{5}{Audit Methodology}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Identity Control}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Disjoint Splits, Unified Prompts, and Honest Counters}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Mapper Ladder}{5}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Oracle Probes}{5}{subsection.4.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. No family reaches zero; more calibration data moves affine mapping from $-0.138$ to $-0.239$; $\lambda $ is inert over two orders of magnitude; the architecture-anchored RAT sits inside the same band.}}{6}{figure.2}\protected@file@percent }
+\newlabel{fig:landscape}{{2}{6}{The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. No family reaches zero; more calibration data moves affine mapping from $-0.138$ to $-0.239$; $\lambda $ is inert over two orders of magnitude; the architecture-anchored RAT sits inside the same band}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Pairs, Data, and Protocol Discipline}{6}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{6}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{5}{6}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}H1 Passes: Mechanics Is Not the Failure Mode}{6}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}H2 Fails for the Strong Student and Holds for the Weak One}{6}{subsection.5.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted. All runs use disjoint calibration/evaluation splits and the unified prompt format.}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:main}{{2}{7}{Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted. All runs use disjoint calibration/evaluation splits and the unified prompt format}{table.2}{}}
+\newlabel{tab:main}{{2}{7}{Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted. All runs use disjoint calibration/evaluation splits and the unified prompt format}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}RAT Component Ablations Separate Fluency From Capability}{7}{subsection.5.3}\protected@file@percent }
+\newlabel{sec:ratresults}{{5.3}{7}{RAT Component Ablations Separate Fluency From Capability}{subsection.5.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}H3: Oracle Probes Bound Exploitability at Zero}{7}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Perplexity and Accuracy Decouple}{7}{subsection.5.5}\protected@file@percent }
+\newlabel{sec:decoupling}{{5.5}{7}{Perplexity and Accuracy Decouple}{subsection.5.5}{}}
+\citation{ffnmemory2021}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: window injection is harmless only in the top third of layers; full replacement and early/mid injection are far below the student.}}{8}{figure.3}\protected@file@percent }
+\newlabel{fig:probes}{{3}{8}{Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: window injection is harmless only in the top third of layers; full replacement and early/mid injection are far below the student}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Channel Asymmetry}{8}{subsection.5.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Why Translation Fails: An Architectural Analysis}{8}{section.6}\protected@file@percent }
+\newlabel{sec:why}{{6}{8}{Why Translation Fails: An Architectural Analysis}{section.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student.}}{9}{figure.4}\protected@file@percent }
+\newlabel{fig:decoupling}{{4}{9}{Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student}{figure.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Implications for Cache-Translation Research}{9}{section.7}\protected@file@percent }
+\newlabel{sec:implications}{{7}{9}{Implications for Cache-Translation Research}{section.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{9}{section.8}\protected@file@percent }
+\bibstyle{plainnat}
+\bibdata{references}
+\bibcite{stitching2021}{{1}{2021}{{Bansal et~al.}}{{Bansal, Nakkiran, and Barak}}}
+\bibcite{tunedlens2023}{{2}{2023}{{Belrose et~al.}}{{Belrose, Ostrovsky, McKinney, Furman, Smith, Halawi, Biderman, and Steinhardt}}}
+\bibcite{lsc2026}{{3}{2026}{{Dery et~al.}}{{Dery, Yahav, Prior, Feng, Shen, and Szlam}}}
+\bibcite{interlat2025}{{4}{2025}{{Du et~al.}}{{}}}
+\bibcite{c2c2025}{{5}{2025}{{Fu et~al.}}{{Fu, Min, Zhang, Yan, Dai, Ouyang, and Wang}}}
+\bibcite{hcache2025}{{6}{2025}{{Gao et~al.}}{{}}}
+\bibcite{ffnmemory2021}{{7}{2021}{{Geva et~al.}}{{Geva, Schuster, Berant, and Levy}}}
+\bibcite{aristotelian2026}{{8}{2026}{{Gr{\"o}ger et~al.}}{{Gr{\"o}ger, Wen, and Brbi{\'c}}}}
+\bibcite{taskvectors2023}{{9}{2023}{{Hendel et~al.}}{{Hendel, Geva, and Globerson}}}
+\bibcite{platonic2024}{{10}{2024}{{Huh et~al.}}{{Huh, Cheung, Wang, and Isola}}}
+\bibcite{vec2vec2025}{{11}{2025}{{Jha et~al.}}{{Jha, Zhang, Shmatikov, and Morris}}}
+\bibcite{mot2026}{{12}{2026}{{Lee et~al.}}{{Lee, Song, Oh, Han, Park, Jang, and Lim}}}
+\bibcite{cachegen2024}{{13}{2024}{{Liu et~al.}}{{Liu, Li, Cheng, Ray, Huang, Zhang, Du, Yao, Lu, Ananthanarayanan, Maire, Hoffmann, Holtzman, and Jiang}}}
+\bibcite{relrep2022}{{14}{2022}{{Moschella et~al.}}{{Moschella, Maiorca, Fumero, Norelli, Locatello, and Rodol{\`a}}}}
+\bibcite{gist2023}{{15}{2023}{{Mu et~al.}}{{Mu, Li, and Goodman}}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{10}{section.9}\protected@file@percent }
+\bibcite{kvcomm2025}{{16}{2025}{{Shi et~al.}}{{}}}
+\bibcite{streamingsink2023}{{17}{2023}{{Xiao et~al.}}{{Xiao, Tian, Chen, Han, and Lewis}}}
+\bibcite{kvsharer2024}{{18}{2024}{{Yang et~al.}}{{Yang, Cao, Chen, Qin, Yang, Zhao, and Chen}}}
+\bibcite{cacheblend2025}{{19}{2025}{{Yao et~al.}}{{Yao, Li, Liu, Ray, Cheng, Zhang, Du, Lu, and Jiang}}}
+\bibcite{perfectplatonic2025}{{20}{2025}{{Ziyin and Chuang}}{{}}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Reproducibility}{11}{appendix.A}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Measurements}{11}{appendix.B}\protected@file@percent }
+\gdef \@abspage@last{11}
