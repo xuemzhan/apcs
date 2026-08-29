@@ -1,4 +1,4 @@
-"""CLI 端到端测试：每个 task 都能跑通且产出标准产物（真实 configs/pair_qwen3.yaml）。
+"""CLI 端到端测试：每个 task 都能跑通且产出标准产物（真实 configs/v15_*.yaml）。
 
 覆盖：
     t00（§28）：产出 model_compatibility.json 且含 verdict
@@ -19,11 +19,11 @@ import yaml
 from apcs.cli import main as cli_main
 from apcs.decision.runner import run_mvp_decision
 
-CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pair_qwen3.yaml"
+CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "v15_4b_1.7b_affine_c30_tail.yaml"
 
 
 def _setup_run(tmp_path: Path) -> Path:
-    """把真实 pair_qwen3.yaml 的 base_dir 重定向到 tmp_path/runs 并落盘为可跑配置。"""
+    """把真实 v15_4b_1.7b_affine_c30_tail.yaml 的 base_dir 重定向到 tmp_path/runs 并落盘为可跑配置。"""
     cfg = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8"))
     cfg["output"]["base_dir"] = str(tmp_path / "runs")
     cfg_path = tmp_path / "pair.yaml"
