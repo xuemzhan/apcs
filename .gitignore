@@ -110,3 +110,8 @@ output/pdf/*.blg
 output/pdf/*.out
 archive/
 paper/cache_audit/project_context.md
+
+# arXiv 提交包：仅保留源文件/bbl/成品 PDF，编译中间产物不入库
+paper/cache_audit/arxiv/*.aux
+paper/cache_audit/arxiv/*.out
+paper/cache_audit/arxiv/*.log
