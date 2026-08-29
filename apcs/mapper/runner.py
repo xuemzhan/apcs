@@ -1354,9 +1354,11 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     if provider_kind != "synthetic":
         n_calib = int(cfg.get("mapper", {}).get("real_calibration_samples", min(n_calib, 16)))
         n_eval_real = max(1, n_eval_real)
-        real_splits, seq = _real_kv_splits(
+        real_splits, seq_stats = _real_kv_splits(
             cfg, run_dir, n_calib=n_calib, n_eval=n_eval_real, requested_seq=seq
         )
+        seq = int(seq_stats.get("min", seq))
+        # 变长样本：positions=None 让 fit_ridge_aggregate 自动生成 per-sample positions
         n_agg = min(n_agg, n_calib)
     # 同一模型对：calib 与 held-out eval 复用同一组 w_t/w_s（§32），
     # 只换 latent Z —— 否则等于拿不同模型的 KV 做 train/eval。
@@ -1376,7 +1378,7 @@ def run_lightweight_mapper(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
         kind_de_rope = _de_rope_for_kind(cfg, kind, de_rope_fn)
         ridge_ref.lam = _ridge_lambda(cfg, kind)
         fit_ridge_aggregate(ridge_ref, calib, layer_map, kv_kind=kind,
-                            positions=np.arange(seq, dtype=np.float64),
+                            positions=None if real_splits is not None else np.arange(seq, dtype=np.float64),
                             de_rope_fn=kind_de_rope)  # §22：PCR 分母也 K/V 独立
         # ALS 无法按 Gram 聚合：把 n_agg 个样本沿 S 维 concat 成一个大 KV 后
         # 只 fit 一次（方案 A）。数学上等价于"用全部样本训练"（Ridge 情形已由

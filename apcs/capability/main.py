@@ -343,6 +343,142 @@ def run_main_capability(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     return {"status": gate2a, "metrics": metrics, "summary": md}
 
 
+# ---------------------------------------------------------------------------
+# 真实训练目标（Stage II: Advantage Residual Training）
+# ---------------------------------------------------------------------------
+
+
+def compute_training_loss(
+    student_logits: np.ndarray,
+    teacher_logits: np.ndarray,
+    target_ids: np.ndarray,
+    student_self_logits: np.ndarray | None = None,
+    lambda_task: float = 1.0,
+    lambda_self: float = 0.1,
+    lambda_teacher: float = 0.5,
+    lambda_kl: float = 0.1,
+    lambda_att: float = 0.05,
+) -> dict[str, float]:
+    """计算训练目标 loss（design.md §8 / paper §5.2 Stage II）。
+
+    L = λ_task * L_task + λ_self * L_self + λ_teacher * w * L_teacher + λ_kl * L_KL + λ_att * L_att
+
+    Args:
+        student_logits: Student模型输出logits (batch, seq_len, vocab_size)
+        teacher_logits: Teacher模型输出logits (batch, seq_len, vocab_size)
+        target_ids: 目标token IDs (batch, seq_len)
+        student_self_logits: Student self-prefill的logits（用于L_self约束）
+        lambda_task: 任务loss权重
+        lambda_self: 自我行为保护loss权重
+        lambda_teacher: Teacher guidance loss权重
+        lambda_kl: KL散度loss权重
+        lambda_att: Attention output loss权重
+
+    Returns:
+        各项loss的字典和总loss
+    """
+    from ..metrics import kl_divergence
+
+    losses = {}
+
+    # L_task: 交叉熵任务loss
+    # 使用teacher logits作为soft target（知识蒸馏风格）
+    if student_logits.shape[-1] > 0 and target_ids.max() < student_logits.shape[-1]:
+        # Hard target loss
+        vocab_size = student_logits.shape[-1]
+        flat_logits = student_logits.reshape(-1, vocab_size)
+        flat_targets = target_ids.reshape(-1)
+        
+        # 数值稳定的交叉熵
+        logits_max = flat_logits.max(axis=-1, keepdims=True)
+        log_probs = flat_logits - logits_max - np.log(np.exp(flat_logits - logits_max).sum(axis=-1, keepdims=True) + 1e-10)
+        
+        # 标签平滑
+        smooth_factor = 0.1
+        n_classes = vocab_size
+        smooth_loss = -log_probs.mean(axis=-1)
+        hard_loss = -log_probs[np.arange(len(flat_targets)), flat_targets]
+        l_task = ((1 - smooth_factor) * hard_loss + smooth_factor * smooth_loss).mean()
+        losses["l_task"] = float(l_task)
+    else:
+        losses["l_task"] = 0.0
+
+    # L_self: 保护Student稳定行为（KL约束）
+    if student_self_logits is not None:
+        # KL(student || student_self)
+        student_probs = _softmax(student_logits)
+        self_probs = _softmax(student_self_logits)
+        
+        # 数值稳定的KL散度
+        log_student = np.log(student_probs + 1e-10)
+        log_self = np.log(self_probs + 1e-10)
+        kl = np.sum(student_probs * (log_student - log_self), axis=-1)
+        l_self = np.mean(kl)
+        losses["l_self"] = float(l_self)
+    else:
+        losses["l_self"] = 0.0
+
+    # L_teacher: Teacher guidance（只使用Train Split Margin）
+    # 使用teacher logits作为指导信号
+    student_probs_for_teacher = _softmax(student_logits)
+    teacher_probs = _softmax(teacher_logits)
+    
+    # 负KL散度作为guidance（student应该接近teacher）
+    log_student_for_teacher = np.log(student_probs_for_teacher + 1e-10)
+    l_teacher = -np.sum(teacher_probs * log_student_for_teacher, axis=-1).mean()
+    losses["l_teacher"] = float(l_teacher)
+
+    # L_KL: Next-token KL散度
+    if student_logits.shape[-1] > 0:
+        student_probs_kl = _softmax(student_logits[:, :-1, :])
+        teacher_probs_kl = _softmax(teacher_logits[:, :-1, :])
+        
+        # KL(teacher || student)
+        log_teacher = np.log(teacher_probs_kl + 1e-10)
+        log_student = np.log(student_probs_kl + 1e-10)
+        kl_teacher_student = np.sum(teacher_probs_kl * (log_teacher - log_student), axis=-1)
+        l_kl = np.mean(kl_teacher_student)
+        losses["l_kl"] = float(l_kl)
+    else:
+        losses["l_kl"] = 0.0
+
+    # L_att: Attention output对齐（简化版，使用logit差异代理）
+    # 真正的L_att需要attention weights，这里用logit余弦相似度近似
+    if student_logits.shape[-1] > 0:
+        student_flat = student_logits.reshape(-1, student_logits.shape[-1])
+        teacher_flat = teacher_logits.reshape(-1, teacher_logits.shape[-1])
+        
+        # 归一化
+        student_norm = student_flat / (np.linalg.norm(student_flat, axis=-1, keepdims=True) + 1e-10)
+        teacher_norm = teacher_flat / (np.linalg.norm(teacher_flat, axis=-1, keepdims=True) + 1e-10)
+        
+        # 余弦相似度
+        cosine_sim = np.sum(student_norm * teacher_norm, axis=-1)
+        l_att = 1.0 - cosine_sim.mean()  # 最小化 1 - cosine
+        losses["l_att"] = float(l_att)
+    else:
+        losses["l_att"] = 0.0
+
+    # 总loss
+    total_loss = (
+        lambda_task * losses["l_task"]
+        + lambda_self * losses["l_self"]
+        + lambda_teacher * lambda_teacher * losses["l_teacher"]  # 注意：lambda_teacher在公式中是系数w
+        + lambda_kl * losses["l_kl"]
+        + lambda_att * losses["l_att"]
+    )
+    losses["total_loss"] = float(total_loss)
+
+    return losses
+
+
+def _softmax(x: np.ndarray) -> np.ndarray:
+    """数值稳定的softmax。"""
+    x_max = x.max(axis=-1, keepdims=True)
+    exp_x = np.exp(x - x_max)
+    return exp_x / (exp_x.sum(axis=-1, keepdims=True) + 1e-10)
+
+
 def _gap_strata_report(
     scores: dict[str, list[list[float]]],
     decisions: dict[str, list[list[int]]],

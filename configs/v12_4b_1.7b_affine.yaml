@@ -1,0 +1,68 @@
+# 协议 v1.2 验证：P0 全套（self_kv 恒等对照 + 统一格式 + native_rescale + summary 基线）
+# mapper 类型 = affine
+experiment:
+  name: v12-4b-1.7b-affine
+  run_id: ${experiment.name}-${run.timestamp}
+
+provider:
+  kv: hf
+  score: synthetic
+  timing: hf
+
+teacher:
+  model_id: Qwen/Qwen3-4b
+  revision: main
+  dtype: float16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  num_layers: 36
+  num_kv_heads: 8
+  head_dim: 128
+
+student:
+  model_id: Qwen/Qwen3-1.7b
+  revision: main
+  dtype: float16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  freeze: true
+  num_layers: 28
+  num_kv_heads: 8
+  head_dim: 128
+
+datasets:
+  fidelity:
+    - hellaswag
+    - arc_challenge
+  teacher_advantage:
+    primary: mmlu
+
+context_lengths: [512]
+
+mapper:
+  type: affine
+  separate_kv: true
+  de_rope: true
+  de_rope_k: true
+  de_rope_v: false
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
+  inject_eval_calib_samples: 30
+  layer_selection: proportional
+  inject_eval: true
+  rope_align: rotated
+
+inject_eval:
+  max_samples: 60
+  seed: 42
+  calib_eval_split: true
+  calib_samples: 30
+  calib_shuffle: true
+  persist_kv: true
+  native_rescale: true
+  summary_baseline: true
+  ablation_modes: [self_kv, native, k_only, v_only, kv_both]
+
+seeds: [42]
+output:
+  base_dir: reports/runs

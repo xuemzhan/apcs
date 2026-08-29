@@ -268,3 +268,139 @@ def run_layer_alignment(cfg: dict[str, Any], run_dir) -> dict[str, Any]:
     )
     (run_dir / "summary.md").write_text(summary, encoding="utf-8")
     return {"status": "OK", "metrics": metrics, "summary": summary}
+
+
+# ---------------------------------------------------------------------------
+# 配置化 Alignment 策略选择
+# ---------------------------------------------------------------------------
+
+
+def select_layer_mapping(
+    strategy: str,
+    n_t: int,
+    n_s: int,
+    sim_matrix: np.ndarray | None = None,
+    k: int = 2,
+    alpha: float = 0.5,
+) -> list[list[int]]:
+    """根据策略名称选择并执行层映射。
+
+    Args:
+        strategy: 策略名称，支持：
+            - "proportional": 按层数比例均摊
+            - "last_layer": 每个Student层取最末k个Teacher层
+            - "data_driven_topk": 基于相似度矩阵top-k
+            - "geometry_aware_topk": data-driven + 邻近层平滑
+        n_t: Teacher层数
+        n_s: Student层数
+        sim_matrix: 相似度矩阵 (n_s, n_t)，data_driven_topk和geometry_aware_topk需要
+        k: top-k值
+        alpha: geometry_aware_topk的平滑系数
+
+    Returns:
+        层映射 list[list[int]]
+
+    Raises:
+        ValueError: 未知策略或缺少必要参数
+    """
+    if strategy == "proportional":
+        return proportional_mapping(n_t, n_s)
+    elif strategy == "last_layer":
+        return last_layer_mapping(n_t, n_s, k=k)
+    elif strategy == "data_driven_topk":
+        if sim_matrix is None:
+            raise ValueError("data_driven_topk requires sim_matrix")
+        return data_driven_topk(sim_matrix, k=k)
+    elif strategy == "geometry_aware_topk":
+        if sim_matrix is None:
+            raise ValueError("geometry_aware_topk requires sim_matrix")
+        return geometry_aware_topk(sim_matrix, k=k, alpha=alpha)
+    else:
+        raise ValueError(
+            f"Unknown alignment strategy: {strategy}. "
+            f"Supported: proportional, last_layer, data_driven_topk, geometry_aware_topk"
+        )
+
+
+def compare_alignment_strategies(
+    n_t: int,
+    n_s: int,
+    sim_matrix: np.ndarray | None = None,
+    k: int = 2,
+    alpha: float = 0.5,
+) -> dict[str, list[list[int]]]:
+    """比较所有4种alignment策略，返回结果字典。
+
+    Args:
+        n_t: Teacher层数
+        n_s: Student层数
+        sim_matrix: 相似度矩阵
+        k: top-k值
+        alpha: 平滑系数
+
+    Returns:
+        策略名称到映射的字典
+    """
+    results = {}
+    
+    # 始终包含proportional和last_layer
+    results["proportional"] = proportional_mapping(n_t, n_s)
+    results["last_layer"] = last_layer_mapping(n_t, n_s, k=k)
+    
+    # 如果有sim_matrix，也包含data-driven策略
+    if sim_matrix is not None:
+        results["data_driven_topk"] = data_driven_topk(sim_matrix, k=k)
+        results["geometry_aware_topk"] = geometry_aware_topk(sim_matrix, k=k, alpha=alpha)
+    
+    return results
+
+
+def evaluate_alignment_quality(
+    mapping: list[list[int]],
+    sim_matrix: np.ndarray,
+) -> dict[str, float]:
+    """评估层映射质量。
+
+    Args:
+        mapping: 层映射 list[list[int]]
+        sim_matrix: 相似度矩阵 (n_s, n_t)
+
+    Returns:
+        质量指标字典
+    """
+    n_s = len(mapping)
+    
+    # 计算平均相似度
+    similarities = []
+    for s in range(n_s):
+        teacher_layers = mapping[s]
+        if teacher_layers:
+            avg_sim = np.mean([sim_matrix[s, t] for t in teacher_layers])
+            similarities.append(avg_sim)
+    
+    avg_similarity = np.mean(similarities) if similarities else 0.0
+    
+    # 计算映射多样性（每个Student层映射到的不同Teacher层数）
+    unique_teachers = set()
+    for teacher_layers in mapping:
+        unique_teachers.update(teacher_layers)
+    
+    diversity = len(unique_teachers) / sim_matrix.shape[1] if sim_matrix.shape[1] > 0 else 0.0
+    
+    # 计算映射一致性（相邻Student层映射的重叠度）
+    consistency_scores = []
+    for s in range(1, n_s):
+        prev_set = set(mapping[s - 1])
+        curr_set = set(mapping[s])
+        if prev_set and curr_set:
+            overlap = len(prev_set & curr_set) / max(len(prev_set | curr_set), 1)
+            consistency_scores.append(overlap)
+    
+    consistency = np.mean(consistency_scores) if consistency_scores else 1.0
+    
+    return {
+        "avg_similarity": float(avg_similarity),
+        "diversity": float(diversity),
+        "consistency": float(consistency),
+        "n_mapped_layers": len(unique_teachers),
+    }

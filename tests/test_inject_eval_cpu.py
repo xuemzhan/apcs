@@ -33,14 +33,14 @@ class TestScoreChoices:
     """score_choices 数值正确性（零 torch 依赖）。"""
 
     def test_equal_logits(self):
-        """均等 logits → softmax 1/vocab_size 每个 token → choice id 32 概率 0.01。"""
+        """均等 logits → softmax 仅在 4 选项间做 → 每个选项概率 0.25。"""
         from apcs.inference.evaluator import score_choices
 
         logits = np.zeros(100)
         score, decision = score_choices(logits)
-        # 每个 token 概率 = 1/100 = 0.01；A/B/C/D 各 0.01 → argmax = 0 (A)
+        # 4 选项等概率 → argmax = 0 (A)，概率 0.25
         assert decision == 0
-        assert abs(score - 0.01) < 1e-6
+        assert abs(score - 0.25) < 1e-6
 
     def test_one_hot_dominant(self):
         """A token id 位置 logits=100，其余 0 → score ≈ 1.0，decision = 0。"""
@@ -75,12 +75,12 @@ class TestScoreChoices:
         assert decision == 0  # A wins
 
     def test_zero_logits(self):
-        """全零 logits → softmax 1/vocab_size 每个 token → choice id 32 概率 0.001。"""
+        """全零 logits → softmax 仅在 4 选项间做 → 每个选项概率 0.25。"""
         from apcs.inference.evaluator import score_choices
 
         logits = np.zeros(1000)
         score, decision = score_choices(logits)
-        assert abs(score - 0.001) < 1e-6
+        assert abs(score - 0.25) < 1e-6
 
     def test_negative_logits(self):
         """负 logits 仍应产生有效 softmax。"""

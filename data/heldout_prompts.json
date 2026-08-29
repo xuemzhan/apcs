@@ -1,0 +1,248 @@
+{
+  "split": "heldout",
+  "n_prompts": 20,
+  "timestamp": "2026-08-28T23:12:15.669654",
+  "hash": "8151037b1e83b17b59855bff6550fc12d52d92edae2c20fe0e7df221fd9528cc",
+  "prompts": [
+    {
+      "id": "val_001",
+      "domain": "factual",
+      "question": "What is the capital of Germany?",
+      "choices": [
+        "Munich",
+        "Berlin",
+        "Hamburg",
+        "Frankfurt"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_002",
+      "domain": "science",
+      "question": "What is the boiling point of water?",
+      "choices": [
+        "90\u00b0C",
+        "100\u00b0C",
+        "110\u00b0C",
+        "120\u00b0C"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_003",
+      "domain": "mathematical",
+      "question": "What is 15 \u00f7 3?",
+      "choices": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "val_004",
+      "domain": "reasoning",
+      "question": "If A > B and B > C, then:",
+      "choices": [
+        "A > C",
+        "A < C",
+        "A = C",
+        "Cannot determine"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "val_005",
+      "domain": "history",
+      "question": "When did the French Revolution begin?",
+      "choices": [
+        "1776",
+        "1789",
+        "1799",
+        "1804"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_006",
+      "domain": "geography",
+      "question": "What is the smallest country?",
+      "choices": [
+        "Monaco",
+        "Vatican City",
+        "San Marino",
+        "Liechtenstein"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_007",
+      "domain": "language",
+      "question": "What is a verb?",
+      "choices": [
+        "Happy",
+        "Run",
+        "Beautiful",
+        "House"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_008",
+      "domain": "common_sense",
+      "question": "What do you use to see?",
+      "choices": [
+        "Ears",
+        "Eyes",
+        "Nose",
+        "Mouth"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_009",
+      "domain": "technical",
+      "question": "What does GPU stand for?",
+      "choices": [
+        "Graphics Processing Unit",
+        "General Processing Unit",
+        "Graphics Program Utility",
+        "General Purpose Unit"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "val_010",
+      "domain": "creative",
+      "question": "What is the opposite of 'dark'?",
+      "choices": [
+        "Dim",
+        "Bright",
+        "Shadow",
+        "Night"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_011",
+      "domain": "factual",
+      "question": "What is the largest planet?",
+      "choices": [
+        "Saturn",
+        "Jupiter",
+        "Neptune",
+        "Uranus"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_012",
+      "domain": "science",
+      "question": "What is the speed of light?",
+      "choices": [
+        "300,000 km/s",
+        "150,000 km/s",
+        "450,000 km/s",
+        "600,000 km/s"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "val_013",
+      "domain": "mathematical",
+      "question": "What is \u221a16?",
+      "choices": [
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "val_014",
+      "domain": "reasoning",
+      "question": "If no A are B, and all C are A, then:",
+      "choices": [
+        "All C are B",
+        "No C are B",
+        "Some C are B",
+        "Cannot determine"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_015",
+      "domain": "history",
+      "question": "Who wrote the Declaration of Independence?",
+      "choices": [
+        "Washington",
+        "Jefferson",
+        "Franklin",
+        "Adams"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_016",
+      "domain": "geography",
+      "question": "What is the deepest ocean?",
+      "choices": [
+        "Atlantic",
+        "Indian",
+        "Arctic",
+        "Pacific"
+      ],
+      "answer": "D"
+    },
+    {
+      "id": "val_017",
+      "domain": "language",
+      "question": "What is a noun?",
+      "choices": [
+        "Run",
+        "Happy",
+        "Dog",
+        "Quickly"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "val_018",
+      "domain": "common_sense",
+      "question": "What do you use to listen to music?",
+      "choices": [
+        "Eyes",
+        "Ears",
+        "Nose",
+        "Hands"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "val_019",
+      "domain": "technical",
+      "question": "What does USB stand for?",
+      "choices": [
+        "Universal Serial Bus",
+        "United Serial Bus",
+        "Universal System Bus",
+        "United System Bus"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "val_020",
+      "domain": "creative",
+      "question": "What is the opposite of 'fast'?",
+      "choices": [
+        "Quick",
+        "Rapid",
+        "Slow",
+        "Speedy"
+      ],
+      "answer": "C"
+    }
+  ]
+}

@@ -93,3 +93,19 @@ Thumbs.db
 # Jupyter 检查点（不入库）
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
+# =========================================================
+# v1.2+ 追加：大体量运行数据与临时产物不入库（metrics/summary 等
+# 小文件单独选择性提交），保持仓库轻量
+# =========================================================
+reports/runs/**/*.npz
+reports/runs/**/*.bin
+reports/runs/**/kv_store/
+reports/runs/**/stdout.log
+humanizer.tgz
+hza.tgz
+tmp/
+output/pdf/*.aux
+output/pdf/*.bbl
+output/pdf/*.blg
+output/pdf/*.out
+archive/

@@ -1,0 +1,72 @@
+{
+  "experiment": {
+    "name": "qwen3-4b-to-1.7b-taskaware",
+    "run_id": "qwen3-4b-to-1.7b-taskaware-20260829-085946"
+  },
+  "provider": {
+    "kv": "hf",
+    "score": "synthetic",
+    "timing": "hf"
+  },
+  "teacher": {
+    "model_id": "Qwen/Qwen3-4B",
+    "revision": "main",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "device_map": "cuda:0",
+    "num_layers": 36,
+    "num_kv_heads": 8,
+    "head_dim": 128
+  },
+  "student": {
+    "model_id": "Qwen/Qwen3-1.7B",
+    "revision": "main",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "device_map": "cuda:0",
+    "freeze": true,
+    "num_layers": 28,
+    "num_kv_heads": 8,
+    "head_dim": 128
+  },
+  "datasets": {
+    "fidelity": [
+      "hellaswag",
+      "arc_challenge",
+      "winogrande"
+    ],
+    "teacher_advantage": {
+      "primary": "mmlu"
+    }
+  },
+  "context_lengths": [
+    512
+  ],
+  "mapper": {
+    "type": "task_aware",
+    "separate_kv": true,
+    "de_rope": true,
+    "de_rope_k": true,
+    "de_rope_v": false,
+    "ridge_lambda_k": 0.001,
+    "ridge_lambda_v": 0.001,
+    "lr": "5e-4",
+    "n_finetune_steps": 30,
+    "inject_eval_calib_samples": 50,
+    "layer_selection": "proportional",
+    "inject_eval": true
+  },
+  "inject_eval": {
+    "max_samples": 20,
+    "seed": 0,
+    "ablation_modes": [
+      "kv_both"
+    ]
+  },
+  "seeds": [
+    0
+  ],
+  "output": {
+    "base_dir": "reports/runs"
+  }
+}

@@ -552,6 +552,46 @@ def _extract_kv_numpy(pkv, n_layers: int, dtype_bytes: int = 2) -> np.ndarray:
     return np.ascontiguousarray(stack, dtype=np.float32)
 
 
+def _extract_kv_separate(pkv, n_layers: int) -> tuple[np.ndarray, np.ndarray]:
+    """把 HF past_key_values 拆分为独立的 K 和 V numpy 数组。
+
+    与 _extract_kv_numpy 互为替代：_extract_kv_numpy 拼接 K|V 为
+    (L, S, H, 2D)，本函数拆开为 (L, S, H, D) 各一份。
+    用于 4-way 消融实验（§22 K/V 独立）中需要分别变换 K 和 V 的场景。
+
+    Returns:
+        (k_np, v_np): 各 (L, S, H, head_dim) float32 numpy，
+        K 在前 V 在后，与 _extract_kv_numpy 的约定一致。
+    """
+    import torch  # type: ignore
+
+    k_layers: list[Any] = []
+    v_layers: list[Any] = []
+    if hasattr(pkv, "key_cache"):  # DynamicCache
+        keys, vals = pkv.key_cache, pkv.value_cache
+        for k, v in zip(keys, vals):
+            k = k[0]  # drop batch dim → (H, S, D)
+            v = v[0]
+            k_layers.append(k.permute(1, 0, 2))  # (S, H, D)
+            v_layers.append(v.permute(1, 0, 2))
+    else:  # tuple of (K, V) per layer
+        for k, v in pkv:
+            k = k[0]
+            v = v[0]
+            k_layers.append(k.permute(1, 0, 2))
+            v_layers.append(v.permute(1, 0, 2))
+    # 不足 n_layers 时补零（与 _extract_kv_numpy 一致）
+    while len(k_layers) < n_layers:
+        k_layers.append(torch.zeros_like(k_layers[0]))
+        v_layers.append(torch.zeros_like(v_layers[0]))
+    k_np = torch.stack(k_layers[:n_layers]).float().cpu().numpy()
+    v_np = torch.stack(v_layers[:n_layers]).float().cpu().numpy()
+    return (
+        np.ascontiguousarray(k_np, dtype=np.float32),
+        np.ascontiguousarray(v_np, dtype=np.float32),
+    )
+
+
 def _build_cache_from_kv(
     kv: np.ndarray,
     device: str | None = None,
@@ -682,19 +722,38 @@ class TorchBackend(InferenceBackend):
         dtype = getattr(torch, dtype_name, torch.bfloat16)
 
         # 模型源：modelscope.cn 优先（AutoModelForCausalLM 与 transformers 接口对齐）
+        # 如果 modelscope 失败（如服务器不可用），回退到 transformers + 本地缓存
         try:
             from modelscope import AutoModelForCausalLM, AutoTokenizer  # type: ignore
-        except ImportError:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                revision=revision,
+                torch_dtype=dtype,
+                device_map={"": device},
+                attn_implementation="sdpa",
+            )
+            tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        except Exception as e:
+            # Fallback: transformers + 本地缓存路径
             from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
-
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            revision=revision,
-            torch_dtype=dtype,
-            device_map={"": device},
-            attn_implementation="sdpa",
-        )
-        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+            import os
+            # 尝试从 modelscope 本地缓存加载
+            cache_path = os.path.expanduser(
+                f"~/.cache/modelscope/models/{model_id.replace('/', '--')}/snapshots/master"
+            )
+            if not os.path.exists(cache_path):
+                cache_path = model_id  # fallback to hub
+            logger.warning(
+                "[HFBackend] ModelScope unavailable (%s), loading from %s",
+                str(e)[:100], cache_path,
+            )
+            model = AutoModelForCausalLM.from_pretrained(
+                cache_path,
+                torch_dtype=dtype,
+                device_map={"": device},
+                attn_implementation="sdpa",
+            )
+            tokenizer = AutoTokenizer.from_pretrained(cache_path)
         model.eval()
         return TorchModel(model, tokenizer, role=str(run.get("role", "")), device=device)
 
@@ -789,12 +848,13 @@ class TorchBackend(InferenceBackend):
         if not isinstance(past_key_values, tuple) and not hasattr(
             past_key_values, "key_cache"
         ):
-            num_attn_heads = int(
-                getattr(model.model.config, "num_attention_heads", 0)
-            ) or None
+            # ◆ D2 修复：不传 num_attention_heads —— GQA 模型的 DynamicCache
+            #   必须存 num_kv_heads（如 Qwen3-1.7B 存 8 头），HF attention 内部
+            #   自行 repeat_kv 扩展到 attn_heads。此前传 attn_heads 会把 cache
+            #   扩到 16 头，attention 再扩一次 → 32 头形状崩溃（双重扩展）。
             cache = _build_cache_from_kv(
                 past_key_values, device=model.device, dtype=model.model.dtype,
-                num_attention_heads=num_attn_heads,
+                num_attention_heads=None,
             )
         # §52 零 prefill 守卫：断言 past_len == position_offset
         if hasattr(cache, "key_cache"):
@@ -825,21 +885,19 @@ class TorchBackend(InferenceBackend):
         校验失败显式 raise（§52 禁止 8，不静默 re-prefill）。
         返回 DynamicCache（decode 复用）。
 
-        §52 inject-eval GQA 支持：
-            Student 可能使用 GQA（如 Qwen3-1.7B: 8 kv_heads, 16 attn_heads）。
-            此处自动检测 num_attention_heads 并做 repeat_interleave 扩展。
+        ◆ D2 修复（GQA 双重扩展）：cache 必须保持 num_kv_heads 维度
+        （如 Qwen3-1.7B 存 8 kv-heads），GQA 的 8→16 头扩展由 HF attention
+        内部 repeat_kv 完成。此前此处传 num_attention_heads 会预先扩展到
+        16 头，attention 再扩一次 → 32 头，decode 形状崩溃。
         """
         kv = np.asarray(kv)
         if kv.ndim != 4:
             raise NotImplementedError(
                 f"注入 KV 形状 {kv.shape} 非法（需 (L, S, H, 2D)）：inject 必须显式校验，禁止静默 re-prefill（§52 禁止 8）"
             )
-        num_attn_heads = int(
-            getattr(model.model.config, "num_attention_heads", 0)
-        ) or None
         cache = _build_cache_from_kv(
             kv, device=model.device, dtype=model.model.dtype,
-            num_attention_heads=num_attn_heads,
+            num_attention_heads=None,
         )
         model.injected_kv = kv
         return cache

@@ -1,0 +1,17 @@
+{
+  "n_samples": 20,
+  "n_capability_records": 80,
+  "zero_prefill_verified": true,
+  "method_means": {
+    "teacher": 0.6897252036572402,
+    "student": 0.6985163032192329,
+    "text": 0.6985163032192329,
+    "ridge_kv_both": 0.8022956968665922
+  },
+  "ppl_means": {
+    "ridge_kv_both": 128.11248319998907
+  },
+  "chg": 0.10377939364735933,
+  "ridge_kv_both_score_mean": 0.8022956968665922,
+  "student_score_mean": 0.6985163032192329
+}

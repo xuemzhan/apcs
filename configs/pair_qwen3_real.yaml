@@ -118,6 +118,22 @@ timing:
   sync_cuda: true
   report: [p50, p95]
 
+# ---- inject-eval (§22 4-way 消融) ----
+inject_eval:
+  max_samples: 128
+  text_handoff_max_chars: 400
+  export_hidden_states: true
+  seed: 0
+  default_choices: ["A", "B", "C", "D"]
+  # §22 四种 K×V 干预组合 —— 每种独立运行，产出 PPL + 多选准确率
+  ablation_modes:
+    - native       # Case 1: teacher 原生 KV（baseline）
+    - k_only       # Case 2: Mapped K + Native V
+    - v_only       # Case 3: Native K + Mapped V
+    - kv_both      # Case 4: Mapped K + Mapped V（Full Handoff）
+    - zero_kv      # Case 5: Zero KV cache
+    - random_proj  # Case 6: Random projection
+
 # ---- Cache residency (design.md §50) ----
 cache_residency: cpu
 kv_save_full_debug:

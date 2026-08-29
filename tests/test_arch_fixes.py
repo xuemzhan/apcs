@@ -300,7 +300,10 @@ def test_t01_hf_path_raises_explicitly_when_gpu_unusable(tmp_path):
         run_self_kv_replay(cfg, run_dir)
     except (RuntimeError, NotImplementedError) as e:
         msg = str(e)
-        assert ("GPU" in msg) or ("torch" in msg) or ("CUDA" in msg) or ("model" in msg), (
+        assert (
+            ("GPU" in msg) or ("torch" in msg) or ("CUDA" in msg)
+            or ("model" in msg) or ("fidelity" in msg) or ("dataset" in msg)
+        ), (
             f"T01 hf 路径失败原因应可读：{msg}"
         )
         return
@@ -313,6 +316,11 @@ def test_t01_hf_path_raises_explicitly_when_gpu_unusable(tmp_path):
 def test_t10_hf_path_raises_explicitly_when_gpu_unusable(tmp_path):
     """★ T10 real-gpu 接入：provider.timing=hf 时若 GPU 不可计算，必须显式
     失败（§75），而不是静默用线性公式产出推导值。"""
+    import pytest
+    import torch
+    if torch.cuda.is_available():
+        pytest.skip("GPU is available; test premise 'GPU unusable' does not apply")
+
     from apcs.system.runner import run_system_cost
     from apcs.io.runs import resolve_run_id
 

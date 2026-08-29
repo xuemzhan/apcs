@@ -1,0 +1,1097 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": false,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "hellaswag",
+  "provenance": {
+    "teacher_model_id": "Qwen/Qwen3-4b",
+    "student_model_id": "Qwen/Qwen3-1.7b",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "f3051e1dba5b99c3dd2881e5d3162c0959a3e391",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 20,
+    "n_eval_samples": 20,
+    "calib_sample_ids": [
+      "hs-36100",
+      "hs-41334",
+      "hs-33350",
+      "hs-16108",
+      "hs-9043",
+      "hs-18086",
+      "hs-7705",
+      "hs-16960",
+      "hs-34433",
+      "hs-48527",
+      "hs-566",
+      "hs-11242",
+      "hs-42025",
+      "hs-1805",
+      "hs-3871",
+      "hs-26216",
+      "hs-49896",
+      "hs-25862",
+      "hs-11817",
+      "hs-6760"
+    ],
+    "eval_sample_ids": [
+      "hs-14170",
+      "hs-35119",
+      "hs-11278",
+      "hs-46749",
+      "hs-6252",
+      "hs-19083",
+      "hs-43223",
+      "hs-40845",
+      "hs-24098",
+      "hs-22336",
+      "hs-7128",
+      "hs-21624",
+      "hs-45977",
+      "hs-837",
+      "hs-19255",
+      "hs-14159",
+      "hs-22114",
+      "hs-32375",
+      "hs-13412",
+      "hs-48761"
+    ],
+    "rope_align": "rotated",
+    "ablation_modes": [
+      "native",
+      "kv_both"
+    ]
+  },
+  "omitted_methods": [
+    "base_only",
+    "base_plus_adv",
+    "full_apcs"
+  ],
+  "omitted_reason": "advantage branch frozen (T08); methods not yet trained",
+  "method_accuracy": {
+    "teacher": {
+      "accuracy": 0.7,
+      "correct": 14,
+      "total": 20,
+      "score_mean": 0.8168919597787119,
+      "gold_prob_mean": 0.6283512442536174
+    },
+    "student": {
+      "accuracy": 0.4,
+      "correct": 8,
+      "total": 20,
+      "score_mean": 0.722016592256973,
+      "gold_prob_mean": 0.4211108378259819
+    },
+    "text": {
+      "accuracy": 0.4,
+      "correct": 8,
+      "total": 20,
+      "score_mean": 0.7260926489616223,
+      "gold_prob_mean": 0.4230656632873928
+    },
+    "ridge_native": {
+      "accuracy": 0.1,
+      "correct": 2,
+      "total": 20,
+      "score_mean": 0.0,
+      "gold_prob_mean": null
+    },
+    "ridge_kv_both": {
+      "accuracy": 0.1,
+      "correct": 2,
+      "total": 20,
+      "score_mean": 0.0,
+      "gold_prob_mean": null
+    }
+  },
+  "records": [
+    {
+      "method": "teacher",
+      "sample_id": "hs-14170",
+      "seed": 42,
+      "score": 0.6814406233943914,
+      "decision": 2,
+      "correct": false,
+      "gold_prob": 0.117037028893255
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-35119",
+      "seed": 42,
+      "score": 0.9470387865868338,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9470387865868338
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-11278",
+      "seed": 42,
+      "score": 0.9049181007451461,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.07227661936035044
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-46749",
+      "seed": 42,
+      "score": 0.9903469039336826,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.9903469039336826
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-6252",
+      "seed": 42,
+      "score": 0.39395105141218373,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.3490212876889599
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-19083",
+      "seed": 42,
+      "score": 0.94291734227547,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.94291734227547
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-43223",
+      "seed": 42,
+      "score": 0.8706324913447699,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8706324913447699
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-40845",
+      "seed": 42,
+      "score": 0.8730134530357051,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8730134530357051
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-24098",
+      "seed": 42,
+      "score": 0.8187773517099621,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8187773517099621
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-22336",
+      "seed": 42,
+      "score": 0.5970538956836889,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.5970538956836889
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-7128",
+      "seed": 42,
+      "score": 0.8039695230731416,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.1223332479995734
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-21624",
+      "seed": 42,
+      "score": 0.9745777452645424,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9745777452645424
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-45977",
+      "seed": 42,
+      "score": 0.4717428241739709,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.4717428241739709
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-837",
+      "seed": 42,
+      "score": 0.8857362358906631,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8857362358906631
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-19255",
+      "seed": 42,
+      "score": 0.8253839041672114,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.014538293749369522
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-14159",
+      "seed": 42,
+      "score": 0.8773938414413927,
+      "decision": 2,
+      "correct": false,
+      "gold_prob": 0.04103625604006656
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-22114",
+      "seed": 42,
+      "score": 0.6462126185300916,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": 0.6462126185300916
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-32375",
+      "seed": 42,
+      "score": 0.8779791656380176,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8779791656380176
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-13412",
+      "seed": 42,
+      "score": 0.9733167565310263,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9733167565310263
+    },
+    {
+      "method": "teacher",
+      "sample_id": "hs-48761",
+      "seed": 42,
+      "score": 0.9814365807423484,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9814365807423484
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-14170",
+      "seed": 42,
+      "score": 0.43624308573691084,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.19817235346072937,
+      "ppl": 16.621889041784303,
+      "prefill_ms": 84.6177814528346
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-14170",
+      "seed": 42,
+      "score": 0.43624308573691084,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.19817235346072937
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-14170",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-14170",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-35119",
+      "seed": 42,
+      "score": 0.9348542109677751,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9348542109677751,
+      "ppl": 6.8128667281027315,
+      "prefill_ms": 59.54492371529341
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-35119",
+      "seed": 42,
+      "score": 0.9348542109677751,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9348542109677751
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-35119",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-35119",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-11278",
+      "seed": 42,
+      "score": 0.946391942678737,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.022873992099684163,
+      "ppl": 18.24260364111132,
+      "prefill_ms": 57.51934926956892
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-11278",
+      "seed": 42,
+      "score": 0.946391942678737,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.022873992099684163
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-11278",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-11278",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-46749",
+      "seed": 42,
+      "score": 0.8553974019282103,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8553974019282103,
+      "ppl": 4.85393809476312,
+      "prefill_ms": 64.39375225454569
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-46749",
+      "seed": 42,
+      "score": 0.8553974019282103,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8553974019282103
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-46749",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-46749",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-6252",
+      "seed": 42,
+      "score": 0.42276226136884043,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.0838997380406333,
+      "ppl": 9.056166540888139,
+      "prefill_ms": 35.39172373712063
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-6252",
+      "seed": 42,
+      "score": 0.42276226136884043,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.0838997380406333
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-6252",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-6252",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-19083",
+      "seed": 42,
+      "score": 0.9660397843344786,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.018255292134694956,
+      "ppl": 6.961718464157651,
+      "prefill_ms": 35.11390648782253
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-19083",
+      "seed": 42,
+      "score": 0.9660397843344786,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.018255292134694956
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-19083",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-19083",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-43223",
+      "seed": 42,
+      "score": 0.8912207281046337,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8912207281046337,
+      "ppl": 8.963903883992836,
+      "prefill_ms": 31.81829024106264
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-43223",
+      "seed": 42,
+      "score": 0.8912207281046337,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8912207281046337
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-43223",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-43223",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-40845",
+      "seed": 42,
+      "score": 0.8607108925555685,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8607108925555685,
+      "ppl": 6.503263201438997,
+      "prefill_ms": 32.653030939400196
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-40845",
+      "seed": 42,
+      "score": 0.8607108925555685,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8607108925555685
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-40845",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-40845",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-24098",
+      "seed": 42,
+      "score": 0.7844068699801283,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.7844068699801283,
+      "ppl": 5.514317379928404,
+      "prefill_ms": 32.62261115014553
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-24098",
+      "seed": 42,
+      "score": 0.7844068699801283,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.7844068699801283
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-24098",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-24098",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-22336",
+      "seed": 42,
+      "score": 0.8022454162066213,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8022454162066213,
+      "ppl": 8.63018384693568,
+      "prefill_ms": 33.34904741495848
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-22336",
+      "seed": 42,
+      "score": 0.8022454162066213,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.8022454162066213
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-22336",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-22336",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-7128",
+      "seed": 42,
+      "score": 0.4565178549640001,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.023313170001602657,
+      "ppl": 6.143918362927788,
+      "prefill_ms": 32.54058863967657
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-7128",
+      "seed": 42,
+      "score": 0.4565178549640001,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.023313170001602657
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-7128",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-7128",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-21624",
+      "seed": 42,
+      "score": 0.4950194275444449,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.31712135037005706,
+      "ppl": 8.059312312200268,
+      "prefill_ms": 37.80784364789724
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-21624",
+      "seed": 42,
+      "score": 0.4950194275444449,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.31712135037005706
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-21624",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-21624",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-45977",
+      "seed": 42,
+      "score": 0.4943355534992955,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.3241931709255979,
+      "ppl": 7.605408320480763,
+      "prefill_ms": 37.59047668427229
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-45977",
+      "seed": 42,
+      "score": 0.4943355534992955,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.3241931709255979
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-45977",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-45977",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-837",
+      "seed": 42,
+      "score": 0.4951744016071365,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.2713331840080385,
+      "ppl": 5.3499370986720525,
+      "prefill_ms": 33.0716110765934
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-837",
+      "seed": 42,
+      "score": 0.4951744016071365,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.2713331840080385
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-837",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-837",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-19255",
+      "seed": 42,
+      "score": 0.7828757821295635,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.003981760427194176,
+      "ppl": 17.433542027471923,
+      "prefill_ms": 30.65457195043564
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-19255",
+      "seed": 42,
+      "score": 0.7828757821295635,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.003981760427194176
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-19255",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-19255",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-14159",
+      "seed": 42,
+      "score": 0.39978213394982837,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.08645894989426797,
+      "ppl": 7.457698288351906,
+      "prefill_ms": 32.74351917207241
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-14159",
+      "seed": 42,
+      "score": 0.48130326804281554,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.1255554591224855
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-14159",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-14159",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-22114",
+      "seed": 42,
+      "score": 0.554754679005775,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.01107248825653765,
+      "ppl": 5.281756529791386,
+      "prefill_ms": 33.59029907733202
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-22114",
+      "seed": 42,
+      "score": 0.554754679005775,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.01107248825653765
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-22114",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-22114",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-32375",
+      "seed": 42,
+      "score": 0.9145728317440263,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.9145728317440263,
+      "ppl": 16.953788249445918,
+      "prefill_ms": 30.88200744241476
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-32375",
+      "seed": 42,
+      "score": 0.9145728317440263,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.9145728317440263
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-32375",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-32375",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-13412",
+      "seed": 42,
+      "score": 0.9974799754006678,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9974799754006678,
+      "ppl": 11.866206411761576,
+      "prefill_ms": 30.455184169113636
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-13412",
+      "seed": 42,
+      "score": 0.9974799754006678,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9974799754006678
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-13412",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-13412",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "student",
+      "sample_id": "hs-48761",
+      "seed": 42,
+      "score": 0.949546611432816,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.020652980012968912,
+      "ppl": 12.478609063352572,
+      "prefill_ms": 30.934992246329784
+    },
+    {
+      "method": "text",
+      "sample_id": "hs-48761",
+      "seed": 42,
+      "score": 0.949546611432816,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.020652980012968912
+    },
+    {
+      "method": "ridge_native",
+      "sample_id": "hs-48761",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "hs-48761",
+      "seed": 42,
+      "score": 0.0,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": null,
+      "ppl": Infinity
+    }
+  ]
+}

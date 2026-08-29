@@ -44,14 +44,19 @@ class HandoffPipeline:
 
     参数：
         backend: 推理后端（InferenceBackend；numpy 可跑 / torch 骨架）
-        mapper:  具备 transform(kv_t, layer_map) 的映射器（如 RidgeMapper）
+        mapper:  具备 transform(kv_t, layer_map) 的映射器。
+                 ◆ D2 修复说明：TorchBackend.forward_prefill 产出的是
+                 (L_t, S, H, 2D) 的 K‖V 联合布局，必须搭配
+                 apcs.mapper.joint.JointKVMapper（内部拆 K/V 独立变换，
+                 §22）—— 直接传 per-kind mapper 会在 einsum 处形状崩溃。
+                 NumpyBackend 产出 (L_t, S, H, D) 假 KV，用普通 mapper。
         layer_map: Student 层 → Teacher 层索引（§21 proportional_mapping 产物）
         cfg:     模型配置，须含 teacher / student 两节的 num_layers 等
         out_dir: 产物目录（metrics.json + summary.md，§63 风格）
 
     KV 缓存数据流（管线视角）：
-        Teacher Prefill → kv_t (L_t, S, H, D)   ← Teacher 自产 KV（Capture）
-        mapper.transform → kv_s (L_s, S, H, D)  ← 跨模型映射（不改序列维 S）
+        Teacher Prefill → kv_t (L_t, S, H, 2D)  ← Teacher 自产 KV（Capture，K‖V 拼接）
+        mapper.transform → kv_s (L_s, S, H, 2D) ← 跨模型映射（JointKVMapper 拆 K/V）
         backend.inject  → Student 侧可消费 PKV ← 缓存复用入口（注入）
         backend.decode  → 逐 token 拼接新行     ← 只复用注入 KV，不 re-prefill
     """

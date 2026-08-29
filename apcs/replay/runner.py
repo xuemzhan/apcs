@@ -300,6 +300,9 @@ def _real_replay(
                 replay_cache = _build_cache_from_kv(
                     kv_native, device=model.device, dtype=model.model.dtype
                 )
+                native_cache = _build_cache_from_kv(
+                    kv_native, device=model.device, dtype=model.model.dtype
+                )
                 native_input = replay_input = tok_ids[-1]
                 cosines: list[float] = []
                 errors: list[float] = []
