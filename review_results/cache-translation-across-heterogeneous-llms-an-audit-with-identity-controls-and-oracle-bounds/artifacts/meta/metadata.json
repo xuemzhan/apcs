@@ -1,9 +1,9 @@
 {
   "slug": "cache-translation-across-heterogeneous-llms-an-audit-with-identity-controls-and-oracle-bounds",
   "title": "Cache Translation Across Heterogeneous LLMs:\\\\ An Audit with Identity Controls and Oracle Bounds",
-  "source_path": "/workspace/apcs/paper/cache_audit/arxiv/main.tex",
+  "source_path": "/workspace/apcs/paper/cache_audit/main.tex",
   "language": "en",
   "format": ".tex",
-  "generated_at": "2026-08-29T19:24:00.012734",
+  "generated_at": "2026-08-29T21:06:27.057795",
   "review_focus": "full"
 }

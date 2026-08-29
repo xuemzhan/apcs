@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Deep Review Report — /workspace/apcs/paper/cache_audit/arxiv/main.tex</title>
+<title>Deep Review Report — /workspace/apcs/paper/cache_audit/main.tex</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -227,12 +227,12 @@
     <h1>Deep Review Report</h1>
     <div class="meta-bar">
       <div>
-        Paper: <code>/workspace/apcs/paper/cache_audit/arxiv/main.tex</code>
+        Paper: <code>/workspace/apcs/paper/cache_audit/main.tex</code>
         &nbsp;|&nbsp; Language: EN
         &nbsp;|&nbsp; Mode: deep-review
       </div>
       <div>
-        Generated: 2026-08-29 19:24
+        Generated: 2026-08-29 21:06
         
         
       </div>
@@ -311,7 +311,7 @@ Verdict: Pass to Review
 - No methodology blocker was surfaced by the fallback pass.
 
 ### SHOULD-FIX (quality improvements)
-- (abstract) "Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at ." — Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.
+- (abstract) "Across six mapper families (per-head ridge, affine, per-layer affine, task-aware, a residual-anchored translator, and a per-head MLP), a controlled calibration ladder on a fixed evaluation set, and 28 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at ." — Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.
 - (method) "Student self-prefill is the baseline the handoff must not degrade." — Comparative evaluation language was detected. Deep review should verify that baseline tuning, data splits, and reporting conventions are described symmetrically.
 
 ### SRQR Checklist Deltas
@@ -373,13 +373,13 @@ Editor Verdict: Pass to Review
 - We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.
 
 ## Section Map
-- abstract (36-61): 251 words
-- introduction (63-193): 925 words
-- method (310-343): 273 words
-- method_2 (344-413): 545 words
-- result (414-558): 1089 words
-- discussion (559-584): 243 words
-- conclusion (627-643): 116 words
+- abstract (36-63): 278 words
+- introduction (65-195): 925 words
+- method (312-347): 300 words
+- method_2 (348-418): 546 words
+- result (419-569): 1169 words
+- discussion (570-595): 243 words
+- conclusion (640-656): 116 words
 
 ## Closure Targets
 - No closure target was extracted automatically.</pre>
@@ -431,7 +431,7 @@ Editor Verdict: Pass to Review
           
         </div>
         
-        <div class="issue-quote">Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at .</div>
+        <div class="issue-quote">Across six mapper families (per-head ridge, affine, per-layer affine, task-aware, a residual-anchored translator, and a per-head MLP), a controlled calibration ladder on a fixed evaluation set, and 28 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at .</div>
         
         <p>Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.</p>
       </article>
@@ -489,7 +489,7 @@ Editor Verdict: Pass to Review
     </section>
 
     <footer>
-      paper-audit · generated 2026-08-29 19:24
+      paper-audit · generated 2026-08-29 21:06
     </footer>
   </main>
 </div>

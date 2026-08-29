@@ -10,13 +10,13 @@
 - We conclude that the teacher's answer-relevant advantage does not survive KV-space translation under zero re-prefill: it lives in the teacher's weights, not in its cache.
 
 ## Section Map
-- abstract (36-61): 251 words
-- introduction (63-193): 925 words
-- method (310-343): 273 words
-- method_2 (344-413): 545 words
-- result (414-558): 1089 words
-- discussion (559-584): 243 words
-- conclusion (627-643): 116 words
+- abstract (36-63): 278 words
+- introduction (65-195): 925 words
+- method (312-347): 300 words
+- method_2 (348-418): 546 words
+- result (419-569): 1169 words
+- discussion (570-595): 243 words
+- conclusion (640-656): 116 words
 
 ## Closure Targets
 - No closure target was extracted automatically.

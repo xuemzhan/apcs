@@ -4,7 +4,7 @@
 - No methodology blocker was surfaced by the fallback pass.
 
 ### SHOULD-FIX (quality improvements)
-- (abstract) "Across five mapper families (per-head ridge, affine, per-layer affine, task-aware, and a residual-anchored translator built from the two models' own projections), a 200-example calibration ladder, and 21 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at ." — Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.
+- (abstract) "Across six mapper families (per-head ridge, affine, per-layer affine, task-aware, a residual-anchored translator, and a per-head MLP), a controlled calibration ladder on a fixed evaluation set, and 28 recorded GPU runs, no configuration makes the strong student exceed its own prefill: gold-probability change spans to against a self-kv control at ." — Multiple sections contain numeric claims. Confirm that the same quantities reconcile across main text, tables, and appendix material.
 - (method) "Student self-prefill is the baseline the handoff must not degrade." — Comparative evaluation language was detected. Deep review should verify that baseline tuning, data splits, and reporting conventions are described symmetrically.
 
 ### SRQR Checklist Deltas

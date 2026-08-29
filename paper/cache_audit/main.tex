@@ -26,7 +26,7 @@ An Audit with Identity Controls and Oracle Bounds}
 \author{%
   Anonymous\\
   \normalsize Draft, compiled \today\\
-  \normalsize Code and all run artifacts: \texttt{apcs} repository (21 recorded GPU runs)
+  \normalsize Code and all run artifacts: \texttt{apcs} repository (all runs recorded in the repository)
 }
 \date{}
 
@@ -44,10 +44,11 @@ framework and two instruments that prior evaluations omit. First, an
 translation-and-injection pipeline: it reproduces the student's own prefill
 exactly (per-sample logit cosine $1.000$), which isolates mechanics from
 mapping. Second, \emph{oracle probes} mix teacher-cache content into the
-student's own cache and bound what any translator could extract. Across six
+student's own cache and probe what the student can extract from
+translated content. Across six
 mapper families (per-head ridge, affine, per-layer affine, task-aware, a
 residual-anchored translator, and a per-head MLP), a controlled calibration
-ladder on a fixed evaluation set, and 28 recorded GPU runs, no configuration
+ladder on a fixed evaluation set, and 42 recorded audit-protocol runs, no configuration
 makes the strong student exceed its own prefill: gold-probability change
 spans $-0.14$ to $-0.47$ against a self-kv control at $+0.000$. Calibration
 budget is inert (CHG $-0.249$ at $c{=}30$ vs $-0.244$ at $c{=}200$ on the
@@ -110,8 +111,10 @@ control reproduces the student's own prefill with per-sample logit cosine
 $1.000$ and a gold-probability change of $+0.0001$
 ($95\%$ CI $[-0.0006, +0.0009]$), so mechanics is not the failure mode. H2
 fails for the strong student: across the mapper ladder, the gold-probability
-change over the student's own prefill spans $-0.138$ to $-0.302$, and the best
-configuration reaches $0.365$ against a student baseline of $0.503$; the weak
+change over the student's own prefill spans $-0.14$ to $-0.47$ (best and
+worst seeds of the affine mapper; see Section~\ref{sec:results}), and the best
+single configuration reaches $0.365$ against a student baseline of $0.503$;
+the weak
 0.6B student reaches parity ($+0.010$, CI $[-0.081, +0.102]$). H3 returns a
 principled negative: with $75\%$ student cache and only $25\%$ teacher content,
 accuracy already drops from $0.500$ to $0.367$, the decline is monotone in the
@@ -414,7 +417,7 @@ Primary pair: Qwen3-4B (36 layers, hidden 2560) $\to$ Qwen3-1.7B (28 layers,
 hidden 2048); contrast pair: $\to$ Qwen3-0.6B (hidden 1024). Both share the
 same tokenizer, vocabulary, $H{=}8$ KV heads, $d{=}128$, and RoPE base
 $10^6$. Every run records its git commit and protocol version in its
-artifacts; 21 runs back the numbers below.
+artifacts; every number below is read directly from a recorded run.
 
 \section{Results}
 \label{sec:results}

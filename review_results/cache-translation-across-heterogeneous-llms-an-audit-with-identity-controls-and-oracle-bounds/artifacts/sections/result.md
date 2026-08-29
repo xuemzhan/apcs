@@ -15,14 +15,16 @@ single gain: moving from per-head ridge () to per-head affine
 () halves the deficit, which confirms that the teacher/student value
 distributions differ by location and scale before they differ by content
 (the measured teacher/student norm ratios are for keys and
- for values). Second, the ladder is non-monotone in data: at
-200 calibration examples the affine map degrades to from at
-30, and over changes nothing. The per-head
-linear hypothesis saturates; more data drives the estimator to the best
-linear approximation, which is worse than the strongly shrunk 30-example
-solution. Third, structure changes little: per-layer merging (),
-task-aware fine-tuning (), and RAT ( at ,
- at ) sit inside the same band. The strong student never
+ for values). Second, the calibration budget is inert. Under a controlled comparison
+that fixes the evaluation set () and varies only the calibration
+budget, affine mapping yields CHG at and at
+: a difference of . The mapper has converged; more
+calibration data cannot close a gap that is set by the information content
+of the translated cache, not by estimation variance. Third, structure and function class change little: per-layer merging
+(), task-aware fine-tuning (), RAT ( to ),
+and a per-head MLP mapper with two GELU layers ( at ,
+ at ) all sit inside the same band. Nonlinearity does not
+help; the bottleneck is not the function class. The strong student never
 approaches its own prefill (); the best mapper reaches . The
 weak 0.6B student tells the opposite story: affine at gives
  , statistically indistinguishable from its own
@@ -49,9 +51,13 @@ replacing the top third of layers is indistinguishable from the student
 harmful (, ). The reading is architectural. Answer-relevant
 routing runs through early and mid layers, exactly where the teacher's cache
 is least compatible; the top layers, where the translated content is least
-damaging, are not where the answer is decided. Under the most favorable
-conditions any translator could hope for, the teacher's cache adds nothing
-and subtracts much. Exploitability is bounded at zero.
+damaging, are not where the answer is decided.
+The probes were run with two translators: the RAT mapper reported above and
+the affine mapper (the best in the ladder, gold ). Both show the same
+monotone decline. With affine at , gold CHG is 
+(CI ); at , (CI ).
+The verdict is robust to translator quality: even the best available mapper
+produces content that the frozen student cannot exploit.
 ### Perplexity and Accuracy Decouple
 sec:decoupling
 Figure~fig:decoupling plots perplexity against accuracy for every

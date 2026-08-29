@@ -1,7 +1,7 @@
 # Revision Suggestions
 
-**Paper**: `/workspace/apcs/paper/cache_audit/arxiv/main.tex` | **Language**: EN | **Mode**: deep-review
-**Generated**: 2026-08-29 19:24
+**Paper**: `/workspace/apcs/paper/cache_audit/main.tex` | **Language**: EN | **Mode**: deep-review
+**Generated**: 2026-08-29 21:06
 
 The list below pairs each high-priority issue with a concrete edit. Suggestions are derived from the deep-review issue bundle and require author judgment before application.
 

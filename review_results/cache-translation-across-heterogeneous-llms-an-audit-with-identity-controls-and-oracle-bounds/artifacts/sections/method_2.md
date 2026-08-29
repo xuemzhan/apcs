@@ -47,8 +47,9 @@ Fraction probe: for
 Window probe: translated content in only the bottom, middle, or top
 third of student layers, student content elsewhere. Because every
 configuration keeps the student's own cache dominant or localized, any
-improvement over is a lower bound on what a perfect translator
-could deliver; monotone degradation bounds exploitability at zero. Probes are
+improvement over would indicate exploitable teacher-cache
+content; monotone degradation under the tested translators rules out
+exploitable content in this regime. Probes are
 flagged non-deployable (they require the student's own prefill) and exist
 only as measurement instruments.
 ### Pairs, Data, and Protocol Discipline

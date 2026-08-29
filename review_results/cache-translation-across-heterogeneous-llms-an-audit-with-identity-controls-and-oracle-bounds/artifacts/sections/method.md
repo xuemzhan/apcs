@@ -21,9 +21,11 @@ scoring suffix is recorded but never accepted as evidence of capability
 Figure~fig:framework states the three hypotheses with their instruments
 and gates. H1: the identity injection matches the student's own
 prefill per sample (gate: mean logit cosine within float tolerance).
-H2: some reaches replacement level (gate: with
-CI excluding zero, across the mapper ladder at calibration budgets up to 200
-examples). H3: the teacher's cache contains student-readable
+H2: some reaches replacement level (gate: gold CHG
+ with the CI lower bound above a small tolerance ; a
+stricter gain gate additionally requires the CI lower bound ).
+Replacement asks only that the student is not degraded; gain asks that the
+teacher's cache provides a measurable lift. H3: the teacher's cache contains student-readable
 advantage (gate: some oracle probe configuration with teacher content
 improves over the student's own cache). H3's probe is decisive because it
 does not depend on training a translator; it directly measures what a frozen

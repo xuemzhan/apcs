@@ -1,7 +1,7 @@
 # Peer Review Report
 
-**Paper**: `/workspace/apcs/paper/cache_audit/arxiv/main.tex` | **Language**: EN | **Mode**: deep-review
-**Generated**: 2026-08-29 19:24
+**Paper**: `/workspace/apcs/paper/cache_audit/main.tex` | **Language**: EN | **Mode**: deep-review
+**Generated**: 2026-08-29 21:06
 **Artifacts**: `/workspace/apcs/review_results/cache-translation-across-heterogeneous-llms-an-audit-with-identity-controls-and-oracle-bounds`
 
 ## Summary
