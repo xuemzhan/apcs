@@ -3,6 +3,24 @@
 Reviewer mode: paper-audit deep-review + independent reviewer pass, evidence-backed,
 anchored to the paper text and the underlying run artifacts (21+ recorded GPU runs).
 
+> **Meta-review addendum (second-pass, third-party stance).** Two corrections to
+> the first pass below, both evidence-verified:
+> 1. **NEW MAJOR (was buried in C1).** The mapper ladder contains only linear /
+>    analytic mappers (affine, affine_layer, lowrank, rat, ridge_layer,
+>    shared_basis, task_aware). It contains **no cross-attention translator**
+>    (MoT's backbone). The paper's strongest general claims — "any translator,
+>    however nonlinear" (Sec. 6) and "cache translation is currently a net
+>    negative" (Sec. 7) — are therefore untested for the one translator family
+>    that MoT reports as working. Either reproduce a cross-attention translator
+>    (sans replay) or bound the wording to "the tested linear and analytic
+>    mapper families." Same severity as A1.
+> 2. **D2 correction.** The oracle-probe CIs *do* exist in the run data; the
+>    paper's Fig 3 shows point estimates only. More importantly, the mildest
+>    mixing point (mix_a25, mean −0.123) is **not statistically significant**
+>    (CI [−0.261, +0.009], p = 0.95). The claimed "monotone decline" is clean
+>    only from α ≥ 0.5. A3 (H2 gate) and B1 (multi-seed contradiction) stand as
+>    written; A2 (ladder confound) is real but should read MODERATE, not MAJOR.
+
 Legend: [S]=script-backed, [L]=reviewer judgment. Severity: MAJOR / MODERATE / MINOR.
 All numeric claims were cross-checked against `figures/data/all_results.json` and
 `reports/runs/*/inject-eval/metrics.json`.
