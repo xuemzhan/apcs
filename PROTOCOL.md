@@ -369,3 +369,38 @@ H2 的第一杠杆是校准样本规模（§32 原目标 100–500）。
   unrotated 模式不带来额外收益（V 是瓶颈，K 不是）；
 - 尺度失配为唯一原因：native 重标定后仍 PPL 5.4e5 ⇒ 语义/结构失配为主；
 - 机制损失：self_kv 恒等排除注入/位置/GQA/持久化链路问题。
+
+---
+
+## 13. Protocol v1.4（2026-08-29 晚）：RAT、Oracle 探针与 H3 终审
+
+### 13.1 相关文献定位
+
+cache-translation 已成为活跃方向：MoT (arXiv 2607.28979)、LSC (2601.06123)、
+C2C (2510.03215)、KVComm、Interlat、HCache。**MoT 的 baseline "C2C-Project"
+（单投影映射 ≈ 本仓库 affine 族）在其评测中近随机** —— 与本仓库 H2 负
+结果独立互证。MoT 的有效成分是 cross-attention translator + Context
+Correction Loss + **窗口翻译+目标侧重放**（非全层替换、非严格零-prefill）。
+
+### 13.2 RAT（Residual-Anchored Translator）
+
+架构依据：KV = W_V·h（残差流线性投影）⇒ 跨模型翻译可分解为
+`W = pinv(w_t).T @ R @ w_s.T`，R 为共享词表 embedding 的最小二乘对齐
+（Qwen3 同词表，免配对数据）；头对应用协方差轮廓 + 匈牙利匹配；
+position 0（注意力汇）用学生统计覆盖。**实测：解析核有害（去锚后
+PPL 502→23.7）** —— min-norm pullback 在真实模型上不成立，诚实记录。
+
+### 13.3 Oracle 探针（H3 上界判定，probe_mode 门控、非部署路径）
+
+- `mix_aXX`：cache = (1−α)·学生自KV + α·翻译KV —— **实测随 α 单调劣化**；
+- `win_{low,mid,high}`：MoT 注入模式的探针版 —— **顶层 1/3 无害，
+  中/低层有害**。
+- **判读规则**：探针给出"教师 KV 可利用性"的上界；上界为零时，任何
+  mapper 投入都不可能产生 CHG>0，应转向 replacement 叙事。本仓库
+  已触发该规则（2026-08-29）。
+
+### 13.4 PPL/accuracy 脱钩现象
+
+RAT noanchor(rank32) 达到 PPL 23.7（≈自 prefill 21.2）但 acc 0.267：
+cache 翻译可恢复"语言流畅性"，不可恢复"教师级上下文理解"。
+**PPL 不得单独作为 cache 翻译质量的证据**（写入评审 checklist）。

@@ -465,6 +465,9 @@ class InjectionEvaluator:
         self._summary_baseline = bool(ie_cfg.get("summary_baseline", False))
         self._summary_max_tokens = int(ie_cfg.get("summary_max_tokens", 64))
         self._summaries: dict[str, str] = {}
+        # P0-Oracle 探针（H3 上界判定）：允许 mix_*/win_* 探针模式
+        # ⚠️ 探针需要学生对评估行做自 prefill —— 仅诊断用，非部署路径
+        self._probe_mode = bool(ie_cfg.get("probe_mode", False))
 
     # ------------------------------------------------------------------
     # 模型生命周期管理（§53 单卡执行顺序）
@@ -656,6 +659,23 @@ class InjectionEvaluator:
             from ..mapper.math import AffineLayerMapper as _AL
             self._mapper_k = _AL(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = _AL(lam=_ridge_lambda(self.cfg, "V"))
+        elif mapper_type == "rat":
+            from ..mapper.rat import RATMapper as _RAT
+            m_cfg = self.cfg.get("mapper", {})
+            common = dict(
+                lam=_ridge_lambda(self.cfg, "K"),
+                rank=int(m_cfg.get("rank", 16)),
+                head_match=bool(m_cfg.get("rat_head_match", True)),
+                sink_override=bool(m_cfg.get("rat_sink_override", True)),
+                use_embedding_anchor=bool(m_cfg.get("rat_embedding_anchor", True)),
+            )
+            self._mapper_k = _RAT(**common)
+            self._mapper_v = _RAT(**common)
+            # T1/T2: 解析核需要两侧模型权重（safetensors 部分加载，非实例化）
+            t_id = self.cfg.get("teacher", {}).get("model_id", "")
+            s_id = self.cfg.get("student", {}).get("model_id", "")
+            self._mapper_k.setup_weights(t_id, s_id)
+            self._mapper_v.setup_weights(t_id, s_id)
         else:  # default: ridge (per-head)
             self._mapper_k = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "V"))
@@ -1030,6 +1050,49 @@ class InjectionEvaluator:
                 out[s] = src_np[teachers].mean(axis=0)
             return out
 
+        def _student_self_kv() -> np.ndarray:
+            """探针/self_kv 共用：捕获（或取缓存）学生自 prefill 的联合 KV。
+
+            ⚠️ 仅探针模式可用（需要学生对评估行做自 prefill，非部署路径）。
+            """
+            cached_self = (self_kv_cache or {}).get(row.sample_id)
+            if cached_self is None:
+                ctx_text = self._handoff_context_text(row)
+                s_ids = self._student_tokenizer(
+                    ctx_text, return_tensors="np"
+                ).input_ids.reshape(-1)
+                s_ids_t = torch.as_tensor(
+                    s_ids.reshape(1, -1), dtype=torch.long
+                ).to(self._student_device)
+                with torch.no_grad():
+                    s_out = self._student_model(s_ids_t, use_cache=True)
+                n_layers_s = int(
+                    getattr(self._student_model.config, "num_hidden_layers", 0)
+                ) or len(s_out.past_key_values)
+                cached_self = _extract_kv_separate(s_out.past_key_values, n_layers_s)
+                del s_out
+                if self_kv_cache is not None:
+                    self_kv_cache[row.sample_id] = cached_self
+            sk, sv = cached_self
+            return np.concatenate([sk, sv], axis=-1)
+
+        def _translated_kv_both() -> np.ndarray:
+            """探针共用：kv_both 翻译路径（与 kv_both 分支语义一致）。"""
+            k_de_rope = _de_rope_for_kind(self.cfg, "K", de_rope_fn)
+            v_de_rope = _de_rope_for_kind(self.cfg, "V", de_rope_fn)
+            mapped_k = self._mapper_k.transform(
+                k_np, self._layer_map, kv_kind="K",
+                positions=positions, de_rope_fn=k_de_rope,
+            )
+            if self._rope_align == "unrotated":
+                from ..rope.runner import apply_rope
+                mapped_k = apply_rope(mapped_k, positions, inv_freq)
+            mapped_v = self._mapper_v.transform(
+                v_np, self._layer_map, kv_kind="V",
+                positions=positions, de_rope_fn=v_de_rope,
+            )
+            return np.concatenate([mapped_k, mapped_v], axis=-1)
+
         if ablation_mode == "self_kv":
             # ── P0.0 恒等对照（H1 判定）──
             # 学生自身 prefill(prefix+context) 的 KV，走与 ridge_handoff 完全
@@ -1058,6 +1121,38 @@ class InjectionEvaluator:
             S = sk.shape[1]
             counters.teacher_prefill_seq_len = S
             final_kv = np.concatenate([k_np, v_np], axis=-1)
+
+        elif ablation_mode.startswith("mix_a") or ablation_mode.startswith("win_"):
+            # ── P0-Oracle 探针（H3 上界判定，非部署路径）──
+            # mix_aXX: cache = (1−α)·学生自KV + α·翻译教师KV（α=XX/100）
+            # win_{low,mid,high}: 非窗口层=学生自KV，窗口层=翻译教师KV
+            #   （MoT 注入模式的探针版 —— 定位最优 channel 窗口）
+            # 两者都需要学生自 KV 作为基底；cache 全长以学生侧为准。
+            if not getattr(self, "_probe_mode", False):
+                raise ValueError(
+                    f"探针模式 {ablation_mode} 需要inject_eval.probe_mode=true（仅诊断用）"
+                )
+            self_kv_joint = _student_self_kv()
+            translated = _translated_kv_both()
+            L_p = min(self_kv_joint.shape[0], translated.shape[0])
+            self_kv_joint = self_kv_joint[:L_p]
+            translated = translated[:L_p]
+            S = self_kv_joint.shape[1]
+            counters.teacher_prefill_seq_len = S
+            if ablation_mode.startswith("mix_a"):
+                alpha = float(ablation_mode[5:]) / 100.0
+                final_kv = (1.0 - alpha) * self_kv_joint + alpha * translated
+            else:  # win_*
+                third = L_p // 3
+                final_kv = self_kv_joint.copy()
+                if ablation_mode == "win_low":
+                    final_kv[:third] = translated[:third]
+                elif ablation_mode == "win_mid":
+                    final_kv[third:2 * third] = translated[third:2 * third]
+                elif ablation_mode == "win_high":
+                    final_kv[2 * third:] = translated[2 * third:]
+                else:
+                    raise ValueError(f"未知探针窗口模式: {ablation_mode}")
 
         elif ablation_mode == "native":
             # Case 1: Teacher 原生 KV，不做映射（baseline）
