@@ -73,8 +73,10 @@ student's. Recent systems report encouraging results, including
 Mixture-of-Translators (MoT), which preserves 51.0\% closed-set QA accuracy at
 7B$\to$0.5B scale~\citep{mot2026}, Cache-to-Cache semantic
 communication~\citep{c2c2025}, latent-space
-communication~\citep{lsc2026}, and selective KV
-sharing~\citep{kvcomm2025}.
+communication~\citep{lsc2026}, selective KV
+sharing~\citep{kvcomm2025}, and a closed-form ridge mapper that retains
+73--98\% of a receiver's standalone-prefill accuracy on four of six
+matched-KV pairs~\citep{heo2026crosskv}.
 
 % Problem gap: claims conflate three things; none of the evaluations separate them.
 These reports conflate three questions that can fail independently. Does the
@@ -220,13 +222,36 @@ modules over depth-ratio channel windows with a Context Correction Loss that
 aligns a replayed target trajectory with the native one, and reports the
 strongest numbers to date: 51.0\% average closed-set QA accuracy at
 Qwen2.5-7B$\to$0.5B and 96.3\% retention in long-context cache-augmented
-generation~\citep{mot2026}. KVComm shares attention-ranked KV
+generation~\citep{mot2026}. A parallel recent system studies cross-model KV
+cache transfer inside one family under the strict zero-re-prefill regime we
+audit: it fits a closed-form, per-head ridge mapper that (i) concatenates
+the top-$k$ most predictive source layers for each target layer, (ii)
+strips RoPE from the keys before mapping so the fit is position-free and
+reusable across context lengths, and (iii) calibrates on 500 FineWeb-Edu
+sequences of 1{,}024 tokens each; across six matched-KV pairs in three
+families it retains 73--98\% of the receiver's standalone-prefill accuracy
+on four pairs while two degrade sharply, and an MLP recovers up to $+37$~pp
+HellaSwag retention on the failures~\citep{heo2026crosskv}. KVComm shares attention-ranked KV
 layers~\citep{kvcomm2025}; Interlat communicates last-hidden-state
 messages~\citep{interlat2025}; HCache restores caches from hidden-state
-translations~\citep{hcache2025}. Two properties of this line matter for our
+translations~\citep{hcache2025}. Latent Cache Flow translates sharer KV to
+a receiver through learned adapters and targets compact, bandwidth-efficient
+adapters~\citep{latentcacheflow2026}. Semantic Cache Distillation replaces
+raw KV with compact semantic codes: most layers are reconstructed by a
+low-rank cross-model projection, while a few key layers regenerate the
+receiver's KV from the receiver's own weights, framing state transfer as
+rate--distortion~\citep{semcache2026}. DroidSpeak shares KV caches between
+fine-tuned variants of one architecture by selectively recomputing a few
+layers and reusing the rest, so it does not address arbitrary large-to-small
+state synthesis~\citep{droidspeak2024}. A recent survey, Beyond Tokens,
+unifies these latent-communication lines and names cross-architecture
+alignment as open~\citep{beyondtokens2026}. Two properties of this line matter for our
 audit. First, its evaluations score the translated pipeline against the
 student baseline, which conflates mechanics, mapping, and exploitability.
-Second, its strongest variants do not operate under strict zero re-prefill:
+The closed-form ridge mapper above is the exception on the prefill axis
+(its receiver skips prefill), but it still reports retention against a
+standalone prefill without isolating the three hypotheses. Second, the
+line's other strongest variants do not operate under strict zero re-prefill:
 MoT reconstructs the target-side cache by replaying the context through the
 target model with source-guided sparse attention, so the reported quality
 includes a correction pass that a cold-start deployment would not get. Our
@@ -294,12 +319,21 @@ LSC~\citep{lsc2026} & KV via shared latent & learned latent space & no &
 one latent space fits all layers \\
 MoT~\citep{mot2026} & KV windows & gated translators & yes (sparse) &
 pipeline delta $\neq$ translation value \\
+Heo et al.~\citep{heo2026crosskv} & matched-KV full cache & per-head ridge,
+de-RoPE & no & retention vs standalone; no identity control / probe \\
 KVComm~\citep{kvcomm2025} & selected KV layers & attention ranking & no &
 ranked layers carry the signal \\
 Interlat~\citep{interlat2025} & last hidden state & latent message & no &
 the last layer summarizes the cache \\
 HCache~\citep{hcache2025} & hidden states & translator & no & states
 determine caches \\
+Latent Cache Flow~\citep{latentcacheflow2026} & KV via adapters & learned
+adapter & no & compact adapter preserves receiver behavior \\
+SCD~\citep{semcache2026} & semantic codes (Reuse+Patch) & low-rank +
+receiver weights & partial (Patch) & rate-distortion suffices as proxy \\
+DroidSpeak~\citep{droidspeak2024} & KV (same architecture) & selective
+recompute + reuse & yes (selective) & fine-tuned variants share cache
+geometry \\
 \midrule
 This paper & full cache (zero re-prefill) & five families incl.\ RAT & no &
 \emph{none}: identity control + oracle bounds \\

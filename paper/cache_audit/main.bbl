@@ -1,4 +1,4 @@
-\begin{thebibliography}{20}
+\begin{thebibliography}{25}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -64,6 +64,15 @@ Roee Hendel, Mor Geva, and Amir Globerson.
 \newblock In \emph{Findings of EMNLP}, 2023.
 \newblock \doi{10.18653/v1/2023.findings-emnlp.624}.
 
+\bibitem[Heo et~al.(2026)Heo, Shafipour, Zhao, Golub, Kamani, Borkar, Chandran,
+  Zardoshti, and Darvish~Rouhani]{heo2026crosskv}
+Taekyung Heo, Rasoul Shafipour, Ritchie Zhao, Maximilian Golub, Mohammad~Mahdi
+  Kamani, Ritika Borkar, Makesh~Tarun Chandran, Pantea Zardoshti, and Bita
+  Darvish~Rouhani.
+\newblock Cross-model {KV} cache transfer in {LLM} families: A closed-form
+  linear mapping for prefill reuse.
+\newblock \emph{arXiv preprint arXiv:2608.03893}, 2026.
+
 \bibitem[Huh et~al.(2024)Huh, Cheung, Wang, and Isola]{platonic2024}
 Minyoung Huh, Brian Cheung, Tongzhou Wang, and Phillip Isola.
 \newblock The platonic representation hypothesis.
@@ -82,15 +91,40 @@ Jin-woo Lee, Minkyung Song, Junghyun Oh, Seunghoon Han, Soyoung Park, Gwangseon
   large language models.
 \newblock \emph{arXiv preprint arXiv:2607.28979}, 2026.
 
-\bibitem[Liu et~al.(2024)Liu, Li, Cheng, Ray, Huang, Zhang, Du, Yao, Lu,
-  Ananthanarayanan, Maire, Hoffmann, Holtzman, and Jiang]{cachegen2024}
+\bibitem[Liu(2026)]{beyondtokens2026}
+Yingzhuo Liu.
+\newblock Beyond tokens: A unified framework for latent communication in
+  {LLM}-based multi-agent systems.
+\newblock \emph{arXiv preprint arXiv:2606.05711}, 2026.
+
+\bibitem[Liu et~al.(2024{\natexlab{a}})Liu, Huang, Yao, Feng, Gu, Du, Li,
+  Cheng, Jiang, Lu, Musuvathi, and Choukse]{droidspeak2024}
+Yuhan Liu, Yuyang Huang, Jiayi Yao, Shaoting Feng, Zhuohan Gu, Kuntai Du,
+  Hanchen Li, Yihua Cheng, Junchen Jiang, Shan Lu, Madan Musuvathi, and Esha
+  Choukse.
+\newblock {DroidSpeak}: {KV} cache sharing for cross-{LLM} communication and
+  multi-{LLM} serving.
+\newblock \emph{arXiv preprint arXiv:2411.02820}, 2024{\natexlab{a}}.
+
+\bibitem[Liu et~al.(2024{\natexlab{b}})Liu, Li, Cheng, Ray, Huang, Zhang, Du,
+  Yao, Lu, Ananthanarayanan, Maire, Hoffmann, Holtzman, and
+  Jiang]{cachegen2024}
 Yuhan Liu, Hanchen Li, Yihua Cheng, Siddhant Ray, Yuyang Huang, Qizheng Zhang,
   Kuntai Du, Jiayi Yao, Shan Lu, Ganesh Ananthanarayanan, Michael Maire, Henry
   Hoffmann, Ari Holtzman, and Junchen Jiang.
 \newblock {CacheGen}: {KV} cache compression and streaming for fast large
   language model serving.
-\newblock In \emph{Proceedings of the ACM SIGCOMM Conference}, 2024.
+\newblock In \emph{Proceedings of the ACM SIGCOMM Conference},
+  2024{\natexlab{b}}.
 \newblock \doi{10.1145/3651890.3672274}.
+
+\bibitem[Ma et~al.(2026)Ma, Tang, Cui, Yao, and Jia]{semcache2026}
+Qianli Ma, Zhiqing Tang, Hanshuai Cui, Zhi Yao, and Weijia Jia.
+\newblock Semantic cache distillation: Efficient state transfer via reuse and
+  selective patching.
+\newblock In \emph{Proceedings of the International Conference on Machine
+  Learning (ICML)}, 2026.
+\newblock arXiv:2606.07684.
 
 \bibitem[Moschella et~al.(2022)Moschella, Maiorca, Fumero, Norelli, Locatello,
   and Rodol{\`a}]{relrep2022}
@@ -104,6 +138,11 @@ Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
 \newblock Learning to compress prompts with gist tokens.
 \newblock In \emph{NeurIPS}, 2023.
 \newblock \doi{10.48550/arxiv.2304.08467}.
+
+\bibitem[Rossi et~al.(2026)Rossi, Raghunath, and Wu]{latentcacheflow2026}
+Maximillian Rossi, Prajwal Raghunath, and Eugene Wu.
+\newblock Latent cache flow: Model-to-model communication without text.
+\newblock \emph{arXiv preprint arXiv:2605.22863}, 2026.
 
 \bibitem[Shi et~al.(2025)]{kvcomm2025}
 Rongzhi Shi et~al.
