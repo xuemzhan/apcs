@@ -47,7 +47,7 @@ htmlcov/
 .nox/
 coverage.xml
 *.cover
-*.hypothesis/
+.hypothesis/
 
 # 运行产物（§63 reports/runs/）
 # 排除实际跑出来的数据，但保留 .gitkeep 让目录存在
@@ -56,7 +56,7 @@ reports/runs/**/__pycache__/
 reports/runs/**/*.pyc
 # run_id 粘性指针（<base>/<experiment_name>.current）：本机运行状态，不入库。
 # 它记录"当前实验用哪个 run_id"，换机器/换 checkout 后应重新生成。
-# 注：必须用 ** 才能匹配到 reports/ruts/<date>/<name>.current 这类子目录里的指针文件。
+# 注：必须用 ** 才能匹配到 reports/runs/<date>/<name>.current 这类子目录里的指针文件。
 reports/runs/**/*.current
 # 注意：reports/runs/*/PREREGISTRATION.md 是 §70 必须保留的，不忽略
 
@@ -94,23 +94,6 @@ Thumbs.db
 # Jupyter 检查点（不入库）
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
-
-# =========================================================
-# LaTeX 编译中间产物（不入库；只保留 main.pdf / figures/ 等最终产物）
-# 对应 paper/{arxiv,arxiv_submission_*}/
-# =========================================================
-output/pdf/*.aux
-output/pdf/*.bbl
-output/pdf/*.blg
-output/pdf/*.out
-output/pdf/*.toc
-output/pdf/*.lof
-output/pdf/*.lot
-output/pdf/*.fls
-output/pdf/*.fdb_latexmk
-output/pdf/*.synctex.gz
-output/pdf/rendered/
-
 # =========================================================
 # v1.2+ 追加：大体量运行数据与临时产物不入库（metrics/summary 等
 # 小文件单独选择性提交），保持仓库轻量
@@ -122,21 +105,10 @@ reports/runs/**/stdout.log
 humanizer.tgz
 hza.tgz
 tmp/
-
-# 一次性临时目录
-tmp/
-
-# Hermes 个人环境产物（离线 skill 备份，跟项目无关）
-offline-hermes-*.zip
-
-# paper/memory.md 是写论文时的私人笔记，不入库
-paper/memory.md
-
-# arXiv 提交包：仅保留源文件/bbl/成品 PDF，编译中间产物不入库
-paper/cache_audit/arxiv/*.aux
-paper/cache_audit/arxiv/*.out
-paper/cache_audit/arxiv/*.log
-paper/cache_audit/project_context.md
+output/pdf/*.aux
+output/pdf/*.bbl
+output/pdf/*.blg
+output/pdf/*.out
 archive/
 paper/cache_audit/project_context.md
 
