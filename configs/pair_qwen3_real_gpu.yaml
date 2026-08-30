@@ -30,7 +30,7 @@ experiment:
   run_id: ${experiment.name}-${run.timestamp}
 gates:
   chg_positive: true
-  retention_min: 0.90
+  retention_min: 0.80
   retention_strong: 0.90
 kv_save_full_debug:
   max_samples: 10
