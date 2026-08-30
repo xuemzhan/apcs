@@ -1,0 +1,130 @@
+# =========================================================
+# APCS 第二模型 Pair：SmolLM2-1.7B → SmolLM2-135M
+# 对应 design.md §11 (G1: Second Model Pair, 不同 Model Family)
+#
+# 选择 SmolLM2 家族：
+#   - Open Weight（HuggingFaceH4/SmolLM2-1.7B / SmolLM2-135M）
+#   - 都是 decoder-only LLaMA 风格，能获取 past_key_values
+#   - vocab / kv_heads / head_dim 与 Qwen3 不一致 → 强 G2 验证场景
+#   - GPU 资源可承受（135M 极小，1.7B 中等）
+#
+# 第二 Pair 的目的：证明 APCS 不是 Qwen3-4B→1.7B 的特例
+# =========================================================
+
+experiment:
+  name: smollm2-1.7b-to-135m
+  run_id: ${experiment.name}-${run.timestamp}
+  description: |
+    §11 第二 Pair：不同 Model Family。
+    验证 APCS 在 matched-KV（注意 SmolLM2 1.7B/135M 本身就是 matched）
+    与 mismatched head_dim（需要 P_d）两种情形下都成立。
+  family: smollm2  # 标识这是不同 Family
+
+# ---- 模型 ----
+teacher:
+  model_id: HuggingFaceTB/SmolLM2-1.7B
+  revision: main
+  dtype: bfloat16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  # SmolLM2-1.7B 已知架构（fallback）
+  num_layers: 24
+  num_attention_heads: 32
+  num_kv_heads: 8          # GQA: 32 → 8 (head 比 4:1)
+  head_dim: 64             # 注意：与 Qwen3 的 128 不同
+  vocab_size: 49152
+
+student:
+  model_id: HuggingFaceTB/SmolLM2-135M
+  revision: main
+  dtype: bfloat16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  freeze: true
+  num_layers: 30
+  num_attention_heads: 9
+  num_kv_heads: 3          # GQA: 9 → 3
+  head_dim: 64             # 与 Teacher 一致 → P_d 不需要
+  vocab_size: 49152
+
+# 注意：Teacher 与 Student head 数不同（8 vs 3）→ 必须启用 G2 P_H 路径
+# head_dim 一致（都是 64）→ P_d 不会被调用
+g2:
+  enabled: true
+  p_h_strategy: mean       # 8 → 3 用均值池化
+  # DimensionProjection 合法值为 truncate/pad/linear；head_dim 一致（64==64）时
+  # P_d 不会被调用，truncate 仅为占位（identity 不是合法值）
+  p_d_strategy: truncate
+
+# ---- 数据集分层 ----
+datasets:
+  fidelity:
+    - hellaswag
+    - arc_challenge
+  teacher_advantage:
+    primary: mmlu
+    splits: [train, validation, test]
+  long_context:
+    - ruler
+    - longbench
+  behavior_sensitive:
+    - judge_set
+
+# ---- 上下文长度 ----
+context_lengths: [512, 1024, 2048, 4096]
+
+# ---- Mapper ----
+# source_top_k: 2 意味着每 Student 层聚合 k=2 个 Teacher 层
+# （对 24 层→30 层映射同样适用：层多的 Student 每层取最近的 2 个 Teacher 层）
+mapper:
+  type: ridge
+  rank: 16
+  separate_kv: true
+  de_rope: true
+  source_top_k: 2
+  layer_selection: proportional
+  alpha_max: 0.5
+  rms_calibration: true
+  shared_basis: false
+  t06_aggregate_samples: 16         # §32 bug-3: ALS 类 mapper 拼接校准样本数上限（内存控制）
+
+# ---- Advantage ----
+advantage:
+  rank: 16
+  key: lowrank
+  value: lowrank
+  source_mixer: true
+  rms_calibration: true
+  bounded_alpha: true
+
+# ---- Loss / Stats ----
+loss:
+  lambda_task: 1.0
+  lambda_self: 0.1
+  lambda_teacher: 0.1
+  lambda_att: 1.0
+  lambda_reg: 0.01
+
+seeds: [0, 1, 2]
+statistics:
+  bootstrap_n: 10000
+  ci: 0.95
+  paired_test: permutation
+
+timing:
+  warmup: 2
+  repeats: 10
+  sync_cuda: true
+  report: [p50, p95]
+
+cache_residency: cpu
+
+output:
+  base_dir: reports/runs
+  files: [config.yaml, metrics.json, system.json, geometry.json, stdout.log, summary.md]
+
+gates:
+  retention_min: 0.90
+  retention_strong: 0.95
+  chg_positive: true
+  psr_a_positive: true

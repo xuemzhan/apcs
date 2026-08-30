@@ -1,0 +1,28 @@
+{
+ "arch": {
+  "n_t": 36,
+  "n_s": 28,
+  "H": 8,
+  "D": 128
+ },
+ "seq": 512,
+ "n_calib": 8,
+ "n_eval": 8,
+ "per_kind": {
+  "K": {
+   "retention": 0.9704430442258436,
+   "token_agreement": 1.0,
+   "cosine": 0.9704430442258436
+  },
+  "V": {
+   "retention": 0.6786266890826681,
+   "token_agreement": 1.0,
+   "cosine": 0.6786266890826681
+  }
+ },
+ "mean_retention": 0.8245348666542558,
+ "mean_token_agreement": 1.0,
+ "gate1": "CONDITIONAL",
+ "data_source": "real_hellaswag_hf_kv",
+ "note": "真实 KV（Qwen3-4B/1.7B forward）替代合成；pad 到 512"
+}

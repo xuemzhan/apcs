@@ -1,0 +1,21 @@
+{
+ "seq": 70,
+ "n_calib": 12,
+ "n_eval": 12,
+ "K": {
+  "retention": 0.9760853433708542,
+  "token_agreement": 0.8854166666666666
+ },
+ "V_de_rope_on": {
+  "retention": 0.7285505921702894,
+  "token_agreement": 0.3333333333333333
+ },
+ "V_de_rope_off": {
+  "retention": 0.7581343984027074,
+  "token_agreement": 0.34375
+ },
+ "mean_current": 0.8523179677705718,
+ "mean_optimized": 0.8671098708867808,
+ "gate_current": "CONDITIONAL",
+ "gate_optimized": "CONDITIONAL"
+}
