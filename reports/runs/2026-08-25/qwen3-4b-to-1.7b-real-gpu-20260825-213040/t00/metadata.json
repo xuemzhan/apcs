@@ -1,0 +1,234 @@
+{
+  "generated_at": "2026-08-25T21:34:49.440173",
+  "config_enriched": {
+    "experiment": {
+      "name": "qwen3-4b-to-1.7b-real-gpu",
+      "run_id": "qwen3-4b-to-1.7b-real-gpu-20260825-213040",
+      "description": "Same-family 主实验（真实模型验证轨）。Teacher Qwen3-4B, Student Qwen3-1.7B。\n所有 HF 路径经 ModelScope 下载本地缓存，GPU 走 CUDA 真实计算。\n结果存放到 reports/runs/2026-08-25/ 下。\n"
+    },
+    "provider": {
+      "kv": "hf",
+      "score": "synthetic",
+      "timing": "hf"
+    },
+    "teacher": {
+      "model_id": "Qwen/Qwen3-4B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "student": {
+      "model_id": "Qwen/Qwen3-1.7B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "freeze": true,
+      "num_layers": 28,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "datasets": {
+      "fidelity": [
+        "hellaswag",
+        "arc_challenge",
+        "winogrande"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu",
+        "splits": [
+          "train",
+          "validation",
+          "test"
+        ]
+      },
+      "long_context": [
+        "ruler",
+        "longbench"
+      ],
+      "behavior_sensitive": [
+        "judge_set",
+        "ranker_set"
+      ]
+    },
+    "context_lengths": [
+      512,
+      1024
+    ],
+    "context_lengths_extended": [
+      8192,
+      16384
+    ],
+    "mapper": {
+      "type": "ridge",
+      "rank": 16,
+      "separate_kv": true,
+      "de_rope": true,
+      "de_rope_k": true,
+      "de_rope_v": false,
+      "ridge_lambda_k": 0.001,
+      "ridge_lambda_v": 0.001,
+      "real_calibration_samples": 16,
+      "real_eval_samples": 16,
+      "source_top_k": 2,
+      "layer_selection": "proportional",
+      "alpha_max": 0.5,
+      "rms_calibration": true,
+      "shared_basis": false,
+      "t06_aggregate_samples": 8
+    },
+    "dataset_prepare": {
+      "samples_per_split": 128,
+      "seed": 0
+    },
+    "advantage": {
+      "rank": 16,
+      "key": "lowrank",
+      "value": "lowrank",
+      "source_mixer": true,
+      "rms_calibration": true,
+      "bounded_alpha": true
+    },
+    "query_gate": {
+      "enabled": false
+    },
+    "loss": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01,
+      "teacher_weight_from": "train_split_margin"
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "statistics": {
+      "bootstrap_n": 1000,
+      "ci": 0.95,
+      "paired_test": "permutation"
+    },
+    "timing": {
+      "warmup": 2,
+      "repeats": 10,
+      "sync_cuda": true,
+      "report": [
+        "p50",
+        "p95"
+      ]
+    },
+    "cache_residency": "cpu",
+    "kv_save_full_debug": {
+      "max_samples": 10
+    },
+    "output": {
+      "base_dir": "reports/runs/2026-08-25",
+      "files": [
+        "config.yaml",
+        "metrics.json",
+        "system.json",
+        "geometry.json",
+        "stdout.log",
+        "summary.md"
+      ]
+    },
+    "gates": {
+      "retention_min": 0.9,
+      "retention_strong": 0.95,
+      "chg_positive": true
+    },
+    "teacher_model": "Qwen/Qwen3-4B",
+    "teacher_commit": "main",
+    "student_model": "Qwen/Qwen3-1.7B",
+    "student_commit": "main",
+    "tokenizer": "Qwen/Qwen3-4B",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 512,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 0,
+    "rank": 16,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    }
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "verdict": "G1_MATCHED_KV",
+    "matched_kv": true,
+    "student_score": null,
+    "teacher_score": null,
+    "handoff_score": null,
+    "retention": null,
+    "chg": null,
+    "tgrr": null,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": null,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}

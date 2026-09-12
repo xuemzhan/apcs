@@ -1,0 +1,69 @@
+experiment:
+  name: v15-4b-to-1.7b-mlp-c30-s42-repro
+  run_id: v15-4b-to-1.7b-mlp-c30-s42-repro-${run.timestamp}
+provider:
+  kv: hf
+  score: synthetic
+  timing: hf
+teacher:
+  model_id: /workspace/models/Qwen3-4B
+  revision: main
+  dtype: float16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  num_layers: 36
+  num_kv_heads: 8
+  head_dim: 128
+student:
+  model_id: /workspace/models/Qwen3-1.7B
+  revision: main
+  dtype: float16
+  attention_implementation: sdpa
+  device_map: cuda:0
+  freeze: true
+  num_layers: 28
+  num_kv_heads: 8
+  head_dim: 128
+datasets:
+  fidelity:
+  - hellaswag
+  - arc_challenge
+  teacher_advantage:
+    primary: mmlu
+context_lengths:
+- 512
+mapper:
+  type: mlp
+  separate_kv: true
+  de_rope: true
+  de_rope_k: true
+  de_rope_v: false
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
+  rank: 16
+  inject_eval_calib_samples: 30
+  layer_selection: proportional
+  inject_eval: true
+  rope_align: rotated
+  mlp_hidden: 64
+  mlp_epochs: 300
+  mlp_lr: 0.001
+inject_eval:
+  max_samples: 60
+  seed: 42
+  calib_eval_split: true
+  calib_samples: 30
+  calib_shuffle: true
+  persist_kv: false
+  native_rescale: true
+  summary_baseline: false
+  probe_mode: false
+  eval_from_tail_n: 0
+  ablation_modes:
+  - self_kv
+  - native
+  - kv_both
+seeds:
+- 42
+output:
+  base_dir: reports/runs

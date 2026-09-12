@@ -1,0 +1,53 @@
+{
+  "task": "T10",
+  "contexts": [
+    8192,
+    16384
+  ],
+  "repeats": 10,
+  "warmup": 2,
+  "per_context": [
+    {
+      "context": 8192,
+      "psr_a_p50": 0.6166666666666667,
+      "psr_a_p95": 0.6166666666666667,
+      "n_be_median": 3,
+      "cost_b_p50": 117.1456,
+      "cost_b_p95": 117.1456,
+      "teacher_cache_bytes": 1207959552,
+      "student_cache_bytes": 939524096
+    },
+    {
+      "context": 16384,
+      "psr_a_p50": 0.6166666666666667,
+      "psr_a_p95": 0.6166666666666667,
+      "n_be_median": 3,
+      "cost_b_p50": 234.2912,
+      "cost_b_p95": 234.2912,
+      "teacher_cache_bytes": 2415919104,
+      "student_cache_bytes": 1879048192
+    }
+  ],
+  "vram_teacher_mb_est": 0.28125,
+  "ram_student_mb_est": 0.21875,
+  "scenario_definitions": {
+    "A": "natural handoff; PSR_A = 1 - (T_map+T_load+T_query)/T_prefill_S",
+    "B": "teacher-for-transfer; Cost = T_prefill_T + T_map + T_load + T_query",
+    "C": "one-teacher-many-students; N_BE = ceil((T_prefill_T + T_map) / (T_prefill_S - T_load - T_query))"
+  },
+  "single_card_pipeline_order": [
+    "teacher_load",
+    "forward",
+    "capture",
+    "cpu_offload",
+    "teacher_unload",
+    "cuda_cleanup",
+    "student_load",
+    "map",
+    "inject",
+    "decode"
+  ],
+  "offline_demo": true,
+  "timing_evidence": "cuda_proxy_not_end_to_end",
+  "note": "T10 使用 CUDA 代理算子诊断，不是 HandoffPipeline 端到端计时；PSR_A / Cost_B / N_BE 仍不可作为真实系统收益证据。"
+}

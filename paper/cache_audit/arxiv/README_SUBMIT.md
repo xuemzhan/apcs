@@ -19,11 +19,11 @@ figures/fig4_ppl_acc_decoupling.pdf
 |---|---|
 | Primary subject | cs.CL |
 | Cross-list | cs.LG; cs.AI |
-| Title | Cache Translation Across Heterogeneous LLMs: An Audit with Identity Controls and Oracle Bounds |
+| Title | Cache Translation Across Model Scale: An Audit with Identity Controls and Oracle Probes |
 | Authors | （投稿前替换 main.tex 中的 Anonymous 占位） |
 | Abstract | 见下方纯文本 |
 | License | CC BY 4.0（或 arXiv 默认） |
-| Comments | 11 pages, 3 figures, 2 tables. Code and run artifacts: apcs repository |
+| Comments | 14 pages, 3 figures, 3 tables. Code and run artifacts: apcs repository |
 | Journal ref / DOI | 暂无 |
 
 ## Abstract（表单纯文本版，无 TeX 命令）
@@ -32,24 +32,35 @@ Cache translation maps the key-value (KV) cache that a large teacher model
 forms over a context into the cache space of a smaller student model, so
 that the student answers without re-prefilling the context. A growing line
 of work reports quality-preserving translation across heterogeneous models.
-We audit this claim on Qwen3 pairs (4B to 1.7B and 4B to 0.6B) with a
-three-hypothesis framework and two instruments that prior evaluations omit.
-First, an identity control injects the student's own cache through the full
-translation-and-injection pipeline: it reproduces the student's own prefill
-exactly (per-sample logit cosine 1.000), which isolates mechanics from
-mapping. Second, oracle probes mix teacher-cache content into the student's
-own cache and bound what any translator could extract. Across five mapper
-families, a 200-example calibration ladder, and 21 recorded GPU runs, no
+We audit this claim on Qwen3 pairs (8B to 1.7B, 8B to 0.6B, 4B to 1.7B, and
+4B to 0.6B), plus five cross-architecture students, with a three-hypothesis
+framework and two instruments that prior
+evaluations omit. First, an identity control injects the student's own cache
+through the full translation-and-injection pipeline: it reproduces the
+student's own prefill exactly (per-sample logit cosine 1.000), which isolates
+mechanics from mapping. Second, oracle probes mix teacher-cache content into
+the student's own cache and probe what the student can extract from
+translated content. Across seven mapper families, a controlled calibration
+ladder on a fixed evaluation set, and 58 recorded audit-protocol runs, no
 configuration makes the strong student exceed its own prefill:
 gold-probability change spans -0.14 to -0.30 against a self-kv control at
-+0.000. The weak student reaches parity (+0.010, CI [-0.08, +0.10]). Oracle
-probes show a monotone decline as teacher content replaces student content
-in early and mid layers, and a perplexity-accuracy decoupling: a translator
-that restores near-native fluency (PPL 23.7 versus 21.2) still leaves
-accuracy at 0.267 versus 0.500. We conclude that the teacher's
-answer-relevant advantage does not survive KV-space translation under zero
-re-prefill: it lives in the teacher's weights, not in its cache. We release
-the audit protocol as a required checklist for cache-translation claims.
++0.000. A held-out reconstruction quantifies the structural cause: the best
+per-head mapper recovers student key states (R^2 = +0.81) but only partially
+recovers value states (R^2 = +0.32; per-(layer,head) mean over held-out
+calibration contexts). Calibration budget is inert (CHG -0.249 at c=30 vs
+-0.244 at c=200 on the same evaluation set), and the tested nonlinear MLP
+mapper does not close the gap. The weak student's point estimate is near
+parity (+0.010, CI [-0.08, +0.10]), but the interval is too wide to establish
+non-inferiority at the pre-specified margin. Oracle probes show a monotone
+decline as teacher content replaces student content in early and mid layers,
+robust to translator quality, and a perplexity-accuracy decoupling:
+near-native fluency (PPL 23.7 versus 21.2) still leaves accuracy at 0.267
+versus 0.500. Under zero re-prefill, no configuration we test lets the
+student extract the teacher's answer-relevant advantage from its cache; the
+evidence is consistent with an advantage that is weight-mediated rather than
+recoverable from raw KV states by the tested translators. The audit protocol
+doubles as a checklist that a future cache-translation claim can run in one
+evaluation.
 
 ## 已按 arXiv 规范完成的样式项
 
@@ -60,7 +71,7 @@ the audit protocol as a required checklist for cache-translation claims.
 - 零 Type 3 字体（已验证：24 个字体全部 Type 1 嵌入）
 - hyperref 携带 pdftitle/pdfauthor 元数据
 - `\input` 已展平（tab1 表格内联进 main.tex）
-- 干净环境编译验证：仅上传文件 + pdflatex×2 即可复现（11 页，0 错误，
+- 干净环境编译验证：仅上传文件 + pdflatex×2 即可复现（14 页，0 错误，
   引用全解析，bbl 直接生效）
 - 宏包全部在 arXiv TeX Live 集合内：geometry/amsmath/graphicx/booktabs/
   multirow/xcolor/tikz/natbib/microtype/hyperref/lmodern

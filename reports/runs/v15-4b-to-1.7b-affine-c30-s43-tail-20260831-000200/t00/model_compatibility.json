@@ -1,0 +1,45 @@
+{
+  "teacher": {
+    "model_id": "Qwen/Qwen3-4b",
+    "revision": "main",
+    "vocab_size": 151936,
+    "hidden_size": 2560,
+    "num_layers": 36,
+    "num_attention_heads": 32,
+    "num_kv_heads": 8,
+    "head_dim": 128,
+    "intermediate_size": 9728,
+    "max_position_embeddings": 40960,
+    "rope_theta": 1000000,
+    "rope_scaling": null,
+    "attention_implementation": "sdpa",
+    "dtype": "float16",
+    "tokenizer_hash": "unavailable:HF cache not found for Qwen/Qwen3-4b",
+    "extras": {}
+  },
+  "student": {
+    "model_id": "Qwen/Qwen3-1.7b",
+    "revision": "main",
+    "vocab_size": 151936,
+    "hidden_size": 2048,
+    "num_layers": 28,
+    "num_attention_heads": 16,
+    "num_kv_heads": 8,
+    "head_dim": 128,
+    "intermediate_size": 6144,
+    "max_position_embeddings": 40960,
+    "rope_theta": 1000000,
+    "rope_scaling": null,
+    "attention_implementation": "sdpa",
+    "dtype": "float16",
+    "tokenizer_hash": "unavailable:HF cache not found for Qwen/Qwen3-1.7b",
+    "extras": {}
+  },
+  "compatibility": {
+    "matched_kv": true,
+    "matched_hidden": false,
+    "same_tokenizer_vocab": true,
+    "verdict": "G1_MATCHED_KV",
+    "note": "Same family + matched KV heads / head_dim. 可直接进入 matched-KV 主实验 (design.md §10)."
+  }
+}

@@ -542,7 +542,7 @@ def _score_kv(kv_pred: np.ndarray, kv_ref: np.ndarray) -> dict[str, float]:
     a = kv_pred.reshape(-1, kv_pred.shape[-1])
     b = kv_ref.reshape(-1, kv_ref.shape[-1])
     return {
-        "r2": r2(a, b),
+        "r2": r2(b, a),
         "cosine": cosine(a, b),
         # KL 用"按 D 平均的 |kv|"当分布，1e-6 防止 0 值出现（log(0) 防御）
         "kl": kl_divergence(

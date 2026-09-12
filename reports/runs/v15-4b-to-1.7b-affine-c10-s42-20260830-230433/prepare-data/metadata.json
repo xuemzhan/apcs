@@ -1,0 +1,180 @@
+{
+  "generated_at": "2026-08-30T23:04:41.412209",
+  "config_enriched": {
+    "experiment": {
+      "name": "v15-4b-to-1.7b-affine-c10-s42",
+      "run_id": "v15-4b-to-1.7b-affine-c10-s42-20260830-230433"
+    },
+    "provider": {
+      "kv": "hf",
+      "score": "synthetic",
+      "timing": "hf"
+    },
+    "teacher": {
+      "model_id": "Qwen/Qwen3-4b",
+      "revision": "main",
+      "dtype": "float16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "student": {
+      "model_id": "Qwen/Qwen3-1.7b",
+      "revision": "main",
+      "dtype": "float16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "freeze": true,
+      "num_layers": 28,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "datasets": {
+      "fidelity": [
+        "hellaswag",
+        "arc_challenge"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu"
+      }
+    },
+    "context_lengths": [
+      512
+    ],
+    "mapper": {
+      "type": "affine",
+      "separate_kv": true,
+      "de_rope": true,
+      "de_rope_k": true,
+      "de_rope_v": false,
+      "ridge_lambda_k": 0.001,
+      "ridge_lambda_v": 0.001,
+      "rank": 16,
+      "inject_eval_calib_samples": 10,
+      "layer_selection": "proportional",
+      "inject_eval": true,
+      "rope_align": "rotated"
+    },
+    "inject_eval": {
+      "max_samples": 300,
+      "seed": 42,
+      "calib_eval_split": true,
+      "calib_samples": 10,
+      "calib_shuffle": true,
+      "persist_kv": false,
+      "native_rescale": true,
+      "summary_baseline": false,
+      "probe_mode": false,
+      "eval_from_tail_n": 100,
+      "ablation_modes": [
+        "self_kv",
+        "native",
+        "kv_both"
+      ]
+    },
+    "seeds": [
+      42
+    ],
+    "output": {
+      "base_dir": "reports/runs"
+    },
+    "teacher_model": "Qwen/Qwen3-4b",
+    "teacher_commit": "main",
+    "student_model": "Qwen/Qwen3-1.7b",
+    "student_commit": "main",
+    "tokenizer": "Qwen/Qwen3-4b",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 512,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 42,
+    "rank": 16,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    },
+    "cache_residency": "cpu"
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "task": "prepare-data",
+    "datasets": [
+      "hellaswag",
+      "arc_challenge",
+      "mmlu"
+    ],
+    "seed": 42,
+    "split_overlap_check": "PASS",
+    "manifest": "dataset_manifest.json",
+    "snapshot": "dataset_samples.json",
+    "student_score": null,
+    "teacher_score": null,
+    "handoff_score": null,
+    "retention": null,
+    "chg": null,
+    "tgrr": null,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": null,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "kv": {
+    "kind": "hf",
+    "implementation": "hf_modelscope",
+    "teacher_model_id": "Qwen/Qwen3-4B",
+    "student_model_id": "Qwen/Qwen3-1.7B",
+    "revision": "main",
+    "dtype": "bfloat16",
+    "device_map": "cuda:0",
+    "dataset": [
+      "hellaswag",
+      "arc_challenge",
+      "winogrande"
+    ],
+    "note": "K+V 沿 head_dim 拼接为 (L, S, H, 2D)；iter_eval 严格取 test split（§36）"
+  }
+}

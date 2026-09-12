@@ -115,3 +115,8 @@ paper/cache_audit/project_context.md
 paper/cache_audit/arxiv/*.aux
 paper/cache_audit/arxiv/*.out
 paper/cache_audit/arxiv/*.log
+
+# KV cache / mapper params（可复现生成的二进制，非跨机资产）
+*.npz
+reports/runs/**/kv_store/
+reports/runs/**/*.current

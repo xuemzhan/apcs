@@ -1,0 +1,324 @@
+{
+  "generated_at": "2026-08-18T23:44:43.317659",
+  "config_enriched": {
+    "experiment": {
+      "name": "qwen3-4b-to-1.7b",
+      "run_id": "qwen3-4b-to-1.7b-20260818-230910",
+      "description": "Same-family 主实验。Teacher Qwen3-4B, Student Qwen3-1.7B。\n验证 APCS 在 matched-KV 情形下的核心机制。\n"
+    },
+    "teacher": {
+      "model_id": "Qwen/Qwen3-4B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "student": {
+      "model_id": "Qwen/Qwen3-1.7B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "freeze": true,
+      "num_layers": 28,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "datasets": {
+      "fidelity": [
+        "hellaswag",
+        "arc_challenge",
+        "winogrande"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu",
+        "splits": [
+          "train",
+          "validation",
+          "test"
+        ]
+      },
+      "long_context": [
+        "ruler",
+        "longbench"
+      ],
+      "behavior_sensitive": [
+        "judge_set",
+        "ranker_set"
+      ]
+    },
+    "context_lengths": [
+      128
+    ],
+    "context_lengths_extended": [
+      128
+    ],
+    "mapper": {
+      "type": "ridge",
+      "rank": 4,
+      "separate_kv": true,
+      "de_rope": true,
+      "source_top_k": 2,
+      "layer_selection": "proportional",
+      "alpha_max": 0.5,
+      "rms_calibration": true,
+      "shared_basis": false,
+      "t06_aggregate_samples": 2,
+      "calibration_samples": 8,
+      "replacement_calib_samples": 8,
+      "replacement_eval_samples": 4,
+      "t04_eval_samples": 4,
+      "t06_context": 128,
+      "calibration_context": 128,
+      "t06_ranks": [
+        4,
+        8
+      ]
+    },
+    "advantage": {
+      "rank": 2,
+      "key": "lowrank",
+      "value": "lowrank",
+      "source_mixer": true,
+      "rms_calibration": true,
+      "bounded_alpha": true
+    },
+    "query_gate": {
+      "enabled": false
+    },
+    "loss": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01,
+      "teacher_weight_from": "train_split_margin"
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "statistics": {
+      "bootstrap_n": 200,
+      "ci": 0.95,
+      "paired_test": "permutation"
+    },
+    "timing": {
+      "warmup": 1,
+      "repeats": 2,
+      "sync_cuda": false,
+      "report": [
+        "p50"
+      ]
+    },
+    "cache_residency": "cpu",
+    "kv_save_full_debug": {
+      "max_samples": 10
+    },
+    "output": {
+      "base_dir": "reports/runs",
+      "files": [
+        "config.yaml",
+        "metrics.json",
+        "system.json",
+        "geometry.json",
+        "stdout.log",
+        "summary.md"
+      ]
+    },
+    "gates": {
+      "retention_min": 0.9,
+      "retention_strong": 0.95,
+      "chg_positive": true,
+      "psr_a_positive": true
+    },
+    "t09_n_samples": 4,
+    "kinds": [
+      "K"
+    ],
+    "teacher_model": "Qwen/Qwen3-4B",
+    "teacher_commit": "main",
+    "student_model": "Qwen/Qwen3-1.7B",
+    "student_commit": "main",
+    "tokenizer": "Qwen/Qwen3-4B",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 128,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 0,
+    "rank": 4,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    }
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "task": "T09",
+    "student_score": 0.5028901422325561,
+    "teacher_score": 0.80689080056413,
+    "teacher_gap": 0.30400065833157386,
+    "per_method": [
+      {
+        "method": "text",
+        "score": 0.5536508036380099,
+        "score_std": 0.03214098142655722,
+        "retention": 1.1009378731905626,
+        "chg": 0.050760661405453766,
+        "tgrr": 0.16697549829016836,
+        "jcr_vs_student": 0.4166666666666667
+      },
+      {
+        "method": "ridge",
+        "score": 0.5898798996060576,
+        "score_std": 0.02194620639341651,
+        "retention": 1.172979643202618,
+        "chg": 0.08698975737350145,
+        "tgrr": 0.286149897999963,
+        "jcr_vs_student": 0.5
+      },
+      {
+        "method": "base_only",
+        "score": 0.6056704085542352,
+        "score_std": 0.03128753435881694,
+        "retention": 1.2043791629428071,
+        "chg": 0.10278026632167903,
+        "tgrr": 0.33809224916077807,
+        "jcr_vs_student": 0.5
+      },
+      {
+        "method": "base_plus_adv",
+        "score": 0.6727389721580916,
+        "score_std": 0.022653634363264053,
+        "retention": 1.337745395388941,
+        "chg": 0.16984882992553552,
+        "tgrr": 0.5587120464070877,
+        "jcr_vs_student": 0.3333333333333333
+      },
+      {
+        "method": "full_apcs",
+        "score": 0.6767356129515711,
+        "score_std": 0.023131687101710766,
+        "retention": 1.3456927390686892,
+        "chg": 0.17384547071901502,
+        "tgrr": 0.5718588626522038,
+        "jcr_vs_student": 0.6666666666666666
+      }
+    ],
+    "chg_bootstrap": {
+      "point": 0.16984882992553552,
+      "ci_low": 0.14522589320549315,
+      "ci_high": 0.2059797985734974,
+      "ci": 0.95,
+      "n_samples": 4
+    },
+    "chg_permutation": {
+      "p_value": 0.057971014492753624,
+      "n_perm": 2000
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "n_samples_per_seed": 4,
+    "gap_strata": {
+      "low": {
+        "n": 1,
+        "student_score": 0.5486487749415221,
+        "teacher_score": 0.8344587493352607,
+        "gap_mean": 0.28580997439373856,
+        "base_plus_adv_chg": 0.15384639325383143,
+        "base_plus_adv_tgrr": 0.5382821001267402
+      },
+      "medium": {
+        "n": 1,
+        "student_score": 0.48830295106347976,
+        "teacher_score": 0.7784057346476031,
+        "gap_mean": 0.29010278358412334,
+        "base_plus_adv_chg": 0.16283520274140062,
+        "base_plus_adv_tgrr": 0.5613017590856105
+      },
+      "high": {
+        "n": 2,
+        "student_score": 0.4873044214626113,
+        "teacher_score": 0.8073493591368281,
+        "gap_mean": 0.3200449376742168,
+        "base_plus_adv_chg": 0.181356861853455,
+        "base_plus_adv_tgrr": 0.5666606170101759
+      }
+    },
+    "offline_demo": true,
+    "note": "T09 得分为合成数据（offline demo），不可作为真实能力迁移的证据；design.md §75 要求真实 Test 上 CHG>0 才支持 Runtime Capability Transfer",
+    "gate2a": "FAIL",
+    "handoff_score": 0.6727389721580916,
+    "retention": 1.337745395388941,
+    "chg": 0.16984882992553552,
+    "tgrr": 0.5587120464070877,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": 0.3333333333333333,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}

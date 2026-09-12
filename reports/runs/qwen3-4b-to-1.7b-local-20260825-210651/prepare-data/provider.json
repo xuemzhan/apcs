@@ -1,0 +1,14 @@
+{
+  "kv": {
+    "kind": "hf",
+    "status": "configured_not_opened"
+  },
+  "score": {
+    "kind": "synthetic",
+    "status": "configured_not_opened"
+  },
+  "timing": {
+    "kind": "hf",
+    "status": "configured_not_opened"
+  }
+}

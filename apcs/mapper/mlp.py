@@ -39,6 +39,7 @@ class MLPMapper:
         lr: float = 1e-3,
         weight_decay: float = 0.01,
         batch_size: int = 256,
+        seed: int = 0,
     ):
         self.lam = lam
         self.hidden = int(hidden)
@@ -46,6 +47,7 @@ class MLPMapper:
         self.lr = float(lr)
         self.weight_decay = float(weight_decay)
         self.batch_size = int(batch_size)
+        self.seed = int(seed)
         self.W: dict[tuple[str, int, int], np.ndarray] = {}  # 兼容接口
         self._models: dict[tuple[str, int, int], Any] = {}
 
@@ -96,6 +98,7 @@ class MLPMapper:
                 x_t = torch.tensor(x, device=device)
                 y_t = torch.tensor(y, device=device)
 
+                torch.manual_seed(self.seed * 1_000_003 + s * 131 + h)
                 model = nn.Sequential(
                     nn.Linear(D, self.hidden), nn.GELU(),
                     nn.Linear(self.hidden, self.hidden), nn.GELU(),

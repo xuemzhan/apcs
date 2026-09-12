@@ -1,0 +1,11 @@
+{
+  "task": "T02",
+  "head_dim": 128,
+  "theta": 1000000.0,
+  "n_layers": 3,
+  "n_heads": 3,
+  "n_tokens": 128,
+  "mean_max_err": 8.881784197001252e-16,
+  "mean_cosine": 1.0,
+  "gate": "PASS"
+}

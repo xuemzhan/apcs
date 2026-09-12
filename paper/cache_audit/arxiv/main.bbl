@@ -23,9 +23,11 @@ L.~M. Dery, Z.~Yahav, H.~Prior, Q.~Feng, J.~Shen, and A.~Szlam.
 \newblock Latent space communication via {KV} cache alignment.
 \newblock \emph{arXiv preprint arXiv:2601.06123}, 2026.
 
-\bibitem[Du et~al.(2025)]{interlat2025}
-Xiao Du et~al.
-\newblock Interlat: Latent-space message passing between language models.
+\bibitem[Du et~al.(2025)Du, Wang, Bai, Cao, Zhu, Cheng, Zheng, Chen, and
+  Ying]{interlat2025}
+Zhuoyun Du, Runze Wang, Huiyu Bai, Zouying Cao, Xiaoyong Zhu, Yu~Cheng,
+  Bo~Zheng, Wei Chen, and Haochao Ying.
+\newblock Enabling agents to communicate entirely in latent space.
 \newblock 2025.
 
 \bibitem[Fu et~al.(2025)Fu, Min, Zhang, Yan, Dai, Ouyang, and Wang]{c2c2025}
@@ -35,11 +37,11 @@ Tianyu Fu, Zhen Min, Hang Zhang, Jun Yan, Guohao Dai, Wanli Ouyang, and
   models.
 \newblock \emph{arXiv preprint arXiv:2510.03215}, 2025.
 
-\bibitem[Gao et~al.(2025)]{hcache2025}
-Rui Gao et~al.
-\newblock {HCache}: Cache restoration from hidden-state translation for
-  efficient {LLM} serving.
-\newblock In \emph{preprint}, 2025.
+\bibitem[Gao et~al.(2025)Gao, Chen, and Shu]{hcache2025}
+Shiwei Gao, Youmin Chen, and Jiwu Shu.
+\newblock Fast state restoration in {LLM} serving with {HCache}.
+\newblock In \emph{Proceedings of the Twentieth European Conference on Computer
+  Systems (EuroSys)}, 2025.
 \newblock Cited from MoT's baseline description (MoT-h variant).
 
 \bibitem[Geva et~al.(2021)Geva, Schuster, Berant, and Levy]{ffnmemory2021}
@@ -69,7 +71,7 @@ Minyoung Huh, Brian Cheung, Tongzhou Wang, and Phillip Isola.
 \bibitem[Jha et~al.(2025)Jha, Zhang, Shmatikov, and Morris]{vec2vec2025}
 Rishi Jha, Collin Zhang, Vitaly Shmatikov, and John~X. Morris.
 \newblock Harnessing the universal geometry of embeddings.
-\newblock In \emph{ICLR}, 2025.
+\newblock In \emph{NeurIPS}, 2025.
 \newblock \doi{10.52202/085713-1530}.
 
 \bibitem[Lee et~al.(2026)Lee, Song, Oh, Han, Park, Jang, and Lim]{mot2026}
@@ -102,10 +104,10 @@ Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
 \newblock In \emph{NeurIPS}, 2023.
 \newblock \doi{10.48550/arxiv.2304.08467}.
 
-\bibitem[Shi et~al.(2025)]{kvcomm2025}
-Zheng Shi et~al.
-\newblock {KVComm}: Selecting and sharing knowledge-rich {KV} cache layers
-  between language models.
+\bibitem[Shi et~al.(2025)Shi, Chiesa, Maguire, and Kostic]{kvcomm2025}
+Xiangyu Shi, Marco Chiesa, Jr. Maguire, Gerald~Q., and Dejan Kostic.
+\newblock {KVComm}: Enabling efficient {LLM} communication through selective
+  {KV} sharing.
 \newblock 2025.
 
 \bibitem[Xiao et~al.(2023)Xiao, Tian, Chen, Han, and Lewis]{streamingsink2023}

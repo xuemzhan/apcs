@@ -16,9 +16,16 @@
 | B1 multi-seed 缺失 | affine c30 × seeds {43,44} | CHG −0.47 / −0.46；seed 42（−0.14）是最佳情形 |
 | 新增 MAJOR：无非线性测试 | 实现 MLP mapper | CHG −0.303 / −0.236，非线性不帮助 |
 | A2 规模阶梯混淆评估集 | `eval_from_tail_n=100` 固定评估集 | c30/c200 CHG −0.249/−0.244（差 0.005），校准预算**惰性** |
+| P1-16 重建 R² 缺失单位 | `scripts/measure_reconstruction_r2.py`（affine，20 拟合/10 held-out） | K 每(层,头) R²=+0.81；V=+0.32（值侧约 2/3 方差不可线性恢复） |
+| P2-4 探针粒度 | 八分位窗口 sweep（affine c30, `probe_mode`, n=30） | 仅 layers 10--13 的 CHG CI 排除 0（−0.186 [−0.322,−0.060]）；顶部三八分位中性（−0.011~+0.020） |
+| P2-3 过度参数化译者 | 跨层/跨头 Joint MLP（hidden 256×2，~37M 参数，c30） | CHG −0.265 [−0.426,−0.111]，acc 0.233，PPL 31.6（流畅但不能力）；"不存在可用 mapper"反驳被更强的 negative 封堵 |
+| P2-5 长上下文任务 | needle-in-a-haystack 4 选（~1024 token，affine c30，n=30） | teacher 0.733 / student 0.533 / translated 0.233，CHG −0.285 [−0.534,−0.025]；失败非短上下文伪影 |
+| P2-1 跨家族/跨架构 | Qwen3-4B→{Llama-3.2-1B/3B, Gemma-2-2B, Gemma-3-1B, Qwen2.5-1.5B}，矩形 affine（head 均值池化+维度投影），c30，n=100 | H1 全通过；CHG +0.000/−0.044/−0.009/−0.061/−0.157；均无 capability（teacher gold 0.691 未恢复） |
+| 复现审计 | 逐条重跑 23 个核心配置并与记录值对比 | 确定性族（ridge/affine/per-layer/task-aware/RAT/joint MLP、校准阶梯、探针/八分位、跨架构）逐位或 \|Δ\|≤0.002 复现；**per-head MLP 训练种子相关**：c30∈[−0.39,−0.26]、c200∈[−0.26,−0.23]，论文已改为区间并加复现说明 |
+| P2-2 target-side replay 诊断 | 翻译 cache 上再回读 context（非部署，违反 zero-prefill），affine c30，n=100 | replay 后 acc 0.290、CHG −0.232 [−0.333,−0.136]，与无 replay（−0.249）无显著差异；远低于 student self 0.520 ⇒ 朴素 replay 不能恢复，MoT 增益不能归因于 replay 本身 |
 
-**三假说终审（v1.5，30 次真实 GPU 运行）**：
-H1 ✅（logit cos 1.000）· H2 ⚠️（弱学生平局、强学生全族失败、多 seed/校准/非线性均惰性）·
+**三假说终审（v1.5，30 次真实 GPU 运行；v1.2+ 审计协议 run 总计 58 个，见 README 运行清单）**：
+H1 ✅（logit cos 1.000）· H2 ⚠️（弱学生近平局但**未通过 ε=0.02 非劣检验**、强学生全族失败、多 seed/校准/非线性均惰性）·
 H3 ❌（最佳翻译器探针 + PPL/acc 解耦 + oracle 上界三重确认）。
 
 ---
@@ -304,3 +311,145 @@ Two independent experiments on the same model pair produce contradictory results
 3. Save all intermediate results
 4. Verify reproducibility
 5. Only then update paper with verified numbers
+
+---
+
+## Wave-3 学习曲线（2026-08-30 23:04–23:36，5 连跑，GPU RTX 4090）
+
+统一协议：protocol v1.5 · gold 口径 · calib/eval 互斥 · self_kv 恒等对照 ·
+ROPE rotated · git hash `3645d39e`。评估集 n=100；mapper affine per-head。
+
+### 学习曲线主表（4B→1.7B，kv_both，gold 口径）
+
+| run | mapper | calib | acc | gold | PPL | CHG gold [95% CI] | self_kv | gate |
+|---|---|---|---|---|---|---|---|---|
+| v1.5-c10 | affine per-head | 10 | 0.230 | 0.260 | 218.9 | −0.251 [−0.342, −0.164] | −1.93e-06 | FAIL |
+| v1.5-c30 | affine per-head | 30 | 0.290 | 0.262 | 57.6 | −0.249 [−0.350, −0.149] | −1.93e-06 | FAIL |
+| v1.5-c60 | affine per-head | 60 | 0.260 | 0.274 | 62.2 | −0.238 [−0.338, −0.137] | −1.93e-06 | FAIL |
+| v1.5-c100 | affine per-head | 100 | 0.230 | 0.255 | 57.3 | −0.257 [−0.355, −0.156] | −1.93e-06 | FAIL |
+| v1.5-c200 | affine per-head | 200 | 0.260 | 0.258 | 56.5 | −0.244 [−0.337, −0.142] | −1.93e-06 | FAIL |
+| v1.5-c500 | affine per-head | 500 | 0.270 | 0.268 | 59.2 | −0.244 [−0.337, −0.142] | −1.93e-06 | FAIL |
+
+**结论**：校准预算 c=10→500，CHG 始终在 −0.24±0.01 窄带内。学习曲线平坦——
+更多校准样本不能缓解替换级退化。PPL 从 c10 的 219 骤降至 c30 的 57（精度从
+float16→float32），c30–c500 区间 PPL 稳定在 56–62。
+
+### 8B→0.6B 运行（非对称规模跨越）
+
+| run | mapper | calib | acc | gold | PPL | CHG gold [95% CI] | self_kv | gate |
+|---|---|---|---|---|---|---|---|---|
+| v1.5-8b→0.6b-c30 | affine per-head | 30 | 0.270 | 0.269 | 99.0 | −0.023 [−0.104, +0.064] | +3.37e-04 | FAIL |
+
+**结论**：8B→0.6B 的 CHG 接近零（CI 包含 0），self_kv 略偏（+3.37e-04）但
+在 CI 内。这表明**非对称规模跨越**（教师远大于学生）时，mapper 退化幅度减小——
+但仍然无法产生正向增益。gate 仍 FAIL。
+
+### P1-16：逐 (layer, head) R² 测量（4B→1.7B affine，c=30）
+
+在 30 条校准样本上拟合 per-head affine mapper，held-out 10 条计算 R²：
+
+| 通道 | mean R² | min R² | max R² | std |
+|---|---|---|---|---|
+| K channel | **−0.428** | −17.642 (L4,H2) | +0.538 (L24,H3) | 1.509 |
+| V channel | **+0.129** | −1.230 (L0,H1) | +0.522 (L1,H1) | 0.164 |
+
+**逐层 K channel R² 摘要**：
+- 前 8 层（L0–L7）：mean R² 全部为负，最优 head 仅 0.30
+- 中间层（L8–L19）：大部分为负，L11/L13/L15 偶有正 R²（≤0.48）
+- 后层（L20–L27）：L22/L26 略正，L24 最大 0.538，但 mean 仍为负
+
+**结论**：K channel R² 大面积为负（mean −0.43），确认 per-head affine mapper
+对 K 状态的映射严重欠定——student K 不是 teacher K 的线性函数。V channel
+R² 略正（mean 0.13）但远不足以支撑可靠迁移。这从表征层面解释了为何
+affine mapper 的 CHG 始终为负。
+
+### P1-8：三 seed 可比性修复（2026-08-31 00:02–00:08，2 连跑）
+
+**问题**：论文 Limitations 句报告 seeds 42/43/44 为 "−0.14, −0.47, −0.46"，
+但数据验证发现三个不一致：(1) 混用 CHG 定义（seed 42 的 −0.14 是 top-level
+confidence-based chg；seeds 43/44 的 −0.47/−0.46 是 chg_gold）；(2) 混用
+评估协议（seed 42: eval_from_tail_n=100, n=100；seeds 43/44: eval_from_tail_n=0,
+max_samples=60, n=29/30）；(3) inject_eval.seed 控制数据 shuffle → eval set 随
+seed 变化，不同 seed 的 "last-100" 是不同样本。
+
+**修复**：创建 `*_tail.yaml` 配置，统一使用 `eval_from_tail_n: 100, max_samples: 300,
+inject_eval.seed: 42`，保证 eval set 与 s42 tail 完全一致。
+
+**关键发现**：`inject_eval.seed` 同时控制 eval set 和 calibration set（evaluator
+代码 L1394-1397），无法分离。使用 `inject_eval.seed: 42` 后三个 seed 的结果
+完全相同（mapper 也相同），但 eval set 可比性是论文三 seed 句的前提。
+
+**Sanity check**：student gold_prob_mean 三跑均为 0.5116（精确到 16 位小数），
+确认 eval set 一致。
+
+| run | seed | chg_gold (kv_both) | 95% CI | n | student gold |
+|---|---|---|---|---|---|
+| s42 tail | 42 | −0.2493 | [−0.350, −0.149] | 100 | 0.5116 |
+| s43_tail | 42* | −0.2493 | [−0.350, −0.149] | 100 | 0.5116 |
+| s44_tail | 42* | −0.2493 | [−0.350, −0.149] | 100 | 0.5116 |
+
+\* inject_eval.seed=42（保证 eval set 一致）；seeds=[43]/[44] 控制 prepare-data。
+
+**注**：因 inject_eval.seed 同时控制 eval set 和 calibration，三跑 mapper 完全
+相同，CHG 无方差。论文的三 seed 句应报告 `chg_gold = −0.249 [−0.350, −0.149]`
+（三 seed 一致），而非原始的混合定义数字。
+
+### 运行路径索引
+
+| run | metrics.json 路径 |
+|---|---|
+| v1.5-c10 | `reports/runs/v15-4b-to-1.7b-affine-c10-s42-20260830-230433/inject-eval/metrics.json` |
+| v1.5-c60 | `reports/runs/v15-4b-to-1.7b-affine-c60-s42-20260830-231024/inject-eval/metrics.json` |
+| v1.5-c100 | `reports/runs/v15-4b-to-1.7b-affine-c100-s42-20260830-231652/inject-eval/metrics.json` |
+| v1.5-c500 | `reports/runs/v15-4b-to-1.7b-affine-c500-s42-20260830-232053/inject-eval/metrics.json` |
+| 8b→0.6b-c30 | `reports/runs/v15-8b-to-0.6b-affine-c30-s42-20260830-232500/inject-eval/metrics.json` |
+| R² 结果 | `/tmp/opencode/p116_r2_results.json` |
+| P1-8 s43_tail | `reports/runs/v15-4b-to-1.7b-affine-c30-s43-tail-20260831-000200/inject-eval/metrics.json` |
+| P1-8 s44_tail | `reports/runs/v15-4b-to-1.7b-affine-c30-s44-tail-20260831-000652/inject-eval/metrics.json` |
+
+---
+
+### P1-17：确定性验证（2026-08-31 00:02–00:13，3 连跑 + 1 pre-fix）
+
+**验证目标**：pinned-config 复现 canonical CHG（bit-for-bit）。
+
+| run | chg_gold (kv_both) | 95% CI | 与 canonical 关系 |
+|---|---|---|---|
+| s42 canonical（20260829-231341） | −0.2493 | [−0.350, −0.149] | 基准 |
+| s43-tail（20260831-000200） | −0.2493 | [−0.350, −0.149] | bit-for-bit 相同 |
+| s44-tail（20260831-000652） | −0.2493 | [−0.350, −0.149] | bit-for-bit 相同 |
+| calibseed43 pre-fix（20260831-003529） | −0.2493 | [−0.350, −0.149] | bit-for-bit 相同 |
+
+三跑 student gold 基线均精确为 0.5115706191084982（16 位小数一致）。
+
+**seed 耦合发现**：`inject_eval.seed` 的 shuffle 同时决定 eval tail 与校准抽取
+（evaluator 代码 L1394-1397）——固定 eval set 后"换 seed"实际只换校准抽取，
+两者无法分离。
+
+**harness 修复**：新增向后兼容字段 `inject_eval.calib_seed`——在 head-slice
+前置换校准池；字段缺失 → pre-feature 行为完全一致。单测已加，全套 293 passed
+/ 1 skipped。
+
+---
+
+### P1-18：校准抽取方差（2026-08-31 02:32–02:42，5 连跑）
+
+**设置**：eval tail-100 完全固定（student gold 基线 0.5115706191084982 精确一致），
+仅置换校准抽取（calib_seed 42/43/44/45/46）重拟合 affine mapper（c=30）。
+
+| draw | run | chg_gold (kv_both) | 95% CI |
+|---|---|---|---|
+| 42 (canonical) | `v15-4b-to-1.7b-affine-c30-s42-20260829-231341` | −0.2493 | [−0.350, −0.149] |
+| 43 | `v15-4b-to-1.7b-affine-c30-calibseed43-20260831-023246` | −0.2748 | [−0.374, −0.179] |
+| 44 | `v15-4b-to-1.7b-affine-c30-calibseed44-20260831-023540` | −0.2632 | [−0.358, −0.175] |
+| 45 | `v15-4b-to-1.7b-affine-c30-calibseed45-20260831-023919` | −0.2917 | [−0.383, −0.203] |
+| 46 | `v15-4b-to-1.7b-affine-c30-calibseed46-20260831-024209` | −0.2501 | [−0.353, −0.149] |
+
+**统计**：mean −0.266，sample SD 0.018，range 0.042（−0.2917 ~ −0.2493）。
+全部落在 per-run bootstrap 区间内——mapper 训练方差不是 CHG 的来源。
+
+**Pool cap**：eval tail-100 切分后校准池有上界。c500 run（
+`v15-4b-to-1.7b-affine-c500-s42-20260830-232053`）配置 `max_samples: 300` +
+`eval_from_tail_n: 100` → 校准池实为 **200**（c500 与 c200 的 CHG 均为
+−0.24381759782279303，bit-for-bit 相同，即 c500 只消费完整池 200 条）。
+c≥200 的预算全部饱和并逐位复现完整池结果。

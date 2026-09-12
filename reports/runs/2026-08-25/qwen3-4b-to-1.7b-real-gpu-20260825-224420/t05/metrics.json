@@ -1,0 +1,41 @@
+{
+  "task": "T05",
+  "contexts": [
+    78
+  ],
+  "retention_per_context": [
+    {
+      "context": 78,
+      "retention": 0.7641992797022421,
+      "token_agreement": 0.58203125,
+      "retention_K": 0.9650119520851215,
+      "retention_V": 0.5633866073193627,
+      "token_agreement_K": 0.84375,
+      "token_agreement_V": 0.3203125
+    }
+  ],
+  "mean_retention": 0.7641992797022421,
+  "mean_token_agreement": 0.58203125,
+  "latency_p50_ms": 4247.096888720989,
+  "latency_p95_ms": 5283.009073138237,
+  "repeats": 10,
+  "warmup": 2,
+  "gap_strata": {
+    "low": [],
+    "medium": [
+      0.7641992797022421
+    ],
+    "high": []
+  },
+  "gate1": "FAIL",
+  "data_source": "hf",
+  "offline_demo": false,
+  "de_rope_k": true,
+  "de_rope_v": false,
+  "ridge_lambda_k": 0.001,
+  "ridge_lambda_v": 0.01,
+  "mean_retention_K": 0.9650119520851215,
+  "mean_retention_V": 0.5633866073193627,
+  "mean_token_agreement_K": 0.84375,
+  "mean_token_agreement_V": 0.3203125
+}

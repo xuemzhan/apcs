@@ -7,7 +7,7 @@ name = "apcs"
 version = "0.1.0"
 description = "APCS — Advantage-Preserving Cache Synthesis: 跨模型 KV Cache 运行时能力迁移实验工程"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "KVCache-APCS authors" }]
 keywords = ["kv-cache", "llm", "state-handoff", "research"]

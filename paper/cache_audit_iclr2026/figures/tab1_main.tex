@@ -1,0 +1,28 @@
+\caption{Main audit results. Acc/gold/PPL: answer accuracy,
+gold-letter probability, and perplexity of the scoring suffix for
+the translated cache (kv-both). CHG is the gold-probability change
+over the student's own prefill with 95\% bootstrap CIs. Pairs:
+Qwen3-4B$\to$1.7B unless noted. All runs use disjoint
+calibration/evaluation splits and the unified prompt format.}
+\label{tab:main}
+\small
+\begin{tabular}{lccc}
+\toprule
+Configuration & Acc / Gold / PPL & Gold CHG [95\% CI] \\
+\midrule
+Identity control (self-kv), 1.7B & 0.500 / 0.503 / 21.2 & -- \\
+Student self-prefill, 1.7B & 0.500 / 0.503 / 25.4 & -- \\
+Teacher (full prefill), 1.7B & 0.767 / 0.693 / -- & -- \\
+Native average, 1.7B & 0.167 / 0.169 / 536082.5 & $-0.334$ [$-0.508, -0.154$] \\
+Ridge per-head, c=30, 1.7B & 0.200 / 0.207 / 88.5 & $-0.296$ [$-0.479, -0.121$] \\
+Affine per-head, c=30, 1.7B & 0.367 / 0.365 / 46.1 & $-0.138$ [$-0.317, +0.029$] \\
+Affine per-head, c=200, 1.7B & 0.254 / 0.258 / 56.4 & $-0.239$ [$-0.354, -0.134$] \\
+Affine per-layer, c=200, 1.7B & 0.206 / 0.222 / 81441.1 & $-0.275$ [$-0.407, -0.140$] \\
+Task-aware, c=200, 1.7B & 0.270 / 0.280 / 142.1 & $-0.216$ [$-0.336, -0.105$] \\
+RAT, c=30, 1.7B & 0.233 / 0.235 / 501.6 & $-0.268$ [$-0.440, -0.092$] \\
+RAT, c=200, 1.7B & 0.238 / 0.276 / 1008.2 & $-0.221$ [$-0.340, -0.104$] \\
+RAT no-anchor rank-32, c=30, 1.7B & 0.267 / 0.280 / 23.7 & $-0.223$ [$-0.367, -0.088$] \\
+Affine per-head, c=200, 0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.081, +0.102$] \\
+RAT, c=200, 0.6B & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.120, +0.038$] \\
+\bottomrule
+\end{tabular}

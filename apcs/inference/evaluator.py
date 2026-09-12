@@ -230,6 +230,7 @@ def compute_ppl(
     past_key_values: Any | None = None,
     attention_mask: np.ndarray | None = None,
     position_ids: np.ndarray | None = None,
+    model_attention_mask: np.ndarray | None = None,
 ) -> float:
     """计算 perplexity = exp(cross_entropy_loss)。
 
@@ -280,6 +281,20 @@ def compute_ppl(
             if pos_t.ndim == 1:
                 pos_t = pos_t.unsqueeze(0)
             kwargs["position_ids"] = pos_t
+        if attention_mask is not None:
+            mask_t = torch.as_tensor(
+                np.asarray(attention_mask), dtype=torch.long
+            ).to(model.device)
+            if mask_t.ndim == 1:
+                mask_t = mask_t.unsqueeze(0)
+            kwargs["attention_mask"] = mask_t
+        if model_attention_mask is not None:
+            m_mask_t = torch.as_tensor(
+                np.asarray(model_attention_mask), dtype=torch.long
+            ).to(model.device)
+            if m_mask_t.ndim == 1:
+                m_mask_t = m_mask_t.unsqueeze(0)
+            kwargs["attention_mask"] = m_mask_t
 
         with torch.no_grad():
             outputs = model(**kwargs)
@@ -684,9 +699,25 @@ class InjectionEvaluator:
                 hidden=int(m_cfg.get("mlp_hidden", 64)),
                 epochs=int(m_cfg.get("mlp_epochs", 200)),
                 lr=float(m_cfg.get("mlp_lr", 1e-3)),
+                seed=int(m_cfg.get("mlp_seed", 0)),
             )
             self._mapper_k = _MLP(**common)
             self._mapper_v = _MLP(**common)
+        elif mapper_type in ("joint_mlp", "jointmlp"):
+            from ..mapper.joint_mlp import JointMLPMapper as _JM
+            m_cfg = self.cfg.get("mapper", {})
+            common = dict(
+                hidden=int(m_cfg.get("joint_hidden", 256)),
+                epochs=int(m_cfg.get("joint_epochs", 300)),
+                lr=float(m_cfg.get("joint_lr", 1e-3)),
+                n_hidden_layers=int(m_cfg.get("joint_layers", 2)),
+            )
+            self._mapper_k = _JM(lam=_ridge_lambda(self.cfg, "K"), **common)
+            self._mapper_v = _JM(lam=_ridge_lambda(self.cfg, "V"), **common)
+        elif mapper_type in ("rect_affine", "cross_affine"):
+            from ..mapper.rect import RectAffineMapper as _RA
+            self._mapper_k = _RA(lam=_ridge_lambda(self.cfg, "K"))
+            self._mapper_v = _RA(lam=_ridge_lambda(self.cfg, "V"))
         else:  # default: ridge (per-head)
             self._mapper_k = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "V"))
@@ -1162,6 +1193,13 @@ class InjectionEvaluator:
                     final_kv[third:2 * third] = translated[third:2 * third]
                 elif ablation_mode == "win_high":
                     final_kv[2 * third:] = translated[2 * third:]
+                elif ablation_mode.startswith("win_oct"):
+                    oct_idx = int(ablation_mode[len("win_oct"):])
+                    if not 0 <= oct_idx < 8:
+                        raise ValueError(f"win_oct 索引越界: {ablation_mode}")
+                    bounds = [(i * L_p) // 8 for i in range(9)]
+                    lo, hi = bounds[oct_idx], bounds[oct_idx + 1]
+                    final_kv[lo:hi] = translated[lo:hi]
                 else:
                     raise ValueError(f"未知探针窗口模式: {ablation_mode}")
 
@@ -1221,8 +1259,9 @@ class InjectionEvaluator:
             k_aligned = _align_to_student(k_np)
             final_kv = np.concatenate([k_aligned, mapped_v], axis=-1)
 
-        elif ablation_mode == "kv_both":
-            # Case 4: K 和 V 都映射（Full Handoff）
+        elif ablation_mode in ("kv_both", "replay"):
+            # Case 4: K 和 V 都映射（Full Handoff）。
+            # "replay" additionally runs a target-side correction pass below.
             k_de_rope = _de_rope_for_kind(self.cfg, "K", de_rope_fn)
             v_de_rope = _de_rope_for_kind(self.cfg, "V", de_rope_fn)
             mapped_k = self._mapper_k.transform(
@@ -1281,6 +1320,34 @@ class InjectionEvaluator:
         past_before = cache_seq_len(cache)
         counters.query_past_len = past_before
 
+        # P2-2 diagnostic: target-side replay/correction pass. The student
+        # re-reads the context on top of the translated cache, modeling the
+        # correction pass that MoT's reported quality includes. This violates
+        # zero re-prefill and is explicitly non-deployable; it exists only to
+        # quantify how much of MoT's quality comes from replay rather than from
+        # the translated cache content.
+        if ablation_mode == "replay":
+            ctx_ids = self._student_tokenizer(
+                self._handoff_context_text(row), return_tensors="np"
+            ).input_ids.reshape(-1)
+            n_ctx = len(ctx_ids)
+            ctx_t = torch.as_tensor(
+                ctx_ids.reshape(1, -1), dtype=torch.long
+            ).to(self._student_device)
+            ctx_pos = torch.arange(
+                S, S + n_ctx, dtype=torch.long
+            ).unsqueeze(0).to(self._student_device)
+            with torch.no_grad():
+                self._student_model(
+                    ctx_t, past_key_values=cache, use_cache=True,
+                    position_ids=ctx_pos,
+                    attention_mask=torch.ones(
+                        (1, S + n_ctx), dtype=torch.long,
+                        device=self._student_device,
+                    ),
+                )
+            S = S + n_ctx
+
         # ⑤ Student decode q tokens（zero-prefill：只喂统一 suffix）
         # P0.5: suffix 与 student_self 等方法逐 token 一致（消除格式混淆）
         suffix = _unified_suffix_text(row.query)
@@ -1312,12 +1379,16 @@ class InjectionEvaluator:
                 dtype=self._student_model.dtype, num_attention_heads=None,
             ),
             position_ids=np.arange(S, S + n_query, dtype=np.int64),
-        )
+            model_attention_mask=np.ones(S + n_query, dtype=np.int64),
+        ) if ablation_mode != "replay" else float("inf")
         # ⑦ Student scoring forward（独立 cache，未被 PPL 污染）
         with torch.no_grad():
             student_out = self._student_model(
                 suffix_t, past_key_values=cache, use_cache=False,
                 position_ids=pos_ids,
+                attention_mask=torch.ones(
+                    (1, S + n_query), dtype=torch.long, device=self._student_device
+                ),
             )
         # ◆ D1 审计语义（修订）：transformers 会把本次 forward 的 n_query 个
         #   suffix token 追加进 cache —— 这是 HF 行为，不是 zero-prefill 违反。
@@ -1332,8 +1403,9 @@ class InjectionEvaluator:
 
         del student_out, cache
 
-        # §52 审计断言
-        counters.assert_zero_prefill()
+        # §52 审计断言（replay 诊断路径有意 re-prefill，跳过零 prefill 断言）
+        if ablation_mode != "replay":
+            counters.assert_zero_prefill()
         counters.assert_query_handoff()
 
         score, decision = score_choices(logits, choice_ids)
@@ -1400,6 +1472,11 @@ class InjectionEvaluator:
             if n_eval_fixed > 0 and len(rows_work) > n_eval_fixed:
                 eval_rows = rows_work[-n_eval_fixed:]
                 calib_rows = rows_work[:-n_eval_fixed]
+                calib_seed = int(self.cfg.get("inject_eval", {}).get("calib_seed", -1))
+                if calib_seed >= 0:
+                    rng_cs = np.random.default_rng(calib_seed)
+                    calib_perm = rng_cs.permutation(len(calib_rows))
+                    calib_rows = [calib_rows[i] for i in calib_perm]
                 if self._n_calib > 0 and len(calib_rows) > self._n_calib:
                     calib_rows = calib_rows[: self._n_calib]
             else:
@@ -1615,20 +1692,20 @@ class InjectionEvaluator:
                                 s_k_np, np.arange(min_S, dtype=np.float64), rope_inv_freq
                             )
 
-                        # Only add if shapes are compatible (same head_dim)
-                        if t_k_np.shape[-1] == s_k_np.shape[-1]:
-                            real_kv_calib["K"].append((t_k_np, s_k_np))
-                            real_kv_calib["V"].append((t_v_np, s_v_np))
-                            student_kv_by_id[row.sample_id] = (s_k_np, s_v_np)
-                            # P0.6: 逐层平均 L2 范数（教师 vs 学生）
-                            norm_acc["K"]["teacher"].append(
-                                np.linalg.norm(t_k_np, axis=-1).mean(axis=(1, 2)))
-                            norm_acc["K"]["student"].append(
-                                np.linalg.norm(s_k_np, axis=-1).mean(axis=(1, 2)))
-                            norm_acc["V"]["teacher"].append(
-                                np.linalg.norm(t_v_np, axis=-1).mean(axis=(1, 2)))
-                            norm_acc["V"]["student"].append(
-                                np.linalg.norm(s_v_np, axis=-1).mean(axis=(1, 2)))
+                        # Append all paired samples; the rectangular mapper
+                        # handles cross-family head-dim and KV-head mismatch.
+                        real_kv_calib["K"].append((t_k_np, s_k_np))
+                        real_kv_calib["V"].append((t_v_np, s_v_np))
+                        student_kv_by_id[row.sample_id] = (s_k_np, s_v_np)
+                        # P0.6: 逐层平均 L2 范数（教师 vs 学生）
+                        norm_acc["K"]["teacher"].append(
+                            np.linalg.norm(t_k_np, axis=-1).mean(axis=(1, 2)))
+                        norm_acc["K"]["student"].append(
+                            np.linalg.norm(s_k_np, axis=-1).mean(axis=(1, 2)))
+                        norm_acc["V"]["teacher"].append(
+                            np.linalg.norm(t_v_np, axis=-1).mean(axis=(1, 2)))
+                        norm_acc["V"]["student"].append(
+                            np.linalg.norm(s_v_np, axis=-1).mean(axis=(1, 2)))
                     except Exception as e:  # noqa: BLE001
                         logger.warning(
                             "[inject-eval] Calibration KV capture failed for %s: %s",

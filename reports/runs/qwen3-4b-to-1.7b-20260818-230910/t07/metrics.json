@@ -1,0 +1,11 @@
+{
+  "n_total": 64,
+  "n_validation": 32,
+  "n_train": 32,
+  "gap_distribution": {
+    "low": 8,
+    "medium": 16,
+    "high": 8
+  },
+  "mean_gap_validation": 0.165388084262023
+}

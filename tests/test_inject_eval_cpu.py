@@ -623,6 +623,67 @@ class TestCLIRegistration:
 # 10. _orthogonal_projection 确定性
 # ---------------------------------------------------------------------------
 
+class TestCalibSeed:
+    """calib_seed 分离校准 shuffle 与 eval set 选择。
+
+    契约（evaluator 固定尾部分支, eval_from_tail_n>0）:
+        eval_rows = rows_work[-n_eval_fixed:]
+        calib_rows = rows_work[:-n_eval_fixed]
+        if calib_seed >= 0: calib_rows = rng(calib_seed).permutation(calib_rows)
+        if n_calib > 0 and len(calib_rows) > n_calib: calib_rows = calib_rows[:n_calib]
+    注意: 该测试复刻 permute-then-slice 契约于 fake rows（SimpleNamespace，
+    含可去重 sample_id），不实例化完整 Evaluator（需 GPU/模型加载）。
+    """
+
+    @staticmethod
+    def _select(n_total, n_eval, n_calib, calib_seed=None, shuffle_seed=42):
+        """按契约返回 (calib_ids, eval_ids)；calib_seed=None 表示配置缺省。"""
+        from types import SimpleNamespace
+
+        rows = [SimpleNamespace(sample_id=f"s{i}") for i in range(n_total)]
+        rows_work = list(np.random.default_rng(shuffle_seed).permutation(rows))
+        eval_rows = rows_work[-n_eval:]
+        calib_rows = rows_work[:-n_eval]
+        if calib_seed is not None:
+            rng_cs = np.random.default_rng(calib_seed)
+            calib_perm = rng_cs.permutation(len(calib_rows))
+            calib_rows = [calib_rows[i] for i in calib_perm]
+        if n_calib > 0 and len(calib_rows) > n_calib:
+            calib_rows = calib_rows[:n_calib]
+        return {r.sample_id for r in calib_rows}, {r.sample_id for r in eval_rows}
+
+    def test_different_seed_different_calib_set(self):
+        """(a) 相同 base seed + 不同 calib_seed → 不同 calib sample_id 集合（pool > n_calib）。"""
+        n_total, n_eval, n_calib = 200, 30, 30
+        calib_a, _ = self._select(n_total, n_eval, n_calib, calib_seed=43)
+        calib_b, _ = self._select(n_total, n_eval, n_calib, calib_seed=44)
+        # pool=170 > n_calib=30 → 两个不同 permutation 的头部 30 必不同集合
+        assert len(calib_a) == n_calib
+        assert len(calib_b) == n_calib
+        assert calib_a != calib_b
+
+    def test_absent_seed_matches_prefeature_head_selection(self):
+        """(b) 缺省 calib_seed → 与旧版 head-selection（无 shuffle）逐位一致。"""
+        from types import SimpleNamespace
+
+        n_total, n_eval, n_calib = 200, 30, 30
+        rows = [SimpleNamespace(sample_id=f"s{i}") for i in range(n_total)]
+        rows_work = list(np.random.default_rng(42).permutation(rows))
+        # 旧版（无 calib_seed 块）: calib = 直接取 pool 头部
+        pre_feature = {r.sample_id for r in rows_work[:-n_eval][:n_calib]}
+        calib_ids, _ = self._select(n_total, n_eval, n_calib, calib_seed=None)
+        assert calib_ids == pre_feature
+
+    def test_seed_keeps_eval_set_fixed(self):
+        """(c) eval 集由 calib_seed 不变（始终 = 尾部 n_eval）。"""
+        n_total, n_eval, n_calib = 200, 30, 30
+        _, eval_a = self._select(n_total, n_eval, n_calib, calib_seed=43)
+        _, eval_b = self._select(n_total, n_eval, n_calib, calib_seed=44)
+        _, eval_none = self._select(n_total, n_eval, n_calib, calib_seed=None)
+        assert eval_a == eval_b == eval_none
+        assert len(eval_a) == n_eval
+
+
 class TestOrthogonalProjection:
     """确定性正交投影矩阵生成。"""
 

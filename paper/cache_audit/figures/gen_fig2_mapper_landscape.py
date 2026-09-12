@@ -8,6 +8,7 @@ data = json.load(open(DATA))
 SELECT_17B = [
     ("v12-4b-1.7b-ridge-20260829-144617",       "Ridge (per-head)", "30"),
     ("v12-4b-1.7b-affine-20260829-142010",      "Affine (per-head)", "30"),
+    ("v15-4b-to-1.7b-jointmlp-c30-s42-20260912-072431", "Joint MLP", "30"),
     ("v13-4b-to-1.7b-affine-c200-20260829-152704", "Affine (per-head)", "200"),
     ("v13-4b-to-1.7b-affine-c200-lam1e-02-20260829-154654", "Affine $\\lambda$=1e-2", "200"),
     ("v13-4b-to-1.7b-affine-c200-lam1e-01-20260829-155201", "Affine $\\lambda$=1e-1", "200"),

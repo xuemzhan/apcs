@@ -1,0 +1,12 @@
+{
+  "task": "prepare-data",
+  "datasets": [
+    "hellaswag",
+    "arc_challenge",
+    "mmlu"
+  ],
+  "seed": 43,
+  "split_overlap_check": "PASS",
+  "manifest": "dataset_manifest.json",
+  "snapshot": "dataset_samples.json"
+}

@@ -68,7 +68,7 @@ apcs/
 ├── tests/                   # 133 单测（test_protocol_v11.py 覆盖 v1.1→v1.5）
 ├── configs/v1{1,2,3,4,5}_*.yaml
 ├── paper/cache_audit/       # main.tex + figures + references.bib + arxiv/ 打包 + review_report.md
-├── reports/runs/            # 92 个运行产物（metrics.json，git hash 落盘）
+├── reports/runs/            # 92 个运行产物（metrics.json，git hash 落盘）；其中 v1.2+ 审计协议 run 58 个
 └── PROTOCOL.md / EXPERIMENT_LOG.md / CRITICAL_REVIEW_RESPONSE.md / DATA_PROVENANCE.md
 ```
 

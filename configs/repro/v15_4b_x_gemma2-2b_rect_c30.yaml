@@ -1,0 +1,65 @@
+context_lengths:
+- 512
+datasets:
+  fidelity:
+  - hellaswag
+  - arc_challenge
+  teacher_advantage:
+    primary: mmlu
+experiment:
+  name: v15-4b-x-gemma2-2b-rect-c30-s42-repro
+  run_id: v15-4b-x-gemma2-2b-rect-c30-s42-repro-${run.timestamp}
+inject_eval:
+  ablation_modes:
+  - self_kv
+  - kv_both
+  calib_eval_split: true
+  calib_samples: 30
+  calib_shuffle: true
+  eval_from_tail_n: 100
+  max_samples: 300
+  native_rescale: false
+  persist_kv: false
+  probe_mode: false
+  seed: 42
+  summary_baseline: false
+mapper:
+  de_rope: true
+  de_rope_k: true
+  de_rope_v: false
+  inject_eval: true
+  inject_eval_calib_samples: 30
+  layer_selection: proportional
+  rank: 16
+  ridge_lambda_k: 0.001
+  ridge_lambda_v: 0.001
+  rope_align: rotated
+  separate_kv: true
+  type: rect_affine
+output:
+  base_dir: reports/runs
+provider:
+  kv: hf
+  score: synthetic
+  timing: hf
+seeds:
+- 42
+student:
+  attention_implementation: sdpa
+  device_map: cuda:0
+  dtype: float16
+  freeze: true
+  head_dim: 256
+  model_id: /workspace/models/Gemma-2-2B
+  num_kv_heads: 4
+  num_layers: 26
+  revision: main
+teacher:
+  attention_implementation: sdpa
+  device_map: cuda:0
+  dtype: float16
+  head_dim: 128
+  model_id: /workspace/models/Qwen3-4B
+  num_kv_heads: 8
+  num_layers: 36
+  revision: main

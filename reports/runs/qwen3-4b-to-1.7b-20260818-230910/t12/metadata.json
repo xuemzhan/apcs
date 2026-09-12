@@ -1,0 +1,532 @@
+{
+  "generated_at": "2026-08-18T23:40:40.779975",
+  "config_enriched": {
+    "experiment": {
+      "name": "qwen3-4b-to-1.7b",
+      "run_id": "qwen3-4b-to-1.7b-20260818-230910",
+      "description": "Same-family 主实验。Teacher Qwen3-4B, Student Qwen3-1.7B。\n验证 APCS 在 matched-KV 情形下的核心机制。\n"
+    },
+    "teacher": {
+      "model_id": "Qwen/Qwen3-4B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "student": {
+      "model_id": "Qwen/Qwen3-1.7B",
+      "revision": "main",
+      "dtype": "bfloat16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "freeze": true,
+      "num_layers": 28,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "datasets": {
+      "fidelity": [
+        "hellaswag",
+        "arc_challenge",
+        "winogrande"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu",
+        "splits": [
+          "train",
+          "validation",
+          "test"
+        ]
+      },
+      "long_context": [
+        "ruler",
+        "longbench"
+      ],
+      "behavior_sensitive": [
+        "judge_set",
+        "ranker_set"
+      ]
+    },
+    "context_lengths": [
+      128
+    ],
+    "context_lengths_extended": [
+      128
+    ],
+    "mapper": {
+      "type": "ridge",
+      "rank": 4,
+      "separate_kv": true,
+      "de_rope": true,
+      "source_top_k": 2,
+      "layer_selection": "proportional",
+      "alpha_max": 0.5,
+      "rms_calibration": true,
+      "shared_basis": false,
+      "t06_aggregate_samples": 2,
+      "calibration_samples": 8,
+      "replacement_calib_samples": 8,
+      "replacement_eval_samples": 4,
+      "t04_eval_samples": 4,
+      "t06_context": 128,
+      "calibration_context": 128,
+      "t06_ranks": [
+        4,
+        8
+      ]
+    },
+    "advantage": {
+      "rank": 2,
+      "key": "lowrank",
+      "value": "lowrank",
+      "source_mixer": true,
+      "rms_calibration": true,
+      "bounded_alpha": true
+    },
+    "query_gate": {
+      "enabled": false
+    },
+    "loss": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01,
+      "teacher_weight_from": "train_split_margin"
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "statistics": {
+      "bootstrap_n": 200,
+      "ci": 0.95,
+      "paired_test": "permutation"
+    },
+    "timing": {
+      "warmup": 1,
+      "repeats": 2,
+      "sync_cuda": false,
+      "report": [
+        "p50"
+      ]
+    },
+    "cache_residency": "cpu",
+    "kv_save_full_debug": {
+      "max_samples": 10
+    },
+    "output": {
+      "base_dir": "reports/runs",
+      "files": [
+        "config.yaml",
+        "metrics.json",
+        "system.json",
+        "geometry.json",
+        "stdout.log",
+        "summary.md"
+      ]
+    },
+    "gates": {
+      "retention_min": 0.9,
+      "retention_strong": 0.95,
+      "chg_positive": true,
+      "psr_a_positive": true
+    },
+    "t09_n_samples": 4,
+    "kinds": [
+      "K"
+    ],
+    "teacher_model": "Qwen/Qwen3-4B",
+    "teacher_commit": "main",
+    "student_model": "Qwen/Qwen3-1.7B",
+    "student_commit": "main",
+    "tokenizer": "Qwen/Qwen3-4B",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 128,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 0,
+    "rank": 4,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    }
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "task": "T12",
+    "placeholder": true,
+    "n_layers_compared": 28,
+    "mean_cka": 0.9433895281768622,
+    "mean_principal_angle": 2.3835745924539507e-08,
+    "mean_attn_output_cosine": -0.00933340003456941,
+    "mean_head_correlation": 0.06994921342816911,
+    "geometry": {
+      "placeholder": true,
+      "note": "若 placeholder=True，metrics 由合成子空间生成，请用 hidden_states_path 接入真实模型。",
+      "per_layer": [
+        {
+          "student_layer": 0,
+          "teacher_layer": 0,
+          "cka": 0.9457354688183519,
+          "principal_angle": 3.332000937312528e-08,
+          "effective_rank_t": 7.9249194812593196,
+          "effective_rank_s": 7.939582617814612,
+          "attn_output_cosine": -0.01957786024634839,
+          "head_correlation": 0.07034124272919327
+        },
+        {
+          "student_layer": 1,
+          "teacher_layer": 1,
+          "cka": 0.9696686820920619,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.95288602772595,
+          "effective_rank_s": 7.946210918506384,
+          "attn_output_cosine": -0.040924751060925815,
+          "head_correlation": 0.06641749236845898
+        },
+        {
+          "student_layer": 2,
+          "teacher_layer": 3,
+          "cka": 0.9425522013249912,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.948473169932046,
+          "effective_rank_s": 7.930031466307632,
+          "attn_output_cosine": -0.08001103655095992,
+          "head_correlation": 0.06397662844620973
+        },
+        {
+          "student_layer": 3,
+          "teacher_layer": 4,
+          "cka": 0.9535810876286783,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.924429362452539,
+          "effective_rank_s": 7.939322321934922,
+          "attn_output_cosine": -0.07383082697961596,
+          "head_correlation": 0.07630843779776064
+        },
+        {
+          "student_layer": 4,
+          "teacher_layer": 5,
+          "cka": 0.9405847697613892,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.949678644150717,
+          "effective_rank_s": 7.937578468664457,
+          "attn_output_cosine": -0.014532278489024596,
+          "head_correlation": 0.0596257838312987
+        },
+        {
+          "student_layer": 5,
+          "teacher_layer": 7,
+          "cka": 0.9418161161985028,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.911707382811459,
+          "effective_rank_s": 7.921112275935485,
+          "attn_output_cosine": 0.1267707625569578,
+          "head_correlation": 0.08837053817697868
+        },
+        {
+          "student_layer": 6,
+          "teacher_layer": 8,
+          "cka": 0.9577612645027583,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.919585768861643,
+          "effective_rank_s": 7.960201943844822,
+          "attn_output_cosine": -0.12865515387069676,
+          "head_correlation": 0.06395609310811272
+        },
+        {
+          "student_layer": 7,
+          "teacher_layer": 9,
+          "cka": 0.9311962371171401,
+          "principal_angle": 1.4901161193847656e-08,
+          "effective_rank_t": 7.94088481581943,
+          "effective_rank_s": 7.911508761196553,
+          "attn_output_cosine": -0.18589166638589577,
+          "head_correlation": 0.06754831994205247
+        },
+        {
+          "student_layer": 8,
+          "teacher_layer": 10,
+          "cka": 0.9511557683292102,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.930940723029967,
+          "effective_rank_s": 7.919732034203233,
+          "attn_output_cosine": -0.12883133013413317,
+          "head_correlation": 0.06688095521364623
+        },
+        {
+          "student_layer": 9,
+          "teacher_layer": 12,
+          "cka": 0.9093510835951141,
+          "principal_angle": 2.9802322387695312e-08,
+          "effective_rank_t": 7.914943158514802,
+          "effective_rank_s": 7.932896920855368,
+          "attn_output_cosine": -0.06659430517322115,
+          "head_correlation": 0.07465597729398975
+        },
+        {
+          "student_layer": 10,
+          "teacher_layer": 13,
+          "cka": 0.9409860215125526,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.947400704736904,
+          "effective_rank_s": 7.918058142786545,
+          "attn_output_cosine": 0.082051797947247,
+          "head_correlation": 0.07268093715120835
+        },
+        {
+          "student_layer": 11,
+          "teacher_layer": 14,
+          "cka": 0.937639184639641,
+          "principal_angle": 3.332000937312528e-08,
+          "effective_rank_t": 7.91265138399651,
+          "effective_rank_s": 7.956349364083348,
+          "attn_output_cosine": 0.09224360221288608,
+          "head_correlation": 0.08357058799461974
+        },
+        {
+          "student_layer": 12,
+          "teacher_layer": 16,
+          "cka": 0.9483667445281505,
+          "principal_angle": 0.0,
+          "effective_rank_t": 7.928569094139636,
+          "effective_rank_s": 7.943189429630176,
+          "attn_output_cosine": -0.018799930761666882,
+          "head_correlation": 0.07168596445574975
+        },
+        {
+          "student_layer": 13,
+          "teacher_layer": 17,
+          "cka": 0.9121888091965971,
+          "principal_angle": 2.9802322387695312e-08,
+          "effective_rank_t": 7.9506906237989305,
+          "effective_rank_s": 7.89273813758789,
+          "attn_output_cosine": 0.029228351656679006,
+          "head_correlation": 0.06238034109498437
+        },
+        {
+          "student_layer": 14,
+          "teacher_layer": 18,
+          "cka": 0.9302857348443533,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.90490473643285,
+          "effective_rank_s": 7.943374388460566,
+          "attn_output_cosine": -0.1011580285526987,
+          "head_correlation": 0.08667054389216758
+        },
+        {
+          "student_layer": 15,
+          "teacher_layer": 19,
+          "cka": 0.9684952259321125,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.925036509549948,
+          "effective_rank_s": 7.948367653860602,
+          "attn_output_cosine": 0.005253166814754972,
+          "head_correlation": 0.06270142241042086
+        },
+        {
+          "student_layer": 16,
+          "teacher_layer": 21,
+          "cka": 0.9184692107806911,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.917195651937565,
+          "effective_rank_s": 7.906697177187553,
+          "attn_output_cosine": -0.04134612325692296,
+          "head_correlation": 0.06261033634794036
+        },
+        {
+          "student_layer": 17,
+          "teacher_layer": 22,
+          "cka": 0.9368605728130506,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.948806854405458,
+          "effective_rank_s": 7.922321537065208,
+          "attn_output_cosine": 0.03733626619252408,
+          "head_correlation": 0.05353006263555639
+        },
+        {
+          "student_layer": 18,
+          "teacher_layer": 23,
+          "cka": 0.9374161621536252,
+          "principal_angle": 1.4901161193847656e-08,
+          "effective_rank_t": 7.929031805261751,
+          "effective_rank_s": 7.8942149034170255,
+          "attn_output_cosine": 0.09058234125725916,
+          "head_correlation": 0.0750462904871
+        },
+        {
+          "student_layer": 19,
+          "teacher_layer": 25,
+          "cka": 0.9444703922269568,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.929998993716029,
+          "effective_rank_s": 7.943379015540933,
+          "attn_output_cosine": -0.07009148213952288,
+          "head_correlation": 0.07129812370199894
+        },
+        {
+          "student_layer": 20,
+          "teacher_layer": 26,
+          "cka": 0.9289421426911109,
+          "principal_angle": 2.9802322387695312e-08,
+          "effective_rank_t": 7.931618549997523,
+          "effective_rank_s": 7.936433357128866,
+          "attn_output_cosine": -0.179124390893935,
+          "head_correlation": 0.08051836292322559
+        },
+        {
+          "student_layer": 21,
+          "teacher_layer": 27,
+          "cka": 0.9602308642949593,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.918353525302671,
+          "effective_rank_s": 7.9350452138568235,
+          "attn_output_cosine": 0.05597488636176196,
+          "head_correlation": 0.07571432183830944
+        },
+        {
+          "student_layer": 22,
+          "teacher_layer": 28,
+          "cka": 0.946037042059349,
+          "principal_angle": 2.9802322387695312e-08,
+          "effective_rank_t": 7.8918438232265595,
+          "effective_rank_s": 7.922253072803381,
+          "attn_output_cosine": 0.28651812510803853,
+          "head_correlation": 0.0838553635318342
+        },
+        {
+          "student_layer": 23,
+          "teacher_layer": 30,
+          "cka": 0.96854903311858,
+          "principal_angle": 4.2146848510894035e-08,
+          "effective_rank_t": 7.92259494591999,
+          "effective_rank_s": 7.947313558092278,
+          "attn_output_cosine": 0.11454528613833186,
+          "head_correlation": 0.06282543155198614
+        },
+        {
+          "student_layer": 24,
+          "teacher_layer": 31,
+          "cka": 0.9538096000778685,
+          "principal_angle": 1.4901161193847656e-08,
+          "effective_rank_t": 7.947539254335498,
+          "effective_rank_s": 7.942205838257834,
+          "attn_output_cosine": -0.05932823559421116,
+          "head_correlation": 0.06259542637383667
+        },
+        {
+          "student_layer": 25,
+          "teacher_layer": 32,
+          "cka": 0.9459982326042133,
+          "principal_angle": 1.4901161193847656e-08,
+          "effective_rank_t": 7.939897404899496,
+          "effective_rank_s": 7.887645992350028,
+          "attn_output_cosine": -0.04871717239167138,
+          "head_correlation": 0.06154573862655548
+        },
+        {
+          "student_layer": 26,
+          "teacher_layer": 34,
+          "cka": 0.9283022160782889,
+          "principal_angle": 2.5809568279517847e-08,
+          "effective_rank_t": 7.924955316437936,
+          "effective_rank_s": 7.909932743022742,
+          "attn_output_cosine": 0.21297733365574606,
+          "head_correlation": 0.07260429991177197
+        },
+        {
+          "student_layer": 27,
+          "teacher_layer": 35,
+          "cka": 0.9644569200318406,
+          "principal_angle": 2.1073424255447017e-08,
+          "effective_rank_t": 7.954336399976554,
+          "effective_rank_s": 7.913932377218427,
+          "attn_output_cosine": -0.13740254838867946,
+          "head_correlation": 0.05866295215176825
+        }
+      ],
+      "mean_cka": 0.9433895281768622,
+      "mean_principal_angle": 2.3835745924539507e-08,
+      "mean_attn_output_cosine": -0.00933340003456941,
+      "mean_head_correlation": 0.06994921342816911,
+      "fig7_axes": {
+        "Fig.7a": "layer × layer CKA",
+        "Fig.7b": "principal_angle × CHG (T09)",
+        "Fig.7c": "attn_output_cosine × retention (T05)",
+        "Fig.7d": "effective_rank × CHG"
+      }
+    },
+    "student_score": null,
+    "teacher_score": null,
+    "handoff_score": null,
+    "retention": null,
+    "chg": null,
+    "tgrr": null,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": null,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}
