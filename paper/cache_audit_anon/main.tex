@@ -898,7 +898,14 @@ $R^2 = 0.854$ for keys and $0.481$ for values, with training-split $R^2$ $0.949$
 and $0.647$---and yet that mapper's downstream change is worse ($-0.27$ versus
 $-0.14$). Better cache-state reconstruction does not buy task performance here,
 and the value channel stays only partially recoverable even on the fitting
-split. Second, the teacher's advantage over the student is consistent with
+split. The closest published design fails the same way for the same channel: in the
+Heo-style baseline, adding source layers makes reconstruction worse, not better---per-(layer,head)
+held-out $R^2$ falls from $0.822$ to $0.787$ to $0.762$ for keys and from $0.317$ to $0.248$ to
+$0.182$ for values as $k$ goes from $1$ to $3$ to $5$, with the training-split value $R^2$ also
+dropping ($0.430 \to 0.295 \to 0.222$). Suffix perplexity tracks that collapse ($78.5 \to 2629.6
+\to 6.9\times10^{4}$): averaging several source layers dilutes the value signal rather than
+recovering it, so the baseline’s instability is a property of the mapping on this pair rather than
+a case of good reconstruction with broken attention. Second, the teacher's advantage over the student is consistent with
 being mediated by parameter-dependent computation that raw cache transfer does
 not reproduce. FFN layers carry the model's factual
 associations~\citep{ffnmemory2021}, and the capability gap between Qwen3-4B
