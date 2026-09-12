@@ -24,7 +24,7 @@
 | 复现审计 | 逐条重跑 23 个核心配置并与记录值对比 | 确定性族（ridge/affine/per-layer/task-aware/RAT/joint MLP、校准阶梯、探针/八分位、跨架构）逐位或 \|Δ\|≤0.002 复现；**per-head MLP 训练种子相关**：c30∈[−0.39,−0.26]、c200∈[−0.26,−0.23]，论文已改为区间并加复现说明 |
 | P2-2 target-side replay 诊断 | 翻译 cache 上再回读 context（非部署，违反 zero-prefill），affine c30，n=100 | replay 后 acc 0.290、CHG −0.232 [−0.333,−0.136]，与无 replay（−0.249）无显著差异；远低于 student self 0.520 ⇒ 朴素 replay 不能恢复，MoT 增益不能归因于 replay 本身 |
 
-**三假说终审（v1.5，30 次真实 GPU 运行；v1.2+ 审计协议 run 总计 58 个，见 README 运行清单）**：
+**三假说终审（v1.5，30 次真实 GPU 运行；v1.2+ 审计协议 run 总计 96 个，见 README 运行清单）**：
 H1 ✅（logit cos 1.000）· H2 ⚠️（弱学生近平局但**未通过 ε=0.02 非劣检验**、强学生全族失败、多 seed/校准/非线性均惰性）·
 H3 ❌（最佳翻译器探针 + PPL/acc 解耦 + oracle 上界三重确认）。
 

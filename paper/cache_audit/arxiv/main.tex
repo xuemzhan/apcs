@@ -46,9 +46,9 @@ translated content. Across seven
 mapper families (per-head ridge, affine, per-layer affine, task-aware, a
 residual-anchored translator, a per-head MLP, and an over-parameterized
 joint MLP), a controlled calibration
-ladder on a fixed evaluation set, and 58 recorded audit-protocol runs, no configuration
+ladder on a fixed evaluation set, and 96 recorded audit-protocol runs, no configuration
 makes the strong student exceed its own prefill: gold-probability change
-spans $-0.14$ to $-0.30$ against a self-kv control at $+0.000$. Calibration
+spans $-0.14$ to $-0.39$ against a self-kv control at $+0.000$. Calibration
 budget is inert (CHG $-0.249$ at $c{=}30$ vs $-0.244$ at $c{=}200$ on the
 same evaluation set), and nonlinearity does not help. The weak
 student's point estimate is near parity ($+0.010$, CI $[-0.08,+0.10]$), but
@@ -112,7 +112,7 @@ control reproduces the student's own prefill with per-sample logit cosine
 $1.000$ and a gold-probability change of $+0.0001$
 ($95\%$ CI $[-0.0006, +0.0009]$), so mechanics is not the failure mode. H2
 fails for the strong student: across the mapper ladder, the gold-probability
-change over the student's own prefill spans $-0.14$ to $-0.30$ (best and
+change over the student's own prefill spans $-0.14$ to $-0.39$ (best and
 worst mapper configurations; see Section~\ref{sec:results}), and the best
 single configuration reaches $0.365$ against a student baseline of $0.503$;
 the weak

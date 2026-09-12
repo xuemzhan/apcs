@@ -16,13 +16,13 @@
 
 ---
 
-## 最终裁决（三假说框架，30 次真实 GPU 运行）
+## 最终裁决（三假说框架，199 个运行产物 / 96 次 v1.2+ 审计协议运行）
 
 | 假说 | 判定 | 关键证据 |
 |---|---|---|
 | **H1 机制无损** | ✅ 通过 | `self_kv` 恒等注入 ≡ 学生自 prefill，逐样本 logit 余弦 1.000 |
-| **H2 替换级** | ⚠️ 弱学生平局；强学生全族失败 | 6 族 mapper，CHG −0.14 ~ −0.47（3 seed）；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（MLP −0.303） |
-| **H3 能力迁移** | ❌ 原理性否定 | oracle 探针单调劣化（对翻译器质量鲁棒）+ PPL/acc 解耦（PPL 23.7 但 acc 0.267） |
+| **H2 替换级** | ⚠️ 弱学生近平局但未过 ε=0.02 非劣；强学生全族失败 | 7 族 mapper，CHG −0.14 ~ −0.39；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（MLP 训练种子区间 −0.39~−0.23）；5 个跨架构学生均无能力迁移 |
+| **H3 能力迁移** | ❌ 原理性否定 | oracle 探针（fraction/三分位/八分位）单调劣化 + 原生内容对照 + PPL/acc 解耦（PPL 23.7 但 acc 0.267）；长上下文（~1k token）同样失败；朴素 target-side replay 不能恢复 |
 
 **核心机理**：教师优势在其**参数**（FFN 电路），不在缓存。V 状态经 W_V·h 投影，
 h 在 W_V 行空间外的分量对教师缓存不可见 → V_S 不是 V_T 的函数，任何翻译器都只能
@@ -68,7 +68,7 @@ apcs/
 ├── tests/                   # 133 单测（test_protocol_v11.py 覆盖 v1.1→v1.5）
 ├── configs/v1{1,2,3,4,5}_*.yaml
 ├── paper/cache_audit/       # main.tex + figures + references.bib + arxiv/ 打包 + review_report.md
-├── reports/runs/            # 92 个运行产物（metrics.json，git hash 落盘）；其中 v1.2+ 审计协议 run 58 个
+├── reports/runs/            # 199 个运行产物（metrics.json，git hash 落盘）；其中 v1.2+ 审计协议 run 96 个
 └── PROTOCOL.md / EXPERIMENT_LOG.md / CRITICAL_REVIEW_RESPONSE.md / DATA_PROVENANCE.md
 ```
 
