@@ -57,8 +57,7 @@ ladder on one fixed evaluation set stays within $[-0.257, -0.238]$ from $10$ to
 $200$ examples, and an implementation of the closest published
 strict-zero-reprefill design---top-$k$ cross-layer source selection with
 de-RoPE keys---is worse still ($-0.27$ to $-0.31$, every interval below zero).
-The only translated configurations whose intervals clear our pre-specified
-replacement margin ($\epsilon{=}0.02$) are two near-chance students (accuracy
+The only translated configurations whose intervals clear our reporting replacement margin ($\epsilon{=}0.02$) are two near-chance students (accuracy
 $0.30$ and $0.27$) whose gains are indistinguishable from zero. A 0.6B student is not established as
 non-inferior ($+0.010$ $[-0.081, +0.102]$ for 4B$\to$0.6B; $-0.023$
 $[-0.104, +0.064]$ for 8B$\to$0.6B). No probe configuration yields a gain whose
@@ -123,7 +122,7 @@ The audit returns three verdicts; Section~\ref{sec:tiers} labels which of them
 were pre-specified and which are extensions made while revising. H1 passes: the
 identity control reproduces the student's own prefill (per-sample logit cosine
 $0.99998$; gold-probability change $+0.0001$, $95\%$ CI $[-0.0006, +0.0009]$),
-so mechanics is not the failure mode. H2 fails for the strong student:
+so mechanics is not the failure mode. no tested strong-student mapper establishes replacement:
 gold-probability change over the student's own prefill ranges from $-0.138$
 (best configuration) to $-0.392$ (worst) across the mapper ladder, the best
 configuration reaches $0.365$ against a $0.503$ student baseline, and on one
@@ -151,11 +150,11 @@ and component ablations, all under one protocol
 (Section~\ref{sec:method}, Section~\ref{sec:results}); we additionally derive
 the most architecture-informed translator we could (RAT), and it fails too,
 which strengthens the negative. The third is a verdict
-with consequences: mechanics passes, replacement fails for the strong student
+with consequences: mechanics passes, no strong-student mapper establishes replacement
 and is inconclusive for the weak one, no probe configuration with teacher
 content produces an interval-excluded gain, and perplexity
 cannot stand in for accuracy as evidence (Section~\ref{sec:results},
-Section~\ref{sec:implications}). H2's failure routes the audit to H3
+Section~\ref{sec:implications}). H2's null result routes the audit to H3
 because the probes measure what a frozen student can extract from
 teacher-cache content without training anything, so a null result cannot
 be blamed on the mapper.
@@ -642,8 +641,7 @@ with de-RoPE keys (the design of Heo et al.), at $k\in\{1,3,5\}$ and $c{=}200$
 on the fixed evaluation set, degrades the strong student by $-0.273$
 $[-0.380,-0.158]$, $-0.308$ $[-0.417,-0.200]$, and $-0.291$
 $[-0.399,-0.192]$ respectively, with suffix perplexity rising from $78.5$ to
-$6.9\times10^{4}$ as $k$ grows. The negative result therefore covers the closest
-published baseline and not only our own ladder. Two
+$6.9\times10^{4}$ as $k$ grows. The negative result therefore persists after importing the two defining design choices of the closest published strict-zero-reprefill mapper---top-$k$ cross-layer selection and de-RoPE key mapping---into our audit calibration regime; it is not a strict reproduction, since that system calibrates on 500 FineWeb-Edu sequences of 1{,}024 tokens rather than our 200 audit-context examples and concatenates the selected source layers where our implementation averages them. Two
 aggregates summarize the strong-student result. Across the $128$ translated configuration
 rows recorded under the audit protocol, the largest point estimate is $+0.010$,
 and it belongs to the weak-student pair; every strong-student row is negative.
@@ -657,8 +655,7 @@ aggregation script; ``translated'' excludes the identity, native-content,
 text-channel, and probe rows.} Scaling
 the teacher to 8B under the same protocol does not change the verdict:
 self-injection remains an identity (logit cosine $0.99998$) and the ridge
-mapper reaches CHG $-0.224$ $[-0.320, -0.123]$ at $c{=}500$, so H2's failure
-is robust to teacher scale. The
+mapper reaches CHG $-0.224$ $[-0.320, -0.123]$ at $c{=}500$, so Failure to establish H2 persists at the teacher scale. The
 weak 0.6B student tells the opposite story. Affine at $c{=}200$ gives a
 near-parity point estimate $+0.010$ $[-0.081, +0.102]$, and 8B$\to$0.6B gives
 $-0.023$ $[-0.104, +0.064]$; both intervals include zero, but both lower
@@ -917,8 +914,7 @@ Heo-style baseline, adding source layers makes reconstruction worse, not better-
 held-out $R^2$ falls from $0.822$ to $0.787$ to $0.762$ for keys and from $0.317$ to $0.248$ to
 $0.182$ for values as $k$ goes from $1$ to $3$ to $5$, with the training-split value $R^2$ also
 dropping ($0.430 \to 0.295 \to 0.222$). Suffix perplexity tracks that collapse ($78.5 \to 2629.6
-\to 6.9\times10^{4}$): averaging several source layers dilutes the value signal rather than
-recovering it, so the baseline’s instability is a property of the mapping on this pair rather than
+\to 6.9\times10^{4}$): in our averaged variant, combining the selected source layers dilutes the value signal rather than recovering it, so the baseline’s instability is a property of the mapping on this pair rather than
 a case of good reconstruction with broken attention. Second, the teacher's advantage over the student is consistent with
 being mediated by parameter-dependent computation that raw cache transfer does
 not reproduce. FFN layers carry the model's factual
@@ -956,8 +952,7 @@ For deployment, the weak student presents a near-parity regime rather than a
 demonstrated capability transfer. At 0.6B, translated injection is
 statistically indistinguishable from self-prefill
 (4B$\to$0.6B: $+0.010$ $[-0.081,+0.102]$; 8B$\to$0.6B: $-0.023$
-$[-0.104,+0.064]$), but neither interval clears the pre-specified
-non-inferiority margin, so replacement-level service is not established, and
+$[-0.104,+0.064]$), but neither interval clears the reported $\epsilon{=}0.02$ replacement margin, so replacement-level service is not established, and
 at near-chance absolute accuracy ($0.302$ versus $0.25$ random) this is not an
 endorsement. Top-layer injection is harmless, which means a system that
 must spend translation capacity can spend it there, though our probes also
@@ -1152,7 +1147,8 @@ then refit on the full calibration split & not specified in the reference \\
 Key mapping & de-RoPE keys (\texttt{de\_rope\_k}) & yes (de-RoPE keys) \\
 Penalty & $\lambda=10^{-3}$, K and V fitted separately & not specified \\
 Candidate source layers & all teacher layers & not specified \\
-Calibration volume & the same 200 contexts as the affine $c{=}200$ row & not specified \\
+Calibration volume & 200 audit-context examples (as in the affine $c{=}200$ row) & 500 FineWeb-Edu sequences of 1{,}024 tokens \
+Source-layer combination & average of the selected layers & concatenation of the selected layers \
 \bottomrule
 \end{tabular}\end{center}
 
