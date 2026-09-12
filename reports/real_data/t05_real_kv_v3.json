@@ -1,0 +1,21 @@
+{
+ "seq": 53,
+ "n_calib": 16,
+ "n_eval": 16,
+ "per_kind": {
+  "K": {
+   "retention": 0.9757600655412288,
+   "token_agreement": 0.8359375,
+   "cosine": 0.9757600655412288
+  },
+  "V": {
+   "retention": 0.7328491509446331,
+   "token_agreement": 0.328125,
+   "cosine": 0.7328491509446331
+  }
+ },
+ "mean_retention": 0.854304608242931,
+ "mean_token_agreement": 0.58203125,
+ "gate1": "CONDITIONAL",
+ "data_source": "real_hellaswag_hf_kv_common_min_len"
+}

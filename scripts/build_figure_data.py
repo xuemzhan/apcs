@@ -12,14 +12,26 @@ from pathlib import Path
 NEW_RUN_PREFIXES = [
     "v15-4b-to-1.7b-affine-c30-probes-s42-20260829-234406",
     "v15-4b-to-1.7b-jointmlp-c30-s42",
+    "v14-4b-to-1.7b-rat-c30-noanchor",
+    "v14-4b-to-1.7b-rat-c30-probes",
+    "v14-4b-to-0.6b-rat-c200",
     "v15-4b-to-1.7b-affine-c30-longctx-s42",
     "v15-4b-to-1.7b-affine-c30-probes-octant-s42",
     "v15-4b-to-1.7b-affine-c30-replay-s42",
+    "v15-4b-to-1.7b-affine-c30-s42-20260829-231341",
+    "v13-4b-to-0.6b-affine-c200-20260829-154145",
+    "v15-8b-to-1.7b-ridge-c500",
+    "v15-8b-to-0.6b-affine-c30",
+    "v15-4b-to-1.7b-mlp-c",
+    "v15-4b-to-1.7b-jointmlp-c30-seed",
     "v15-4b-x-llama1b-rect-c30-s42",
     "v15-4b-x-gemma2-2b-rect-c30-s42",
     "v15-4b-x-llama32-3b-rect-c30-s42",
     "v15-4b-x-qwen25-1.5b-rect-c30-s42",
     "v15-4b-x-gemma3-1b-rect-c30-s42",
+    "v15-4b-x-llama32-3b-rect-align-c30-s42",
+    "v15-4b-x-gemma3-1b-rect-align-c30-s42",
+    "v15-4b-x-qwen25-1.5b-rect-align-c30-s42",
 ]
 
 TARGETS = [
@@ -54,14 +66,14 @@ def main() -> int:
         mpath = d / "inject-eval" / "metrics.json"
         if not mpath.exists():
             continue
-        m = json.loads(mpath.read_text())
+        m = json.loads(mpath.read_text(encoding="utf-8"))
         added[d.name] = make_entry(m)
         print("add", d.name, "n=", m.get("n_samples"))
 
     for tgt in TARGETS:
-        data = json.loads(tgt.read_text()) if tgt.exists() else {}
+        data = json.loads(tgt.read_text(encoding="utf-8")) if tgt.exists() else {}
         data.update(added)
-        tgt.write_text(json.dumps(data, indent=1))
+        tgt.write_text(json.dumps(data, indent=1), encoding="utf-8")
         print("wrote", tgt, "entries", len(data))
     return 0
 

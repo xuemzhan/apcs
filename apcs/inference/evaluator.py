@@ -483,6 +483,7 @@ class InjectionEvaluator:
         # P0-Oracle 探针（H3 上界判定）：允许 mix_*/win_* 探针模式
         # ⚠️ 探针需要学生对评估行做自 prefill —— 仅诊断用，非部署路径
         self._probe_mode = bool(ie_cfg.get("probe_mode", False))
+        self._cross_token_align = bool(ie_cfg.get("cross_token_align", False))
 
     # ------------------------------------------------------------------
     # 模型生命周期管理（§53 单卡执行顺序）
@@ -711,6 +712,7 @@ class InjectionEvaluator:
                 epochs=int(m_cfg.get("joint_epochs", 300)),
                 lr=float(m_cfg.get("joint_lr", 1e-3)),
                 n_hidden_layers=int(m_cfg.get("joint_layers", 2)),
+                seed=int(m_cfg.get("joint_seed", 0)),
             )
             self._mapper_k = _JM(lam=_ridge_lambda(self.cfg, "K"), **common)
             self._mapper_v = _JM(lam=_ridge_lambda(self.cfg, "V"), **common)
@@ -875,6 +877,65 @@ class InjectionEvaluator:
             ctx_ids = tokenizer(ctx_text, return_tensors="np").input_ids.reshape(-1)
             return np.concatenate([ctx_ids, suffix_ids])
         return suffix_ids
+
+    def _ensure_teacher_tokenizer(self) -> Any:
+        """Lazily (re)load the teacher tokenizer for tokenizer-aligned transfer."""
+        if self._teacher_tokenizer is not None:
+            return self._teacher_tokenizer
+        try:
+            from transformers import AutoTokenizer  # type: ignore
+
+            spec = self.cfg.get("teacher", {})
+            self._teacher_tokenizer = AutoTokenizer.from_pretrained(
+                spec.get("model_id"), revision=str(spec.get("revision", "main"))
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        return self._teacher_tokenizer
+
+    def _align_teacher_to_student(self, kv_t: np.ndarray, text: str) -> np.ndarray:
+        """Resample teacher KV to student token positions by character overlap.
+
+        Cross-family models tokenize the same text into different sequences, so
+        pairing teacher/student positions index-by-index is only a crude proxy.
+        This maps each student token to the teacher token with maximum character
+        overlap (monotone pointer, fast), which is the tokenizer-aligned variant
+        of the cross-architecture check. Falls back to identity if offsets are
+        unavailable.
+        """
+        tok_t = self._teacher_tokenizer or self._ensure_teacher_tokenizer()
+        tok_s = self._student_tokenizer
+        if tok_t is None or tok_s is None or not text:
+            return kv_t
+        try:
+            off_t = list(tok_t(text, return_offsets_mapping=True)["offset_mapping"])
+            off_s = list(tok_s(text, return_offsets_mapping=True)["offset_mapping"])
+        except Exception:  # noqa: BLE001
+            return kv_t
+        S_t = int(kv_t.shape[1])
+        off_t = off_t[:S_t]
+        if not off_t:
+            return kv_t
+        idx = np.zeros(len(off_s), dtype=np.int64)
+        j = 0
+        for i, (a, b) in enumerate(off_s):
+            if a == b:  # special / zero-width token
+                idx[i] = min(j, S_t - 1)
+                continue
+            while j + 1 < len(off_t) and off_t[j][1] <= a:
+                j += 1
+            best = j
+            best_ov = -1
+            k = j
+            while k < len(off_t) and off_t[k][0] < b:
+                c, d = off_t[k]
+                ov = min(b, d) - max(a, c)
+                if ov > best_ov:
+                    best_ov = ov
+                    best = k
+                k += 1
+            idx[i] = min(best, S_t - 1)
+        return kv_t[:, idx, :, :]
 
     def _student_self(
         self, row: Any, choices: list[str]
@@ -1067,6 +1128,13 @@ class InjectionEvaluator:
 
         S = k_np.shape[1]  # 序列长度
         counters.teacher_prefill_seq_len = S
+
+        if self._cross_token_align and ablation_mode != "self_kv":
+            ctx_text = self._handoff_context_text(row)
+            k_np = self._align_teacher_to_student(k_np, ctx_text)
+            v_np = self._align_teacher_to_student(v_np, ctx_text)
+            S = k_np.shape[1]
+            counters.teacher_prefill_seq_len = S
 
         # ③ 根据 ablation_mode 组装 final_kv (L_s, S, H, 2D)
         from ..mapper.runner import _de_rope_for_kind
@@ -1678,6 +1746,11 @@ class InjectionEvaluator:
 
                         # Get teacher KV (already extracted in Phase 1)
                         t_k_np, t_v_np, _, _ = teacher_kv_cache[row.sample_id]
+
+                        if self._cross_token_align:
+                            ctx_text = self._handoff_context_text(row)
+                            t_k_np = self._align_teacher_to_student(t_k_np, ctx_text)
+                            t_v_np = self._align_teacher_to_student(t_v_np, ctx_text)
 
                         # Truncate to min length (prompt lengths may differ)
                         min_S = min(t_k_np.shape[1], s_k_np.shape[1])

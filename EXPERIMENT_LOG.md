@@ -21,6 +21,8 @@
 | P2-3 过度参数化译者 | 跨层/跨头 Joint MLP（hidden 256×2，~37M 参数，c30） | CHG −0.265 [−0.426,−0.111]，acc 0.233，PPL 31.6（流畅但不能力）；"不存在可用 mapper"反驳被更强的 negative 封堵 |
 | P2-5 长上下文任务 | needle-in-a-haystack 4 选（~1024 token，affine c30，n=30） | teacher 0.733 / student 0.533 / translated 0.233，CHG −0.285 [−0.534,−0.025]；失败非短上下文伪影 |
 | P2-1 跨家族/跨架构 | Qwen3-4B→{Llama-3.2-1B/3B, Gemma-2-2B, Gemma-3-1B, Qwen2.5-1.5B}，矩形 affine（head 均值池化+维度投影），c30，n=100 | H1 全通过；CHG +0.000/−0.044/−0.009/−0.061/−0.157；均无 capability（teacher gold 0.691 未恢复） |
+| 补：joint MLP 种子方差 | joint_mlp c30 × seeds {0,1,2}（+原 run） | CHG −0.302/−0.281/−0.269/−0.265，区间 [−0.30,−0.26]；亦为梯度训练、种子相关 |
+| 补：tokenizer 对齐跨架构 | rect-align（字符重叠对齐教师→学生 token 位置），c30，n=100 | Llama-3.2-3B CHG −0.024 [−0.047,−0.004]、Gemma-3-1B −0.073 [−0.134,−0.021]，均仍显著为负；Qwen2.5 与 Qwen3 分词相同，对齐为空操作 |
 | 复现审计 | 逐条重跑 23 个核心配置并与记录值对比 | 确定性族（ridge/affine/per-layer/task-aware/RAT/joint MLP、校准阶梯、探针/八分位、跨架构）逐位或 \|Δ\|≤0.002 复现；**per-head MLP 训练种子相关**：c30∈[−0.39,−0.26]、c200∈[−0.26,−0.23]，论文已改为区间并加复现说明 |
 | P2-2 target-side replay 诊断 | 翻译 cache 上再回读 context（非部署，违反 zero-prefill），affine c30，n=100 | replay 后 acc 0.290、CHG −0.232 [−0.333,−0.136]，与无 replay（−0.249）无显著差异；远低于 student self 0.520 ⇒ 朴素 replay 不能恢复，MoT 增益不能归因于 replay 本身 |
 
@@ -344,24 +346,26 @@ float16→float32），c30–c500 区间 PPL 稳定在 56–62。
 在 CI 内。这表明**非对称规模跨越**（教师远大于学生）时，mapper 退化幅度减小——
 但仍然无法产生正向增益。gate 仍 FAIL。
 
-### P1-16：逐 (layer, head) R² 测量（4B→1.7B affine，c=30）
+### P1-16：逐 (layer, head) R² 测量（4B→1.7B affine，c=30）——已修正
 
-在 30 条校准样本上拟合 per-head affine mapper，held-out 10 条计算 R²：
+> ⚠️ **勘误（2026-09-12）**：早期版本此处报告 K mean R² = −0.428 / V = +0.129，
+> 源于 `_score_kv` 的 R² 参数顺序错误（把预测与目标的顺序颠倒）。修正后重跑
+> （`scripts/measure_reconstruction_r2.py`，20 条拟合 / 10 条 held-out，
+> 输出 `reports/reconstruction_r2/reconstruction_r2.json`）结果如下，
+> 论文 §6 使用的是修正后的数字。
 
-| 通道 | mean R² | min R² | max R² | std |
-|---|---|---|---|---|
-| K channel | **−0.428** | −17.642 (L4,H2) | +0.538 (L24,H3) | 1.509 |
-| V channel | **+0.129** | −1.230 (L0,H1) | +0.522 (L1,H1) | 0.164 |
+| 通道 | pooled R² | 逐 (层,头) 均值 | 单位 |
+|---|---|---|---|
+| K channel（de-RoPE 拟合） | **+0.923** | **+0.810** | held-out 校准上下文 |
+| V channel | **+0.297** | **+0.323** | held-out 校准上下文 |
 
-**逐层 K channel R² 摘要**：
-- 前 8 层（L0–L7）：mean R² 全部为负，最优 head 仅 0.30
-- 中间层（L8–L19）：大部分为负，L11/L13/L15 偶有正 R²（≤0.48）
-- 后层（L20–L27）：L22/L26 略正，L24 最大 0.538，但 mean 仍为负
+仓库自带的 per-head ridge 基线在同一 held-out 切分上一致：K pooled +0.919 /
+V pooled +0.291（`reports/runs/t04-recon-r2-4b-1.7b/t04/metrics.json`）。
 
-**结论**：K channel R² 大面积为负（mean −0.43），确认 per-head affine mapper
-对 K 状态的映射严重欠定——student K 不是 teacher K 的线性函数。V channel
-R² 略正（mean 0.13）但远不足以支撑可靠迁移。这从表征层面解释了为何
-affine mapper 的 CHG 始终为负。
+**结论（修正后）**：键状态几乎可以线性恢复（逐(层,头)均值 +0.81），值状态只能
+部分恢复（+0.32，约 2/3 方差不可线性恢复）。这与论文 §6 的读法一致：键可重建，
+但重建出的键改写了注意力路由（通道消融里 k-only 0.300 vs v-only 0.367 vs
+kv-both 0.200，而 PPL 排序相反），因此重建质量追踪的是流畅度而不是答案。
 
 ### P1-8：三 seed 可比性修复（2026-08-31 00:02–00:08，2 连跑）
 

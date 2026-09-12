@@ -1,4 +1,4 @@
-\begin{thebibliography}{20}
+\begin{thebibliography}{21}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -62,6 +62,15 @@ Roee Hendel, Mor Geva, and Amir Globerson.
 \newblock In-context learning creates task vectors.
 \newblock In \emph{Findings of EMNLP}, 2023.
 \newblock \doi{10.18653/v1/2023.findings-emnlp.624}.
+
+\bibitem[Heo et~al.(2026)Heo, Shafipour, Zhao, Golub, Kamani, Borkar, Chandran,
+  Zardoshti, and Rouhani]{heo2026}
+Taekyung Heo, Rasoul Shafipour, Ritchie Zhao, Maximilian Golub, Mohammad~Mahdi
+  Kamani, Ritika Borkar, Makesh~Tarun Chandran, Pantea Zardoshti, and
+  Bita~Darvish Rouhani.
+\newblock Cross-model {KV} cache transfer in {LLM} families: A closed-form
+  linear mapping for prefill reuse.
+\newblock \emph{arXiv preprint arXiv:2608.03893}, 2026.
 
 \bibitem[Huh et~al.(2024)Huh, Cheung, Wang, and Isola]{platonic2024}
 Minyoung Huh, Brian Cheung, Tongzhou Wang, and Phillip Isola.

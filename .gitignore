@@ -117,6 +117,18 @@ paper/cache_audit/arxiv/*.aux
 paper/cache_audit/arxiv/*.out
 paper/cache_audit/arxiv/*.log
 
+# 论文各版本与图片预览的编译中间产物（.aux/.bbl/.blg/.out）不入库；
+# 早期已被跟踪的 main.aux/main.bbl 等不受影响（.gitignore 不改动已跟踪文件）
+paper/cache_audit/*.aux
+paper/cache_audit/*.bbl
+paper/cache_audit/*.blg
+paper/cache_audit/*.out
+paper/cache_audit/figures/*.aux
+paper/cache_audit_anon/*.aux
+paper/cache_audit_anon/*.bbl
+paper/cache_audit_anon/*.blg
+paper/cache_audit_anon/*.out
+
 # KV cache / mapper params（可复现生成的二进制，非跨机资产）
 *.npz
 reports/runs/**/kv_store/

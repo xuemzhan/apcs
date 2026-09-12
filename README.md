@@ -1,7 +1,19 @@
 # APCS: Cross-Model KV Cache Runtime Capability Transfer
 
 **Status**: ✅ 闭环完成（协议 v1.5 + 论文定稿）
-**Paper**: `paper/cache_audit/`（`main.pdf`，11 页，arXiv 打包于 `paper/cache_audit/arxiv/`）
+**Paper**: 三份同步稿，内容与数字一致（2026-09-12 起）：
+`paper/cache_audit/main.pdf`（正文稿，16 页）、`paper/cache_audit/arxiv/main.pdf`
+（arXiv 打包）、`paper/cache_audit_iclr2026/main.pdf`（ICLR 2026 模板）。图 1–4 与
+表 1–3 均按最新数据重绘/重排；图表与结论的对应关系见
+`paper/cache_audit/EVIDENCE_MAP.md`。
+作者：Xuemin Zhang（zmx0813@gmail.com）、Liangbin Hu、Kun Yi、Liheng Zhong、
+Junpeng Yu。署名版为 `cache_audit` 与 `arxiv` 两份；`cache_audit_iclr2026`
+保持匿名投稿态，真实作者块以注释形式留在 tex 中，camera-ready 时取消注释并
+打开 `\iclrfinalcopy`。
+匿名审稿版：`paper/cache_audit_anon/`（`main.pdf` + 源码 + 图，已去除作者块、
+PDF 元数据作者为 Anonymous、仓库名中性化），并打包为
+`paper/cache_audit_anon/anonymous_review_package.zip`。审稿包内**不含**代码仓库
+（git 历史含作者信息），如需给代码请另做无 `.git` 的快照。
 
 ---
 
@@ -16,17 +28,18 @@
 
 ---
 
-## 最终裁决（三假说框架，199 个运行产物 / 96 次 v1.2+ 审计协议运行）
+## 最终裁决（三假说框架，162 个记录在案的评测 run；计数规则见 `scripts/aggregate_claims.py`）
 
 | 假说 | 判定 | 关键证据 |
 |---|---|---|
 | **H1 机制无损** | ✅ 通过 | `self_kv` 恒等注入 ≡ 学生自 prefill，逐样本 logit 余弦 1.000 |
-| **H2 替换级** | ⚠️ 弱学生近平局但未过 ε=0.02 非劣；强学生全族失败 | 7 族 mapper，CHG −0.14 ~ −0.39；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（MLP 训练种子区间 −0.39~−0.23）；5 个跨架构学生均无能力迁移 |
+| **H2 替换级** | ⚠️ 弱学生近平局但未过 ε=0.02 非劣；强学生全族失败 | 7 族 mapper，CHG −0.14 ~ −0.39；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（per-head MLP 5 次训练区间 −0.39~−0.26、joint MLP 4 次训练 −0.30~−0.26）；5 个跨架构学生中 1 个（Llama-3.2-1B，近随机）过替换 gate 但无增益，其余 4 个未过 |
 | **H3 能力迁移** | ❌ 原理性否定 | oracle 探针（fraction/三分位/八分位）单调劣化 + 原生内容对照 + PPL/acc 解耦（PPL 23.7 但 acc 0.267）；长上下文（~1k token）同样失败；朴素 target-side replay 不能恢复 |
 
-**核心机理**：教师优势在其**参数**（FFN 电路），不在缓存。V 状态经 W_V·h 投影，
-h 在 W_V 行空间外的分量对教师缓存不可见 → V_S 不是 V_T 的函数，任何翻译器都只能
-追条件均值；而条件均值本身不携带学生可读的答案相关增益。
+**核心机理**（论文口径：与"教师优势由权重中介"一致，非不可能性证明）：V 状态经
+W_V·h 投影，h 在 W_V 行空间外的分量对教师缓存不可见 → 单头 student value 不由对应
+单头 teacher value 决定（held-out R²：K +0.81 / V +0.32），翻译器只能追条件均值；
+而条件均值本身不携带学生可读的答案相关增益。
 
 ## ⚠️ 历史数据声明
 
@@ -68,7 +81,7 @@ apcs/
 ├── tests/                   # 133 单测（test_protocol_v11.py 覆盖 v1.1→v1.5）
 ├── configs/v1{1,2,3,4,5}_*.yaml
 ├── paper/cache_audit/       # main.tex + figures + references.bib + arxiv/ 打包 + review_report.md
-├── reports/runs/            # 199 个运行产物（metrics.json，git hash 落盘）；其中 v1.2+ 审计协议 run 96 个
+├── reports/runs/            # 162 个记录在案的评测 run（metrics.json，git hash 落盘）；聚合口径见 scripts/aggregate_claims.py
 └── PROTOCOL.md / EXPERIMENT_LOG.md / CRITICAL_REVIEW_RESPONSE.md / DATA_PROVENANCE.md
 ```
 
@@ -80,7 +93,8 @@ pytest tests/ -v                      # 单元测试（133 passed, 1 skip）
 # 单次审计评测（协议 v1.5）：
 python -m apcs.cli inject-eval --config configs/v15_4b_1.7b_affine_c30_tail.yaml --new-run
 # 编译论文：
-cd paper/cache_audit && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+cd paper/cache_audit && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex && pdflatex main.tex
+# 交叉引用/浮动体需要跑到无 "Warning: Reference" 为止（ICLR 版尤其如此）
 ```
 
 ## Documentation
