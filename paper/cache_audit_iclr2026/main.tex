@@ -176,6 +176,9 @@ bound. \textbf{(b)}~The three questions can fail independently
 $\dagger$ marks gates fixed before the runs, and $\ddagger$ marks families and
 axes added while revising and evaluated under the same gates
 (Section~\ref{sec:tiers}).}
+Markers: $\dagger$ gate form fixed before the audit runs; $\ddagger$ families and axes
+added while revising under the same gates; $\S$ numeric replacement margin, selected later as a
+reporting tolerance (Appendix~\ref{app:repro}).
 \label{fig:framework}
 \end{figure}
 
@@ -335,7 +338,7 @@ measure answer quality by the gold-letter probability $\gold$---the softmax over
 the four answer-letter logits,
 $\gold = e^{z_{c^\star}}/\sum_{c \in \{A,B,C,D\}} e^{z_c}$, taken at the final
 prompt position with each model's own tokenizer id for each letter (single-token
-letters, no leading space), so teacher-side rows use the teacher's letter tokens
+letters, no leading space; only four-choice examples are retained), so teacher-side rows use the teacher's letter tokens
 and student-side rows the student's---and the change
 $\chg = \gold(\text{handoff}) - \gold(\text{student self})$, with
 95\% bootstrap intervals and sign-flip permutation tests (Appendix~\ref{app:repro}); perplexity over the
@@ -1122,7 +1125,7 @@ the reported $\epsilon{=}0.02$, four rows (three distinct configurations, all tw
 at $\epsilon{=}0.05$, seven rows (five distinct configurations, still confined to near-chance students and the
 smallest negative rows) do. The gain gate is unaffected by this choice.
 
-\begin{center}\footnotesize
+\begin{center}\scriptsize
 \begin{tabular}{lcc}
 \toprule
 Replacement margin & translated rows clearing & distinct configurations \\
@@ -1137,7 +1140,7 @@ $\epsilon=0.05$ & 7 & 5 \\
 ourselves:
 
 \begin{center}\footnotesize
-\begin{tabular}{p{3.4cm}p{6.2cm}p{4.2cm}}
+\begin{tabular}{p{3.0cm}p{5.5cm}p{3.6cm}}
 \toprule
 Aspect & this audit implementation & anchored to the reference \\
 \midrule
