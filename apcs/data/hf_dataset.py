@@ -554,7 +554,132 @@ def load_needle_longctx(
     return rows
 
 
-@_register("needle_mcqa")
+@_register("fineweb_edu")
+def load_fineweb_edu(
+    n: int,
+    split: str = "train",
+    seed: int = 0,
+    *,
+    target_tokens: int = 1024,
+) -> list[Sample]:
+    """Deterministic FineWeb-Edu-style long passages (V2 calibration regime).
+
+    The public FineWeb-Edu corpus is not reachable offline here, so this loader
+    assembles deterministic *educational-web-style* passages of roughly
+    ``target_tokens`` tokens from a built-in paragraph pool. It is used only as
+    a calibration context distribution aligned with the reference Heo et al.
+    regime (long web text), not as an evaluation set.
+    """
+    target_words = max(1, int(target_tokens / 1.3))
+    out: list[Sample] = []
+    for ci in range(n):
+        parts: list[str] = []
+        wc = 0
+        pidx = (ci * 7 + seed) % len(_EDU_PARAGRAPHS)
+        while wc < target_words:
+            para = _EDU_PARAGRAPHS[pidx % len(_EDU_PARAGRAPHS)]
+            parts.append(para)
+            wc += len(para.split())
+            pidx += 1
+        text = " ".join(parts)
+        # deterministic light truncation at a sentence boundary
+        words = text.split()
+        if len(words) > target_words:
+            cut = " ".join(words[:target_words])
+            j = cut.rfind(".")
+            text = cut[: j + 1] if j > len(cut) // 2 else cut + "."
+        out.append(
+            Sample(
+                sample_id=f"fwe-{seed}-{ci}",
+                context=text,
+                query="",
+                answer=None,
+                split=split,
+                context_id=f"fwe-{seed}-{ci}",
+            )
+        )
+    return out
+
+
+_EDU_PARAGRAPHS: list[str] = [
+    "Photosynthesis is the process by which green plants, algae, and some "
+    "bacteria convert light energy into chemical energy stored in glucose. "
+    "Inside the chloroplasts, chlorophyll absorbs red and blue light while "
+    "reflecting green light, which is why most leaves appear green. The light "
+    "reactions split water molecules to release oxygen and produce ATP and "
+    "NADPH, which then drive the Calvin cycle to fix carbon dioxide into sugar.",
+    "The water cycle describes the continuous movement of water on, above, and "
+    "below the Earth's surface. Evaporation turns liquid water into vapor, "
+    "transpiration releases vapor from plant leaves, condensation forms clouds, "
+    "and precipitation returns water to the ground. Groundwater and runoff "
+    "eventually carry the water back to oceans and lakes, completing the loop.",
+    "The American Civil War, fought from 1861 to 1865, arose from long-standing "
+    "disputes over slavery, states' rights, and westward expansion. Eleven "
+    "southern states seceded to form the Confederacy, while the Union retained "
+    "the border states. Key battles at Antietam, Gettysburg, and Vicksburg "
+    "shifted momentum, and the Emancipation Proclamation reframed the conflict "
+    "around freedom before the Union prevailed in 1865.",
+    "Fractions represent parts of a whole and can be added, subtracted, "
+    "multiplied, and divided using consistent rules. To add fractions with "
+    "different denominators, first find a common denominator, rewrite each "
+    "fraction equivalently, and then combine the numerators. Multiplication is "
+    "simpler: multiply numerators together and denominators together, then "
+    "simplify the result by dividing by the greatest common factor.",
+    "Earth's atmosphere is divided into layers distinguished by temperature "
+    "gradients. The troposphere holds most weather and water vapor; the "
+    "stratosphere contains the ozone layer that absorbs harmful ultraviolet "
+    "radiation; the mesosphere is where most meteors burn up; and the "
+    "thermosphere and exosphere gradually merge with space, hosting auroras "
+    "and satellite orbits.",
+    "The Industrial Revolution began in Britain in the late eighteenth century "
+    "and transformed manufacturing through mechanization, steam power, and the "
+    "factory system. Textile production was an early driver, followed by iron, "
+    "coal, and rail. Urbanization accelerated as workers moved to cities, while "
+    "new social questions about labor, education, and public health emerged.",
+    "Algebra uses symbols to represent quantities and relationships. A linear "
+    "equation such as three x plus five equals twenty can be solved by "
+    "isolating the variable through inverse operations. Systems of equations "
+    "are solved by substitution or elimination, and their solutions correspond "
+    "to intersection points of the corresponding lines in the coordinate plane.",
+    "The human digestive system breaks food into nutrients the body can absorb. "
+    "Mechanical and chemical digestion begin in the mouth, continue in the "
+    "stomach, and finish in the small intestine, where villi increase surface "
+    "area. The large intestine reclaims water, and the liver and pancreas "
+    "contribute bile and enzymes that support the breakdown of fats and proteins.",
+    "Newton's three laws of motion describe how forces affect objects. An "
+    "object at rest stays at rest unless acted on by a net force; acceleration "
+    "is proportional to net force and inversely proportional to mass; and every "
+    "action has an equal and opposite reaction. These laws underpin classical "
+    "mechanics and explain phenomena from collisions to planetary orbits.",
+    "Ecosystems consist of living communities interacting with nonliving "
+    "components such as soil, water, and climate. Energy flows from producers "
+    "to consumers and decomposers, while nutrients cycle through biotic and "
+    "abiotic reservoirs. Biodiversity supports resilience, and disturbances "
+    "such as fire or drought can shift an ecosystem between alternative states.",
+    "The Constitution of the United States establishes a federal system with "
+    "separated powers and checks and balances. Article One creates Congress, "
+    "Article Two the presidency, and Article Three the judiciary. Amendments, "
+    "including the Bill of Rights, protect individual liberties and have been "
+    "added over time to reflect changing national commitments.",
+    "Geometry studies points, lines, angles, and shapes and their properties. "
+    "Triangles obey the Pythagorean theorem for right angles, circles relate "
+    "radius, circumference, and area, and transformations such as translation, "
+    "rotation, and reflection preserve distance and angle. Proofs connect "
+    "definitions and theorems through deductive reasoning.",
+    "Weather differs from climate: weather describes short-term atmospheric "
+    "conditions, while climate summarizes long-term patterns. Air masses, "
+    "fronts, and pressure gradients drive storms and temperature changes. "
+    "Oceans and ice influence climate by storing and redistributing heat, and "
+    "greenhouse gases regulate how much energy escapes to space.",
+    "Ancient civilizations along major rivers developed agriculture, writing, "
+    "and centralized government. Mesopotamian city-states invented cuneiform, "
+    "Egyptian society organized around the Nile's floods, the Indus valley "
+    "built planned cities, and early Chinese dynasties unified the Yellow "
+    "River plain. Trade and migration spread ideas, technologies, and religions.",
+]
+
+
+
 def load_needle_mcqa(
     n: int,
     split: str = "test",
@@ -708,4 +833,5 @@ __all__ = [
     "load_winogrande",
     "load_needle_longctx",
     "load_needle_mcqa",
+    "load_fineweb_edu",
 ]

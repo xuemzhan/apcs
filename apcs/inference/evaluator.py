@@ -720,6 +720,10 @@ class InjectionEvaluator:
             from ..mapper.rect import RectAffineMapper as _RA
             self._mapper_k = _RA(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = _RA(lam=_ridge_lambda(self.cfg, "V"))
+        elif mapper_type in ("concat_ridge", "ridge_concat", "heo_concat"):
+            from ..mapper.concat import ConcatRidgeMapper as _CR
+            self._mapper_k = _CR(lam=_ridge_lambda(self.cfg, "K"))
+            self._mapper_v = _CR(lam=_ridge_lambda(self.cfg, "V"))
         else:  # default: ridge (per-head)
             self._mapper_k = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "K"))
             self._mapper_v = RidgePerHeadMapper(lam=_ridge_lambda(self.cfg, "V"))
@@ -755,8 +759,19 @@ class InjectionEvaluator:
             k_top = int(m_cfg.get("topk", 3))
             kind0 = "K"
             dr0 = _de_rope_for_kind(self.cfg, kind0, de_rope_fn)
+            # Selection is O(L_t * L_s * H) ridge fits; cap the contexts used for
+            # selection independent of the (larger) mapper-fit budget so it stays
+            # tractable on long-context calibration corpora.
+            _sel = list(real_kv_calib[kind0])
+            _n_sel = int(m_cfg.get("topk_select_samples", 0))
+            if _n_sel > 0:
+                _sel = _sel[:_n_sel]
+            logger.info(
+                "[inject-eval] topk selection uses %d/%d calibration contexts",
+                len(_sel), len(real_kv_calib[kind0]),
+            )
             self._layer_map = select_topk_layer_map(
-                real_kv_calib[kind0], n_t, n_s, k_top,
+                _sel, n_t, n_s, k_top,
                 de_rope_fn=dr0, lam=_ridge_lambda(self.cfg, kind0),
             )
             logger.info(
@@ -1579,6 +1594,31 @@ class InjectionEvaluator:
             calib_eval_disjoint = False
         eval_ids = {r.sample_id for r in eval_rows}
 
+        # V2: optional separate calibration corpus (e.g. FineWeb-Edu-style long
+        # passages). Only the calibration rows' context is replaced; the eval
+        # set stays the fixed MCQA tail. Teacher/student KV capture downstream
+        # reads row.context, so this changes the mapper's calibration regime.
+        _calib_corpus = str(
+            self.cfg.get("inject_eval", {}).get("calib_corpus", "") or ""
+        )
+        if _calib_corpus and calib_rows:
+            from ..data.hf_dataset import load as _load_corpus
+
+            _n_tok = int(self.cfg.get("inject_eval", {}).get("calib_corpus_tokens", 1024))
+            _corpus = _load_corpus(
+                _calib_corpus, n=len(calib_rows), split="train",
+                seed=self._seed, target_tokens=_n_tok,
+            )
+            for _i, _row in enumerate(calib_rows):
+                if _i < len(_corpus):
+                    _row.context = _corpus[_i].context
+                    _row.query = ""
+                    _row.answer = None
+            logger.info(
+                "[inject-eval] calibration corpus=%s: replaced %d calib contexts (~%d tokens)",
+                _calib_corpus, len(calib_rows), _n_tok,
+            )
+
         def _timed(fn):
             """§49 计时块：CUDA sync 边界内测墙钟（ms）。"""
             if torch.cuda.is_available():
@@ -1616,11 +1656,11 @@ class InjectionEvaluator:
                     choices = _extract_choices_from_query(row.query)
                     if not choices:
                         # 标记样本为不可评估，不使用letter-only fallback
-                        logger.warning(
-                            "[inject-eval] Cannot extract choices for %s, skipping sample",
-                            row.sample_id,
-                        )
                         if row.sample_id in eval_ids:
+                            logger.warning(
+                                "[inject-eval] Cannot extract choices for %s, skipping sample",
+                                row.sample_id,
+                            )
                             capability_records.append({
                                 "method": "teacher",
                                 "sample_id": row.sample_id,
@@ -1630,8 +1670,16 @@ class InjectionEvaluator:
                                 "skipped": True,
                                 "skip_reason": "no_choices_extracted",
                             })
-                        teacher_kv_cache[row.sample_id] = None
-                        continue
+                            teacher_kv_cache[row.sample_id] = None
+                            continue
+                        # Calibration row without MC choices (e.g. a web-text
+                        # calibration corpus): no scoring needed, but its
+                        # context KV must still be captured for mapper fitting.
+                        logger.info(
+                            "[inject-eval] calibration row %s has no choices; "
+                            "capturing context KV only", row.sample_id,
+                        )
+                        choices = None
 
                 # 1a. teacher_full（context + query + choices，用于评分）
                 # A2: 只对评估行跑 teacher_full（校准行不需要 upper-bound 分数）

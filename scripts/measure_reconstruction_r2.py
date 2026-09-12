@@ -127,6 +127,9 @@ def main() -> int:
                 n_hidden_layers=int(m_cfg.get("joint_layers", 2)),
                 seed=int(m_cfg.get("joint_seed", 0)),
             )
+        if args.mapper == "concat_ridge":
+            from apcs.mapper.concat import ConcatRidgeMapper
+            return ConcatRidgeMapper(lam=_ridge_lambda(cfg, "K"))
         raise ValueError(f"unknown mapper {args.mapper}")
 
     from apcs.mapper.aggregate import fit_ridge_aggregate
