@@ -872,7 +872,7 @@ leave the mechanism open. One hypothesis consistent with the asymmetry:
 mapped keys steer attention routing while mapped values carry content, so key
 errors misroute a fluent read while value errors corrupt it audibly.
 
-\section{Why Translation Fails: An Architectural Analysis}
+\section{Why Reconstruction Is Not Enough: An Architectural Analysis}
 \label{sec:why}
 
 We read this section as an architectural explanation of the audit's
@@ -1115,6 +1115,42 @@ Joint MLP (position-wise), $c{=}30$ & 4 & $-0.302$ \dots\ $-0.265$ & $-0.110$ \\
 The native-content control (Section~\ref{sec:results}) uses the same fixed
 depth-ratio layer correspondence as every other row, so it is a
 no-channel-map control rather than a translation-free injection.
+
+\textbf{Margin sensitivity.} Because the numeric margin is a reporting choice, we report how the
+replacement verdict moves with it: at $\epsilon{=}0.01$ no translated configuration clears the margin; at
+the reported $\epsilon{=}0.02$, four rows (three distinct configurations, all two near-chance students) do;
+at $\epsilon{=}0.05$, seven rows (five distinct configurations, still confined to near-chance students and the
+smallest negative rows) do. The gain gate is unaffected by this choice.
+
+\begin{center}\footnotesize
+\begin{tabular}{lcc}
+\toprule
+Replacement margin & translated rows clearing & distinct configurations \\
+\midrule
+$\epsilon=0.01$ & 0 & 0 \\
+$\epsilon=0.02$ (reported) & 4 & 3 \\
+$\epsilon=0.05$ & 7 & 5 \\
+\bottomrule
+\end{tabular}\end{center}
+
+\textbf{Closest-published-baseline implementation.} What we anchor to the reference design and what we chose
+ourselves:
+
+\begin{center}\footnotesize
+\begin{tabular}{p{3.4cm}p{6.2cm}p{4.2cm}}
+\toprule
+Aspect & this audit implementation & anchored to the reference \\
+\midrule
+Source-layer selection & per-target-layer top-$k$ chosen by held-out ridge reconstruction score
+ & yes (top-$k$ cross-layer selection) \\
+Selection/refit split & 70\% of the calibration contexts fit the selection ridge, 30\% score it; the mapper is
+then refit on the full calibration split & not specified in the reference \\
+Key mapping & de-RoPE keys (\texttt{de\_rope\_k}) & yes (de-RoPE keys) \\
+Penalty & $\lambda=10^{-3}$, K and V fitted separately & not specified \\
+Candidate source layers & all teacher layers & not specified \\
+Calibration volume & the same 200 contexts as the affine $c{=}200$ row & not specified \\
+\bottomrule
+\end{tabular}\end{center}
 
 \textbf{Supplementary runs.} The revision-added runs referenced above are
 recorded under the repository's run directory: the closest-published-baseline
