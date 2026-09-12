@@ -178,3 +178,18 @@ student / teacher / translated / identity 四行，n ≥ 100，报告 exact matc
 **E1 需预先决定的事**：如果 Heo-style 通过了 replacement gate，论文叙事要从"强学生全族失败"
 切换为"失败源自朴素逐层对应，而非缓存翻译本身"。建议先写好两个版本的 §5.2 与 Abstract 句，跑完直接二选一，
 避免事后调整口径。
+
+---
+
+## V2（第五轮审稿新增，可选但推荐）
+
+**目的**：把 Heo-style baseline 从"设计元素移植"升级为"该设计下的严格检验"。
+
+**主要步骤**
+1. 把源层组合方式由 **average** 改为 **concatenate**（`apcs/alignment/topk.py` 选层后，拼接选中层的 KV 再拟合 ridge）；
+2. 校准语料换成 **500 条 FineWeb-Edu 风格、每条 1024 token**（对齐参考工作的 calibration regime）；
+3. 其余不变（同 4B→1.7B、固定 tail-100 评测、恒等对照、k=1/3/5）。
+
+**判据**：若仍显著为负 → 可写"该设计在我们的审计口径下同样失败"；若转正或接近 0 → 说明差异来自我们此前的平均式实现（同样有价值）。
+
+**成本**：代码改动 + 3 次 GPU run。

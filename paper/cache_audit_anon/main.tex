@@ -344,9 +344,7 @@ prefill per sample (gate: mean logit cosine $= 1$ within float tolerance).
 (gate: the CI lower bound of gold CHG is above a small tolerance $-\epsilon$; a
 stricter \emph{gain} gate additionally requires the CI lower bound $> 0$).
 Replacement asks only that the student is not degraded; gain asks that the
-teacher's cache provides a measurable lift. We fix $\epsilon = 0.02$ gold
-probability before evaluation---about $4\%$ relative to the $0.503$ student
-baseline, a practical serving tolerance---making the replacement gate a
+teacher's cache provides a measurable lift. We report replacement results at $\epsilon = 0.02$ gold probability; the non-inferiority gate form was frozen before the audit runs, whereas this numeric tolerance was selected later as a practical reporting margin (Appendix~\ref{app:repro} reports sensitivity to alternative margins), about $4\%$ relative to the $0.503$ student baseline---making the replacement gate a
 standard non-inferiority test of $H_0\colon \chg \le -\epsilon$ against
 $H_1\colon \chg > -\epsilon$; unlike a naive significance test, it does not
 additionally require the point estimate to be non-negative. \textbf{H3}: the teacher's cache contains student-readable
