@@ -22,6 +22,7 @@
 | P2-5 长上下文任务 | needle-in-a-haystack 4 选（~1024 token，affine c30，n=30） | teacher 0.733 / student 0.533 / translated 0.233，CHG −0.285 [−0.534,−0.025]；失败非短上下文伪影 |
 | P2-1 跨家族/跨架构 | Qwen3-4B→{Llama-3.2-1B/3B, Gemma-2-2B, Gemma-3-1B, Qwen2.5-1.5B}，矩形 affine（head 均值池化+维度投影），c30，n=100 | H1 全通过；CHG +0.000/−0.044/−0.009/−0.061/−0.157；均无 capability（teacher gold 0.691 未恢复） |
 | 补 E2：joint MLP 重建诊断 | 20 fit / 10 held-out context，joint_mlp（~37M）| K: train 0.949 / held-out per-head 0.854；V: train 0.647 / held-out 0.481（对比 affine K 0.81 / V 0.32）⇒ 重建显著更好但下游仍失败，**表征保真 ≠ 能力保真** |
+| 补 B1：Heo-style 重建诊断（k=1/3/5） | 同 20 fit/10 held-out 口径，per-head held-out R² + 下游 PPL | K: 0.823/0.787/0.762；V: 0.317/0.248/0.182；PPL: 78.5/2629.6/68966.1；CHG ≈ −0.27/−0.31/−0.29 ⇒ k 越大、多源层平均使重建与流畅度同步变差（几何/源混杂问题，非"更好重建破坏几何"） |
 | 补 E4：~4K 上下文 | needle_target_tokens=4096（实际 ~4.8K token），affine c30，n=20 | student 0.400/0.383、teacher 0.850/0.726、kv_both 0.350/0.348，CHG **−0.035 [−0.380,+0.313]**（n 小、CI 含 0，未确立）；self-kv +0.0001 ⇒ 4K 下仍无增益 |
 | 补 E7：复现覆盖 | 3 个跨架构 rect run 已在库；1K long-context 二次复现被外部 SIGTERM 终止（未完成）；4K 版本次成功 | 跨架构覆盖已补齐；long-context 复现以 4K run 部分替代 |
 | 补 E8：开放式任务 | 需新增 GSM8K/TriviaQA 短答适配器 | **未实现**（成本高，列为后续） |

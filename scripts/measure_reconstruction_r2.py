@@ -72,9 +72,24 @@ def main() -> int:
         requested_seq=args.seq,
     )
 
+    m_cfg = cfg.get("mapper", {})
+    if str(m_cfg.get("layer_selection", "proportional")) == "topk":
+        from apcs.alignment.topk import select_topk_layer_map
+        from apcs.mapper.runner import _de_rope_for_kind
+
+        kind0 = "K"
+        dr0 = _de_rope_for_kind(cfg, kind0, de_rope_fn)
+        layer_map = select_topk_layer_map(
+            list(splits[kind0]["calib"]), n_t, n_s, int(m_cfg.get("topk", 3)),
+            de_rope_fn=dr0, lam=float(m_cfg.get("ridge_lambda_k", 1e-3)),
+        )
+        print("[recon-r2] Heo-style topk layer_map:", layer_map)
+
     out: dict[str, object] = {
         "config": args.config,
         "mapper": args.mapper,
+        "layer_selection": str(m_cfg.get("layer_selection", "proportional")),
+        "layer_map": layer_map,
         "n_calib": args.n_calib,
         "n_eval": args.n_eval,
         "requested_seq": args.seq,
@@ -114,20 +129,24 @@ def main() -> int:
             )
         raise ValueError(f"unknown mapper {args.mapper}")
 
+    from apcs.mapper.aggregate import fit_ridge_aggregate
+
+    def _fit(mp, kind: str, dr) -> None:
+        calib = list(splits[kind]["calib"])
+        if hasattr(mp, "fit_batch") and not isinstance(mp, RidgePerHeadMapper):
+            mp.fit_batch(calib, layer_map, kv_kind=kind, positions=None, de_rope_fn=dr)
+        else:
+            fit_ridge_aggregate(mp, calib, layer_map, kv_kind=kind,
+                                positions=None, de_rope_fn=dr)
+
     for kind in kv_kinds(cfg):
         mapper = _make_mapper()
         # Variant 1: follow the configured de-RoPE path (the mapper's actual input).
         kind_dr = _de_rope_for_kind(cfg, kind, de_rope_fn)
-        mapper.fit_batch(
-            list(splits[kind]["calib"]), layer_map, kv_kind=kind,
-            positions=None, de_rope_fn=kind_dr,
-        )
+        _fit(mapper, kind, kind_dr)
         # Variant 2: raw KV (no de-RoPE), for reference.
         mapper_raw = _make_mapper()
-        mapper_raw.fit_batch(
-            list(splits[kind]["calib"]), layer_map, kv_kind=kind,
-            positions=None, de_rope_fn=None,
-        )
+        _fit(mapper_raw, kind, None)
         entries: dict[str, object] = {}
         for tag, mp, dr in (("de_rope", mapper, kind_dr), ("raw", mapper_raw, None)):
             pooled_list: list[float] = []
