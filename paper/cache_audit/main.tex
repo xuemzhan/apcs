@@ -338,7 +338,8 @@ prompt position with each model's own tokenizer id for each letter (single-token
 letters, no leading space; only four-choice examples are retained), so teacher-side rows use the teacher's letter tokens
 and student-side rows the student's---and the change
 $\chg = \gold(\text{handoff}) - \gold(\text{student self})$, with
-95\% bootstrap intervals and sign-flip permutation tests (Appendix~\ref{app:repro}); perplexity over the
+95\% bootstrap intervals (Appendix~\ref{app:repro}); permutation tests are also
+recorded but no reported decision uses a $p$-value; perplexity over the
 scoring suffix is recorded but never accepted as evidence of capability
 (Section~\ref{sec:decoupling}).
 

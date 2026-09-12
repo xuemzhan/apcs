@@ -1,48 +1,49 @@
 This is BibTeX, Version 0.99d (TeX Live 2023/Debian)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
-I found no \citation commands---while reading file main.aux
-I found no \bibdata command---while reading file main.aux
-I found no \bibstyle command---while reading file main.aux
-You've used 0 entries,
-            0 wiz_defined-function locations,
-            83 strings with 482 characters,
-and the built_in function-call counts, 0 in all, are:
-= -- 0
-> -- 0
-< -- 0
-+ -- 0
-- -- 0
-* -- 0
-:= -- 0
-add.period$ -- 0
-call.type$ -- 0
-change.case$ -- 0
-chr.to.int$ -- 0
-cite$ -- 0
-duplicate$ -- 0
-empty$ -- 0
-format.name$ -- 0
-if$ -- 0
-int.to.chr$ -- 0
-int.to.str$ -- 0
-missing$ -- 0
-newline$ -- 0
-num.names$ -- 0
-pop$ -- 0
-preamble$ -- 0
-purify$ -- 0
+The style file: plainnat.bst
+Database file #1: references.bib
+Warning--empty booktitle in interlat2025
+Warning--empty booktitle in kvcomm2025
+You've used 21 entries,
+            2773 wiz_defined-function locations,
+            688 strings with 9331 characters,
+and the built_in function-call counts, 12007 in all, are:
+= -- 907
+> -- 1143
+< -- 1
++ -- 381
+- -- 360
+* -- 1077
+:= -- 1951
+add.period$ -- 71
+call.type$ -- 21
+change.case$ -- 183
+chr.to.int$ -- 21
+cite$ -- 44
+duplicate$ -- 465
+empty$ -- 767
+format.name$ -- 383
+if$ -- 2416
+int.to.chr$ -- 1
+int.to.str$ -- 1
+missing$ -- 21
+newline$ -- 121
+num.names$ -- 84
+pop$ -- 408
+preamble$ -- 1
+purify$ -- 162
 quote$ -- 0
-skip$ -- 0
+skip$ -- 375
 stack$ -- 0
-substring$ -- 0
-swap$ -- 0
+substring$ -- 42
+swap$ -- 31
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 0
-warning$ -- 0
-while$ -- 0
+type$ -- 231
+warning$ -- 2
+while$ -- 63
 width$ -- 0
-write$ -- 0
-(There were 3 error messages)
+write$ -- 273
+(There were 2 warnings)
