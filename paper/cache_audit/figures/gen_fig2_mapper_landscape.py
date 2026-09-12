@@ -13,6 +13,9 @@ SELECT_17B = [
     ("v13-4b-to-1.7b-affine-c200-lam1e-01-20260829-155201", "Affine $\\lambda$=1e-1", "200"),
     ("v13-4b-to-1.7b-affine_layer-c200-20260829-153202", "Affine (per-layer)", "200"),
     ("v13-4b-to-1.7b-taskaware-c200-20260829-155727", "Task-aware", "200"),
+    ("v15-4b-to-1.7b-heo-topk1-ridge-c200-20260912-190517", "Heo-style top-$k$, $k$=1", "200"),
+    ("v15-4b-to-1.7b-heo-topk3-ridge-c200-20260912-191428", "Heo-style top-$k$, $k$=3", "200"),
+    ("v15-4b-to-1.7b-heo-topk5-ridge-c200-20260912-192407", "Heo-style top-$k$, $k$=5", "200"),
     ("v14-4b-to-1.7b-rat-c30-20260829-174525",  "RAT", "30"),
     ("v14-4b-to-1.7b-rat-c200-20260829-174926", "RAT", "200"),
 ]

@@ -15,6 +15,12 @@ PDF 元数据作者为 Anonymous、仓库名中性化），并打包为
 `paper/cache_audit_anon/anonymous_review_package.zip`。审稿包内**不含**代码仓库
 （git 历史含作者信息），如需给代码请另做无 `.git` 的快照。
 
+**投稿版（正文 9 页）**：`paper/cache_audit_iclr2026/main.pdf` 已按 ICLR 正文 9 页
+限制压缩——正文严格 9 页（参考文献自第 10 页起），细节整块下沉到附录：相关工作四条主线、
+审计方法学细节、RAT 组件消融、通道不对称、校准阶梯/重拟合、九分位（octant）探针、
+跨架构细节、Survey 对照表、Table 2 辅助行、部署解读。压缩只做搬迁与合并，未删除任何证据；
+完整长文版本仍保留在 `paper/cache_audit/main.pdf`（19 页）与 `arxiv/`。
+
 ---
 
 ## Overview
@@ -28,7 +34,7 @@ PDF 元数据作者为 Anonymous、仓库名中性化），并打包为
 
 ---
 
-## 最终裁决（三假说框架，162 个记录在案的评测 run；计数规则见 `scripts/aggregate_claims.py`）
+## 最终裁决（三假说框架，171 个记录在案的评测 run；计数规则见 `scripts/aggregate_claims.py`）
 
 | 假说 | 判定 | 关键证据 |
 |---|---|---|
@@ -81,7 +87,7 @@ apcs/
 ├── tests/                   # 133 单测（test_protocol_v11.py 覆盖 v1.1→v1.5）
 ├── configs/v1{1,2,3,4,5}_*.yaml
 ├── paper/cache_audit/       # main.tex + figures + references.bib + arxiv/ 打包 + review_report.md
-├── reports/runs/            # 162 个记录在案的评测 run（metrics.json，git hash 落盘）；聚合口径见 scripts/aggregate_claims.py
+├── reports/runs/            # 171 个记录在案的评测 run（metrics.json，git hash 落盘）；聚合口径见 scripts/aggregate_claims.py
 └── PROTOCOL.md / EXPERIMENT_LOG.md / CRITICAL_REVIEW_RESPONSE.md / DATA_PROVENANCE.md
 ```
 

@@ -70,7 +70,7 @@ Evidence tiers (Section 3.3 of the draft):
 | B9 | Long-context needle task fails the same way: teacher 0.733 / student 0.533 / translated 0.233 accuracy; gold CHG −0.285 [−0.534, −0.025], n=30 | Frozen-gate extension | `RUN v15-4b-to-1.7b-affine-c30-longctx-s42-20260912-072916` | No reproduction artifact for this row |
 | B10 | Cross-architecture: one of five clears the replacement gate (Llama-3.2-1B, +0.000 [−0.012, +0.012], accuracy 0.300); Gemma-2-2B sits at the margin (−0.009 [−0.020, +0.002]); three fall short; none recovers teacher gold 0.691 | Frozen-gate extension | `RUN v15-4b-x-{llama1b,llama32-3b,gemma2-2b,gemma3-1b,qwen25-1.5b}-rect-c30-s42-*` | Position-matched after independent tokenization; mechanism/gate check |
 | B11 | Token alignment preserves the negative direction on two genuinely cross-tokenizer pairs: Llama-3.2-3B −0.024 [−0.047, −0.004], Gemma-3-1B −0.073 [−0.134, −0.021]; Qwen2.5 alignment is a no-op | Frozen-gate extension | `RUN v15-4b-x-{llama32-3b,gemma3-1b,qwen25-1.5b}-rect-align-c30-s42-*` | **No aligned run for the two margin rows** (Llama-3.2-1B, Gemma-2-2B) |
-| B12 | Aggregate: largest translation point estimate +0.010; exactly one distinct translated configuration clears the margin | Derived | `AGG` | Replaces "no configuration reaches replacement", which is false |
+| B12 | Aggregate: largest translation point estimate +0.010 (weak-student pair); three translated configurations clear the margin, all on two near-chance students (Llama-3.2-1B unaligned/aligned, Gemma-2-2B aligned) | Derived | `AGG` | Replaces "no configuration reaches replacement", which is false |
 
 ### C. Exploitability (H3)
 
@@ -105,6 +105,17 @@ Evidence tiers (Section 3.3 of the draft):
 ---
 
 ## Per-section evidence check
+
+### Supplementary experiments (GPU machine, 2026-09-12) and where they land
+
+| Experiment | Result | Paper location |
+|---|---|---|
+| E1 closest published strict-zero-reprefill baseline (top-$k$ cross-layer selection + de-RoPE ridge, $k\in\{1,3,5\}$, $c{=}200$, fixed evaluation set, $n{=}100$) | $-0.273$ $[-0.380,-0.158]$, $-0.308$ $[-0.417,-0.200]$, $-0.291$ $[-0.399,-0.192]$; every interval below zero | Abstract, §2.2, Table 2 (three rows), §5.2 |
+| E2 joint-MLP reconstruction diagnostic (20 fit / 10 held-out contexts) | keys per-head $R^2$ $0.854$ (train $0.949$), values $0.481$ (train $0.647$); better than affine ($0.810$ / $0.323$) yet worse downstream ($-0.27$ vs $-0.14$) | Abstract, §6 |
+| E3 token-aligned margin rows (Llama-3.2-1B, Gemma-2-2B) | $-0.003$ $[-0.011,+0.005]$ and $-0.007$ $[-0.018,+0.005]$; both clear the margin | §5.2 aggregate (two clearing configurations), §5.4, Table 3 (two rows), Limitations |
+| E4 4K-token retrieval ($n{=}20$) | $-0.035$ $[-0.380,+0.313]$; establishes neither degradation nor parity | Table 2 (one row), §5.4, Limitations |
+| E5 cold-start offline/online pair | identical metrics and per-sample gold probabilities (max abs diff $0.000$, $n{=}30$) | Abstract, §5.1, Limitations |
+| E6 text-channel with per-sample scores ($n{=}100$) | summary $0.440$ / gold $0.404$ vs student $0.520$ / $0.512$: $-0.108$ $[-0.181,-0.037]$ | §7, Limitations |
 
 ### Abstract
 logit cosine 0.99998 / +0.0001 [−0.0006, +0.0009] → A1. Seven families → B1.
@@ -184,9 +195,9 @@ B12, C1–C5, D5.
 
 | Gap | What is missing | Unlocks |
 |---|---|---|
-| G1 | Paired offline/online runs under the audit protocol (store manifest + per-sample scores) | A4 cold-start equivalence |
-| G2 | Token-aligned runs for Llama-3.2-1B and Gemma-2-2B | B11 coverage of the margin rows |
+| G1 | ~~Paired offline/online runs~~ **done**: persist/online pair is bit-identical (max abs diff 0.000, n=30) | A4 cold-start equivalence (now claimed) |
+| G2 | ~~Token-aligned runs for Llama-3.2-1B and Gemma-2-2B~~ **done**: −0.003 [−0.011,+0.005] and −0.007 [−0.018,+0.005], both clearing the margin on near-chance students | B11 coverage (now complete for cross-tokenizer students) |
 | G3 | Reproduction artifacts for the long-context row and for Llama-3.2-3B / Gemma-3-1B / Qwen2.5-1.5B | E2 coverage |
-| G4 | Per-sample scores for the text-channel baseline, or a re-run under the current protocol | the text-channel sentence's evidence level |
-| G5 | Second held-out split for the reconstruction R² | D1 range instead of a point |
+| G4 | ~~Per-sample text-channel scores~~ **done**: n=100 run gives −0.108 [−0.181, −0.037] | text-channel sentence carries a CI |
+| G5 | Second held-out split for the reconstruction R² (now for two mappers: affine and joint MLP) | D1 range instead of a point |
 | G6 | End-to-end serving measurements (prefill time, map/load time, VRAM) | any deployment-cost claim (currently absent by design) |

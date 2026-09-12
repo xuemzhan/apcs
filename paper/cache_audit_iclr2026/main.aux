@@ -8,90 +8,47 @@
 \citation{kvcomm2025}
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
 \newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
-\citation{streamingsink2023}
-\citation{cachegen2024}
-\citation{cacheblend2025}
-\citation{kvsharer2024}
-\citation{c2c2025}
-\citation{lsc2026}
-\citation{mot2026}
-\citation{kvcomm2025}
-\citation{interlat2025}
-\citation{hcache2025}
 \citation{heo2026}
 \@writefile{toc}{\contentsline {section}{\numberline {2}A Survey of Cache-Level Communication Between Models}{2}{section.2}\protected@file@percent }
 \newlabel{sec:survey}{{2}{2}{A Survey of Cache-Level Communication Between Models}{section.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}KV Reuse Within a Single Model}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}What the Survey Does Not Establish}{2}{subsection.2.1}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The audited setting and the three gated questions. \textbf  {(a)}~A teacher prefills a long context $x$ and stores its cache $C_T(x)$; a translator maps that stored cache into the student's cache space, and the student answers a short query $q$ from the translated cache $\hat  {C}_S(x)$. The red crossed path is the strict zero-re-prefill constraint: no context token enters the student's forward pass. The audit scores the handoff by the change in gold-letter probability against the student's own prefill (baseline), with the teacher's full prefill as the capability upper bound. \textbf  {(b)}~The three questions can fail independently (Section~\ref {sec:intro}), so each carries its own instrument and gate; $\dagger $ marks gates fixed before the runs, and $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers}).}}{3}{figure.1}\protected@file@percent }
 \newlabel{fig:framework}{{1}{3}{The audited setting and the three gated questions. \textbf {(a)}~A teacher prefills a long context $x$ and stores its cache $C_T(x)$; a translator maps that stored cache into the student's cache space, and the student answers a short query $q$ from the translated cache $\hat {C}_S(x)$. The red crossed path is the strict zero-re-prefill constraint: no context token enters the student's forward pass. The audit scores the handoff by the change in gold-letter probability against the student's own prefill (baseline), with the teacher's full prefill as the capability upper bound. \textbf {(b)}~The three questions can fail independently (Section~\ref {sec:intro}), so each carries its own instrument and gate; $\dagger $ marks gates fixed before the runs, and $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers})}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Cross-Model Cache Translation}{3}{subsection.2.2}\protected@file@percent }
-\citation{stitching2021}
-\citation{relrep2022}
-\citation{platonic2024}
-\citation{aristotelian2026,perfectplatonic2025}
-\citation{vec2vec2025}
-\citation{taskvectors2023}
-\citation{gist2023}
-\citation{tunedlens2023}
-\citation{ffnmemory2021}
-\citation{c2c2025}
-\citation{lsc2026}
-\citation{mot2026}
-\citation{kvcomm2025}
-\citation{interlat2025}
-\citation{hcache2025}
-\citation{heo2026}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Cross-Model Representation Alignment}{4}{subsection.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Frozen-Model Controllability}{4}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}What the Survey Does Not Establish}{4}{subsection.2.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3}The Three-Hypothesis Audit Framework}{4}{section.3}\protected@file@percent }
-\newlabel{sec:framework}{{3}{4}{The Three-Hypothesis Audit Framework}{section.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Setup}{4}{subsection.3.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. No cited evaluation isolates mechanics with an identity injection or reports accuracy at matched perplexity; MoT's injection-window ablations are the closest antecedent (Section~\ref {sec:survey}).}}{5}{table.1}\protected@file@percent }
-\newlabel{tab:related}{{1}{5}{Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. No cited evaluation isolates mechanics with an identity injection or reports accuracy at matched perplexity; MoT's injection-window ablations are the closest antecedent (Section~\ref {sec:survey})}{table.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Hypotheses, Instruments, Gates}{5}{subsection.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Evidence Tiers and Multiplicity}{5}{subsection.3.3}\protected@file@percent }
-\newlabel{sec:tiers}{{3.3}{5}{Evidence Tiers and Multiplicity}{subsection.3.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Audit Methodology}{6}{section.4}\protected@file@percent }
-\newlabel{sec:method}{{4}{6}{Audit Methodology}{section.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Identity Control}{6}{subsection.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Disjoint Splits, Unified Prompts, and Honest Counters}{6}{subsection.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Mapper Ladder}{6}{subsection.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Oracle Probes}{7}{subsection.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Pairs, Data, and Protocol Discipline}{7}{subsection.4.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{7}{section.5}\protected@file@percent }
-\newlabel{sec:results}{{5}{7}{Results}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}H1 Passes: Mechanics Is Not the Failure Mode}{7}{subsection.5.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. All primary-pair point estimates are negative and no configuration passes the replacement gate; calibration budget moves affine mapping by only $0.005$ on a fixed evaluation set; the architecture-anchored RAT, the gradient-trained MLP families (hatched bars span independent trainings), and the over-parameterized joint MLP sit inside the same band. The RAT, MLP, and joint-MLP bars are frozen-gate extensions; the remaining bars are confirmatory (Section~\ref {sec:tiers}).}}{8}{figure.2}\protected@file@percent }
-\newlabel{fig:landscape}{{2}{8}{The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. All primary-pair point estimates are negative and no configuration passes the replacement gate; calibration budget moves affine mapping by only $0.005$ on a fixed evaluation set; the architecture-anchored RAT, the gradient-trained MLP families (hatched bars span independent trainings), and the over-parameterized joint MLP sit inside the same band. The RAT, MLP, and joint-MLP bars are frozen-gate extensions; the remaining bars are confirmatory (Section~\ref {sec:tiers})}{figure.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}H2 Fails for the Strong Student; the Weak-Student Result Is Inconclusive}{8}{subsection.5.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). PPL entries for translated and identity caches score only the suffix conditioned on the injected cache; the student self-prefill row is the native loss over the full context and suffix in one pass and is not directly comparable (the identity-injection value is the student's suffix PPL). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted; rows marked 8B use the Qwen3-8B teacher. $n_{\mathrm  {eval}}$ is the evaluation sample count (tail protocol rows use a fixed evaluation set of 100). All runs use disjoint calibration/evaluation splits and the unified prompt format. ``Gate'' applies the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$): \emph  {pass} (CI lower bound above $-\epsilon $), \emph  {deg.}\ (CI upper bound below zero, i.e.\ significant degradation), \emph  {n.e.}\ (CI lower bound at or below $-\epsilon $ while the upper bound is at or above zero: neither non-inferiority nor degradation is established). A CI that contains zero therefore does not by itself imply \emph  {n.e.}; for the gradient-trained rows the CHG column is a training range rather than a single interval, with the number of trainings in the row label, and Appendix~\ref {app:repro} lists each range with its worst-case interval bound. Calibration budgets above the pool size ($200$ examples once the fixed evaluation set is held out) saturate and reproduce the full-pool result. $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers}); unmarked translation rows are confirmatory.}}{9}{table.2}\protected@file@percent }
-\newlabel{tab:main}{{2}{9}{Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). PPL entries for translated and identity caches score only the suffix conditioned on the injected cache; the student self-prefill row is the native loss over the full context and suffix in one pass and is not directly comparable (the identity-injection value is the student's suffix PPL). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted; rows marked 8B use the Qwen3-8B teacher. $n_{\mathrm {eval}}$ is the evaluation sample count (tail protocol rows use a fixed evaluation set of 100). All runs use disjoint calibration/evaluation splits and the unified prompt format. ``Gate'' applies the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$): \emph {pass} (CI lower bound above $-\epsilon $), \emph {deg.}\ (CI upper bound below zero, i.e.\ significant degradation), \emph {n.e.}\ (CI lower bound at or below $-\epsilon $ while the upper bound is at or above zero: neither non-inferiority nor degradation is established). A CI that contains zero therefore does not by itself imply \emph {n.e.}; for the gradient-trained rows the CHG column is a training range rather than a single interval, with the number of trainings in the row label, and Appendix~\ref {app:repro} lists each range with its worst-case interval bound. Calibration budgets above the pool size ($200$ examples once the fixed evaluation set is held out) saturate and reproduce the full-pool result. $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers}); unmarked translation rows are confirmatory}{table.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$). ``Gate'' is the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$, gold CHG); Gemma-2-2B sits at the margin (CI lower bound $-0.020$). Every row in this table is a frozen-gate extension (Section~\ref {sec:tiers}).}}{10}{table.3}\protected@file@percent }
-\newlabel{tab:crossarch}{{3}{10}{Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$). ``Gate'' is the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$, gold CHG); Gemma-2-2B sits at the margin (CI lower bound $-0.020$). Every row in this table is a frozen-gate extension (Section~\ref {sec:tiers})}{table.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}RAT Component Ablations Separate Fluency From Capability}{10}{subsection.5.3}\protected@file@percent }
-\newlabel{sec:ratresults}{{5.3}{10}{RAT Component Ablations Separate Fluency From Capability}{subsection.5.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}H3: No Teacher-Content Probe Improves on the Student}{10}{subsection.5.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Oracle probes on Qwen3-4B$\to $1.7B ($n{=}30$; the fraction probe is confirmatory, the best-source replication and the octant sweep are frozen-gate extensions, Section~\ref {sec:tiers}). \textbf  {Left}: gold-letter probability as translated teacher content replaces the student's own cache, for two content sources. Filled markers mark mixture fractions whose paired CHG interval excludes zero: the decline separates from the student from $\alpha {=}0.5$ onward for the RAT source and only at $\alpha {=}0.75$ for the affine source, and no mixture at either source yields a gain whose interval excludes zero. \textbf  {Right}: window injection per student-layer octant (affine source), plotted as gold-probability CHG with $95\%$ CIs. Only the octant spanning layers $10$--$13$ excludes zero; two top-layer octants carry small positive point estimates whose intervals span zero.}}{11}{figure.3}\protected@file@percent }
-\newlabel{fig:probes}{{3}{11}{Oracle probes on Qwen3-4B$\to $1.7B ($n{=}30$; the fraction probe is confirmatory, the best-source replication and the octant sweep are frozen-gate extensions, Section~\ref {sec:tiers}). \textbf {Left}: gold-letter probability as translated teacher content replaces the student's own cache, for two content sources. Filled markers mark mixture fractions whose paired CHG interval excludes zero: the decline separates from the student from $\alpha {=}0.5$ onward for the RAT source and only at $\alpha {=}0.75$ for the affine source, and no mixture at either source yields a gain whose interval excludes zero. \textbf {Right}: window injection per student-layer octant (affine source), plotted as gold-probability CHG with $95\%$ CIs. Only the octant spanning layers $10$--$13$ excludes zero; two top-layer octants carry small positive point estimates whose intervals span zero}{figure.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Perplexity and Accuracy Decouple}{11}{subsection.5.5}\protected@file@percent }
-\newlabel{sec:decoupling}{{5.5}{11}{Perplexity and Accuracy Decouple}{subsection.5.5}{}}
-\citation{ffnmemory2021}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Perplexity over the scoring suffix versus accuracy for every method and run in the audit protocol (log scale; the superseded v1.1 runs are excluded). All points use the suffix-scoring protocol, so the identity control is the student's suffix-native reference; the student's full-context native loss (25.4, Table~\ref {tab:main}) is a different quantity and is not plotted. The identity control sits at low perplexity and high accuracy, while translated caches, probe mixtures, and native content spread across the plane---including a point with near-native perplexity ($23.7$) whose accuracy stays $23$ points below the student's $0.500$. Perplexity does not order methods the way the task metric does.}}{12}{figure.4}\protected@file@percent }
-\newlabel{fig:decoupling}{{4}{12}{Perplexity over the scoring suffix versus accuracy for every method and run in the audit protocol (log scale; the superseded v1.1 runs are excluded). All points use the suffix-scoring protocol, so the identity control is the student's suffix-native reference; the student's full-context native loss (25.4, Table~\ref {tab:main}) is a different quantity and is not plotted. The identity control sits at low perplexity and high accuracy, while translated caches, probe mixtures, and native content spread across the plane---including a point with near-native perplexity ($23.7$) whose accuracy stays $23$ points below the student's $0.500$. Perplexity does not order methods the way the task metric does}{figure.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Channel Asymmetry}{12}{subsection.5.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6}Why Translation Fails: An Architectural Analysis}{12}{section.6}\protected@file@percent }
-\newlabel{sec:why}{{6}{12}{Why Translation Fails: An Architectural Analysis}{section.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}Implications for Cache-Translation Research}{13}{section.7}\protected@file@percent }
-\newlabel{sec:implications}{{7}{13}{Implications for Cache-Translation Research}{section.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{13}{section.8}\protected@file@percent }
-\newlabel{sec:limitations}{{8}{13}{Limitations}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}The Three-Hypothesis Audit Framework}{3}{section.3}\protected@file@percent }
+\newlabel{sec:framework}{{3}{3}{The Three-Hypothesis Audit Framework}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Setup}{3}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Hypotheses, Instruments, Gates}{4}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Evidence Tiers and Multiplicity}{4}{subsection.3.3}\protected@file@percent }
+\newlabel{sec:tiers}{{3.3}{4}{Evidence Tiers and Multiplicity}{subsection.3.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. All primary-pair point estimates are negative and no configuration passes the replacement gate; calibration budget moves affine mapping by only $0.005$ on a fixed evaluation set; the architecture-anchored RAT, the gradient-trained MLP families (hatched bars span independent trainings), and the over-parameterized joint MLP sit inside the same band. The RAT, MLP, and joint-MLP bars are frozen-gate extensions; the remaining bars are confirmatory (Section~\ref {sec:tiers}).}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:landscape}{{2}{5}{The mapper landscape for Qwen3-4B$\to $1.7B under the unified audit protocol: gold-probability CHG over the student's own prefill, with 95\% bootstrap CIs. All primary-pair point estimates are negative and no configuration passes the replacement gate; calibration budget moves affine mapping by only $0.005$ on a fixed evaluation set; the architecture-anchored RAT, the gradient-trained MLP families (hatched bars span independent trainings), and the over-parameterized joint MLP sit inside the same band. The RAT, MLP, and joint-MLP bars are frozen-gate extensions; the remaining bars are confirmatory (Section~\ref {sec:tiers})}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Results}{5}{section.4}\protected@file@percent }
+\newlabel{sec:results}{{4}{5}{Results}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}H1 Passes: Mechanics Is Not the Failure Mode}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}H2 Fails for the Strong Student; the Weak-Student Result Is Inconclusive}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). PPL entries for translated and identity caches score only the suffix conditioned on the injected cache; the student self-prefill row is the native loss over the full context and suffix in one pass and is not directly comparable (the identity-injection value is the student's suffix PPL). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted; rows marked 8B use the Qwen3-8B teacher. $n_{\mathrm  {eval}}$ is the evaluation sample count (tail protocol rows use a fixed evaluation set of 100). All runs use disjoint calibration/evaluation splits and the unified prompt format. ``Gate'' applies the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$): \emph  {pass} (CI lower bound above $-\epsilon $), \emph  {deg.}\ (CI upper bound below zero, i.e.\ significant degradation), \emph  {n.e.}\ (CI lower bound at or below $-\epsilon $ while the upper bound is at or above zero: neither non-inferiority nor degradation is established). A CI that contains zero therefore does not by itself imply \emph  {n.e.}; for the gradient-trained rows the CHG column is a training range rather than a single interval, with the number of trainings in the row label, and Appendix~\ref {app:repro} lists each range with its worst-case interval bound. Calibration budgets above the pool size ($200$ examples once the fixed evaluation set is held out) saturate; auxiliary rows (native content, the 8B pair, per-layer, task-aware, RAT variants, the MLP families and the weak-student RAT row) are in Appendix~\ref {tab:mainaux}. $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers}); unmarked translation rows are confirmatory.}}{6}{table.1}\protected@file@percent }
+\newlabel{tab:main}{{1}{6}{Main audit results. Acc/gold/PPL: answer accuracy, gold-letter probability, and perplexity of the scoring suffix for the translated cache (kv-both). PPL entries for translated and identity caches score only the suffix conditioned on the injected cache; the student self-prefill row is the native loss over the full context and suffix in one pass and is not directly comparable (the identity-injection value is the student's suffix PPL). CHG is the gold-probability change over the student's own prefill with 95\% bootstrap CIs. Pairs: Qwen3-4B$\to $1.7B unless noted; rows marked 8B use the Qwen3-8B teacher. $n_{\mathrm {eval}}$ is the evaluation sample count (tail protocol rows use a fixed evaluation set of 100). All runs use disjoint calibration/evaluation splits and the unified prompt format. ``Gate'' applies the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$): \emph {pass} (CI lower bound above $-\epsilon $), \emph {deg.}\ (CI upper bound below zero, i.e.\ significant degradation), \emph {n.e.}\ (CI lower bound at or below $-\epsilon $ while the upper bound is at or above zero: neither non-inferiority nor degradation is established). A CI that contains zero therefore does not by itself imply \emph {n.e.}; for the gradient-trained rows the CHG column is a training range rather than a single interval, with the number of trainings in the row label, and Appendix~\ref {app:repro} lists each range with its worst-case interval bound. Calibration budgets above the pool size ($200$ examples once the fixed evaluation set is held out) saturate; auxiliary rows (native content, the 8B pair, per-layer, task-aware, RAT variants, the MLP families and the weak-student RAT row) are in Appendix~\ref {tab:mainaux}. $\ddagger $ marks families and axes added while revising and evaluated under the same gates (Section~\ref {sec:tiers}); unmarked translation rows are confirmatory}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$). ``Gate'' is the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$, gold CHG); Gemma-2-2B sits at the margin (CI lower bound $-0.020$). Every row in this table is a frozen-gate extension (Section~\ref {sec:tiers}).}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:crossarch}{{2}{7}{Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$). ``Gate'' is the replacement gate of Section~\ref {sec:framework} ($\epsilon {=}0.02$, gold CHG); Gemma-2-2B sits at the margin (CI lower bound $-0.020$). Every row in this table is a frozen-gate extension (Section~\ref {sec:tiers})}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}H3: No Teacher-Content Probe Improves on the Student}{7}{subsection.4.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Oracle probes on Qwen3-4B$\to $1.7B ($n{=}30$; the fraction probe is confirmatory, the best-source replication and the octant sweep are frozen-gate extensions, Section~\ref {sec:tiers}). \textbf  {Left}: gold-letter probability as translated teacher content replaces the student's own cache, for two content sources. Filled markers mark mixture fractions whose paired CHG interval excludes zero: the decline separates from the student from $\alpha {=}0.5$ onward for the RAT source and only at $\alpha {=}0.75$ for the affine source, and no mixture at either source yields a gain whose interval excludes zero. \textbf  {Right}: window injection per student-layer octant (affine source), plotted as gold-probability CHG with $95\%$ CIs. Only the octant spanning layers $10$--$13$ excludes zero; two top-layer octants carry small positive point estimates whose intervals span zero.}}{8}{figure.3}\protected@file@percent }
+\newlabel{fig:probes}{{3}{8}{Oracle probes on Qwen3-4B$\to $1.7B ($n{=}30$; the fraction probe is confirmatory, the best-source replication and the octant sweep are frozen-gate extensions, Section~\ref {sec:tiers}). \textbf {Left}: gold-letter probability as translated teacher content replaces the student's own cache, for two content sources. Filled markers mark mixture fractions whose paired CHG interval excludes zero: the decline separates from the student from $\alpha {=}0.5$ onward for the RAT source and only at $\alpha {=}0.75$ for the affine source, and no mixture at either source yields a gain whose interval excludes zero. \textbf {Right}: window injection per student-layer octant (affine source), plotted as gold-probability CHG with $95\%$ CIs. Only the octant spanning layers $10$--$13$ excludes zero; two top-layer octants carry small positive point estimates whose intervals span zero}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Perplexity and Accuracy Decouple}{8}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:decoupling}{{4.4}{8}{Perplexity and Accuracy Decouple}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Why Translation Fails: An Architectural Analysis}{8}{section.5}\protected@file@percent }
+\newlabel{sec:why}{{5}{8}{Why Translation Fails: An Architectural Analysis}{section.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Perplexity over the scoring suffix versus accuracy for every method and run in the audit protocol (log scale; the superseded v1.1 runs are excluded). All points use the suffix-scoring protocol, so the identity control is the student's suffix-native reference; the student's full-context native loss (25.4, Table~\ref {tab:main}) is a different quantity and is not plotted. The identity control sits at low perplexity and high accuracy, while translated caches, probe mixtures, and native content spread across the plane---including a point with near-native perplexity ($23.7$) whose accuracy stays $23$ points below the student's $0.500$. Perplexity does not order methods the way the task metric does. The channel ablation (key-only versus value-only versus both) is reported in Appendix~\ref {app:channel}.}}{9}{figure.4}\protected@file@percent }
+\newlabel{fig:decoupling}{{4}{9}{Perplexity over the scoring suffix versus accuracy for every method and run in the audit protocol (log scale; the superseded v1.1 runs are excluded). All points use the suffix-scoring protocol, so the identity control is the student's suffix-native reference; the student's full-context native loss (25.4, Table~\ref {tab:main}) is a different quantity and is not plotted. The identity control sits at low perplexity and high accuracy, while translated caches, probe mixtures, and native content spread across the plane---including a point with near-native perplexity ($23.7$) whose accuracy stays $23$ points below the student's $0.500$. Perplexity does not order methods the way the task metric does. The channel ablation (key-only versus value-only versus both) is reported in Appendix~\ref {app:channel}}{figure.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Implications for Cache-Translation Research}{9}{section.6}\protected@file@percent }
+\newlabel{sec:implications}{{6}{9}{Implications for Cache-Translation Research}{section.6}{}}
 \bibstyle{iclr2026_conference}
 \bibdata{references}
 \bibcite{stitching2021}{{1}{2021}{{Bansal et~al.}}{{Bansal, Nakkiran, and Barak}}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Limitations}{10}{section.7}\protected@file@percent }
+\newlabel{sec:limitations}{{7}{10}{Limitations}{section.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{10}{section.8}\protected@file@percent }
 \bibcite{tunedlens2023}{{2}{2023}{{Belrose et~al.}}{{Belrose, Ostrovsky, McKinney, Furman, Smith, Halawi, Biderman, and Steinhardt}}}
 \bibcite{lsc2026}{{3}{2026}{{Dery et~al.}}{{Dery, Yahav, Prior, Feng, Shen, and Szlam}}}
-\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{14}{section.9}\protected@file@percent }
 \bibcite{interlat2025}{{4}{2025}{{Du et~al.}}{{Du, Wang, Bai, Cao, Zhu, Cheng, Zheng, Chen, and Ying}}}
 \bibcite{c2c2025}{{5}{2025}{{Fu et~al.}}{{Fu, Min, Zhang, Yan, Dai, Ouyang, and Wang}}}
 \bibcite{hcache2025}{{6}{2025}{{Gao et~al.}}{{Gao, Chen, and Shu}}}
@@ -110,9 +67,79 @@
 \bibcite{kvsharer2024}{{19}{2024}{{Yang et~al.}}{{Yang, Cao, Chen, Qin, Yang, Zhao, and Chen}}}
 \bibcite{cacheblend2025}{{20}{2025}{{Yao et~al.}}{{Yao, Li, Liu, Ray, Cheng, Zhang, Du, Lu, and Jiang}}}
 \bibcite{perfectplatonic2025}{{21}{2025}{{Ziyin \& Chuang}}{{Ziyin and Chuang}}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Reproducibility}{16}{appendix.A}\protected@file@percent }
-\newlabel{app:repro}{{A}{16}{Reproducibility}{appendix.A}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Measurements}{16}{appendix.B}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {C}Append-on-Translated-Cache Replay Diagnostic}{17}{appendix.C}\protected@file@percent }
-\newlabel{app:replay}{{C}{17}{Append-on-Translated-Cache Replay Diagnostic}{appendix.C}{}}
-\gdef \@abspage@last{17}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Reproducibility}{12}{appendix.A}\protected@file@percent }
+\newlabel{app:repro}{{A}{12}{Reproducibility}{appendix.A}{}}
+\citation{streamingsink2023}
+\citation{cachegen2024}
+\citation{cacheblend2025}
+\citation{kvsharer2024}
+\citation{c2c2025}
+\citation{lsc2026}
+\citation{mot2026}
+\citation{kvcomm2025}
+\citation{interlat2025}
+\citation{hcache2025}
+\citation{heo2026}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Measurements}{13}{appendix.B}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {C}Append-on-Translated-Cache Replay Diagnostic}{13}{appendix.C}\protected@file@percent }
+\newlabel{app:replay}{{C}{13}{Append-on-Translated-Cache Replay Diagnostic}{appendix.C}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Related Work in Detail}{13}{appendix.D}\protected@file@percent }
+\newlabel{app:related}{{D}{13}{Related Work in Detail}{appendix.D}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}KV Reuse Within a Single Model}{13}{subsection.D.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Cross-Model Cache Translation}{13}{subsection.D.2}\protected@file@percent }
+\citation{stitching2021}
+\citation{relrep2022}
+\citation{platonic2024}
+\citation{aristotelian2026,perfectplatonic2025}
+\citation{vec2vec2025}
+\citation{taskvectors2023}
+\citation{gist2023}
+\citation{tunedlens2023}
+\citation{ffnmemory2021}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.3}Cross-Model Representation Alignment}{14}{subsection.D.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.4}Frozen-Model Controllability}{14}{subsection.D.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {E}Audit Methodology in Detail}{14}{appendix.E}\protected@file@percent }
+\newlabel{app:method}{{E}{14}{Audit Methodology in Detail}{appendix.E}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {F}Audit Methodology}{14}{appendix.F}\protected@file@percent }
+\newlabel{sec:method}{{F}{14}{Audit Methodology}{appendix.F}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {F.1}Identity Control}{14}{subsection.F.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {F.2}Disjoint Splits, Unified Prompts, and Honest Counters}{15}{subsection.F.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {F.3}Mapper Ladder}{15}{subsection.F.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {F.4}Oracle Probes}{15}{subsection.F.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {F.5}Pairs, Data, and Protocol Discipline}{15}{subsection.F.5}\protected@file@percent }
+\citation{ffnmemory2021}
+\citation{c2c2025}
+\citation{lsc2026}
+\citation{mot2026}
+\citation{kvcomm2025}
+\citation{interlat2025}
+\citation{hcache2025}
+\citation{heo2026}
+\@writefile{toc}{\contentsline {section}{\numberline {G}RAT Component Ablations}{16}{appendix.G}\protected@file@percent }
+\newlabel{app:rat}{{G}{16}{RAT Component Ablations}{appendix.G}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {G.1}RAT Component Ablations Separate Fluency From Capability}{16}{subsection.G.1}\protected@file@percent }
+\newlabel{sec:ratresults}{{G.1}{16}{RAT Component Ablations Separate Fluency From Capability}{subsection.G.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {H}Channel Asymmetry}{16}{appendix.H}\protected@file@percent }
+\newlabel{app:channel}{{H}{16}{Channel Asymmetry}{appendix.H}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.1}Channel Asymmetry}{16}{subsection.H.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {I}Survivable Variants of the Idea}{16}{appendix.I}\protected@file@percent }
+\newlabel{app:survivable}{{I}{16}{Survivable Variants of the Idea}{appendix.I}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {J}Held-out Reconstruction Measurement}{16}{appendix.J}\protected@file@percent }
+\newlabel{app:r2}{{J}{16}{Held-out Reconstruction Measurement}{appendix.J}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. No cited evaluation isolates mechanics with an identity injection or reports accuracy at matched perplexity; MoT's injection-window ablations are the closest antecedent (Section~\ref {sec:survey}).}}{17}{table.3}\protected@file@percent }
+\newlabel{tab:related}{{3}{17}{Cache-translation and adjacent work, organized by what is translated and what is held fixed. ``Replay'' marks methods whose reported quality includes a target-side correction pass over the context; our audit holds strict zero re-prefill. No cited evaluation isolates mechanics with an identity injection or reports accuracy at matched perplexity; MoT's injection-window ablations are the closest antecedent (Section~\ref {sec:survey})}{table.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {K}Survey Comparison Table}{17}{appendix.K}\protected@file@percent }
+\newlabel{app:table1}{{K}{17}{Survey Comparison Table}{appendix.K}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {L}Deployment Reading of the Weak-Student Regime}{17}{appendix.L}\protected@file@percent }
+\newlabel{app:deployment}{{L}{17}{Deployment Reading of the Weak-Student Regime}{appendix.L}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {M}Alignment-Control Coverage (superseded)}{17}{appendix.M}\protected@file@percent }
+\newlabel{app:aligncov}{{M}{17}{Alignment-Control Coverage (superseded)}{appendix.M}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {N}Per-Octant Probe Windows}{17}{appendix.N}\protected@file@percent }
+\newlabel{app:octant}{{N}{17}{Per-Octant Probe Windows}{appendix.N}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Auxiliary rows of the main audit, moved here for space. Columns and gate definitions are identical to Table~\ref {tab:main}.}}{18}{table.4}\protected@file@percent }
+\newlabel{tab:mainaux}{{4}{18}{Auxiliary rows of the main audit, moved here for space. Columns and gate definitions are identical to Table~\ref {tab:main}}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {O}Calibration Ladder, Draw Variance, and Family Detail}{18}{appendix.O}\protected@file@percent }
+\newlabel{app:ladder}{{O}{18}{Calibration Ladder, Draw Variance, and Family Detail}{appendix.O}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {P}Cross-Architecture Detail}{18}{appendix.P}\protected@file@percent }
+\newlabel{app:crossarch}{{P}{18}{Cross-Architecture Detail}{appendix.P}{}}
+\gdef \@abspage@last{18}

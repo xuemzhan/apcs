@@ -2,6 +2,11 @@
 
 来源：`paper_audit3_1.md` 审稿意见（6/10 Weak Accept）。目标是把审稿人最后几个攻击面封住。
 
+> **状态（2026-09-12 更新）**：E1–E6 **已在 GPU 机器完成并回填论文**（结果见 `EXPERIMENT_LOG.md`
+> 与 `paper/cache_audit/EVIDENCE_MAP.md`）。E7 部分完成（跨架构原 run 在库；1K 复现被外部
+> SIGTERM 终止，4K 版本成功）；E8（开放式任务）未实现。仍未覆盖：1K/4K 行的独立复跑、
+> 对齐跨架构行的独立复跑、开放式任务。
+
 ## 所有 run 的通用要求
 
 1. 启动方式：`python -m apcs.cli inject-eval --config <yaml> --new-run`
