@@ -69,7 +69,7 @@ position-wise joint mapper reconstructs both channels better ($0.85$ and $0.48$)
 yet performs worse on the task---reconstruction fidelity does not imply
 capability. Under zero
 re-prefill, we find no evidence that the teacher's answer-relevant advantage is
-recoverable from its cache by the tested translators. All 171 audit runs are
+recoverable from its cache by the tested translators. The numeric replacement margin $\epsilon{=}0.02$ was selected after the gate form was frozen and is therefore used as a practical reporting tolerance, not as a preregistered constant (Appendix~\ref{app:repro}); the gain gate is $\epsilon$-free and no configuration passes it. All 171 audit runs are
 recorded for reproducibility, and we release the protocol as a checklist for
 future claims.
 \end{abstract}
@@ -103,7 +103,8 @@ report of what happens to \emph{accuracy} when perplexity is repaired.
 
 % Key abstraction: the three-hypothesis audit.
 We evaluate cache translation as an audit with three gated hypotheses.
-\textbf{H1 (mechanics)} asks whether a foreign cache is consumed without loss;
+\textbf{H1 (injection mechanics)} asks whether the cache-injection pipeline preserves a valid
+student-space cache without loss;
 its instrument is an identity control that injects the student's own cache
 through the full pipeline. \textbf{H2 (mapping)} asks whether any translator
 reaches replacement level; its instrument is a ladder of seven mapper families
@@ -127,7 +128,7 @@ configuration reaches $0.365$ against a $0.503$ student baseline, and on one
 fixed evaluation set the calibration ladder stays within $[-0.257, -0.238]$.
 The weak 0.6B student is established as neither worse nor non-inferior
 ($+0.010$, CI $[-0.081, +0.102]$ at $n{=}63$); at the paired variance we
-observe, clearing the pre-specified margin would take roughly an order of
+observe, clearing the reporting margin would take roughly an order of
 magnitude more evaluation samples (Section~\ref{sec:results}). H3 returns a
 negative that we state narrowly: no configuration we test produces a gain whose
 interval excludes zero. The blended-probe point estimate falls monotonically
@@ -363,8 +364,8 @@ paths we test without excluding every nonlinear one.
 The audit grew during revision, and we do not let later additions inherit the
 authority of pre-specified tests. We therefore label every claim by how it
 entered the protocol. \emph{Confirmatory} claims were fixed before the runs: the
-identity gate, the replacement and gain gates at $\epsilon{=}0.02$ on the
-primary pair, and the fraction and window probes under the rule that
+identity gate, the non-inferiority *form* of the replacement gate and the $\epsilon$-free gain
+gate on the primary pair, and the fraction and window probes under the rule that
 exploitability is established only if some configuration's interval excludes
 zero on the positive side. \emph{Frozen-gate extensions} were added while
 revising but evaluated with the same gates and metric definitions: the
@@ -516,7 +517,7 @@ over the full context and suffix in one pass---so its value ($25.4$) is not
 expected to equal the injected-cache PPL. The H1 identity criterion is defined
 on the answer-scoring logits, where the two paths agree to float tolerance.
 
-\subsection{H2 Fails for the Strong Student; the Weak-Student Result Is Inconclusive}
+\subsection{No Strong-Student Mapper Establishes Replacement; the Weak-Student Result Is Inconclusive}
 \emph{Evidence tier: the strong-student ladder is confirmatory; the budget
 ladder, the mapper refits, the nonlinear families, and the 8B pair are
 frozen-gate extensions (Section~\ref{sec:tiers}).}
@@ -654,7 +655,7 @@ is robust to teacher scale. The
 weak 0.6B student tells the opposite story. Affine at $c{=}200$ gives a
 near-parity point estimate $+0.010$ $[-0.081, +0.102]$, and 8B$\to$0.6B gives
 $-0.023$ $[-0.104, +0.064]$; both intervals include zero, but both lower
-bounds fall below the pre-specified replacement margin $-\epsilon=-0.02$, so
+bounds fall below the reporting replacement margin $-\epsilon=-0.02$, so
 non-inferiority is not established at these sample sizes. The two pairs fail
 that gate for different reasons: at the paired variance we observe for
 4B$\to$0.6B (SD $\approx 0.40$), establishing $\epsilon{=}0.02$
@@ -807,7 +808,8 @@ estimates the audit produces and they are consistent with noise in layers the
 student is insensitive to. The verdict is robust to translator quality in a
 narrow sense: neither the architecture-anchored translator nor the best mapper
 in the ladder produces content that yields a gain whose interval excludes zero.
-To state this as a family-wise rather than a per-configuration claim, we take
+The family-wise bound below is a revision-added multiplicity analysis over this pre-specified
+confirmatory probe family. To state the probe result as a family-wise rather than a per-configuration claim, we take
 the maximum over the six confirmatory probe configurations (three mixture
 fractions and three layer windows, RAT source) and bootstrap that maximum over
 evaluation samples: the observed maximum is $-0.001$ and its $95\%$ upper bound
@@ -906,12 +908,11 @@ split. Second, the teacher's advantage over the student is consistent with
 being mediated by parameter-dependent computation that raw cache transfer does
 not reproduce. FFN layers carry the model's factual
 associations~\citep{ffnmemory2021}, and the capability gap between Qwen3-4B
-and 1.7B is a gap in these parameters, which a cache does not transport. The
+and 1.7B is a gap in these parameters, which raw KV transfer does not explicitly transport. The
 oracle probes make the consequence concrete: even with the student's own
 cache holding $75\%$ of the mass, the teacher's $25\%$ contribution degrades
 the answer. MoT's own design corroborates the analysis: its reported quality
-includes a target-side replay with a correction loss, which is exactly the
-upper-layer correction that strict zero re-prefill denies. Under a cold
+includes a target-side correction pathway that strict zero re-prefill disallows. Under a cold
 start the translator's output is all the student gets, and that output shows
 no measurable teacher advantage in our audit.
 
@@ -929,7 +930,7 @@ cache at controlled fractions and layer windows, probing exploitability within
 controlled interventions and without training anything.
 \end{itemize}
 Two gates apply to the metric: a replacement gate requires the bootstrap CI
-lower bound above a pre-specified tolerance $-\epsilon$ (the point estimate
+lower bound above a reporting tolerance $-\epsilon$ (the point estimate
 need not be non-negative), and a stricter
 gain gate requires the CI lower bound above zero. A pipeline delta over a
 student baseline is not evidence of translation, and a perplexity gain is not
@@ -1029,16 +1030,16 @@ establish what MoT's full pipeline does.
 Cache translation promises to move a teacher's work into a smaller model,
 and the audit separates that promise into three testable parts. The
 mechanism holds up: an identity control reproduces the student's own prefill
-exactly. The tested maps do not reach replacement: seven mapper families, a
+exactly. No tested strong-student map establishes replacement under the audit gate: seven mapper families, a
 calibration ladder, an architecture-anchored translator, and an implementation
 of the closest published strict-zero-reprefill design all leave the strong student below its own
 prefill, while the weak student's near-parity point estimate remains
-inconclusive under the pre-specified margin. The map, moreover, is not where the
+inconclusive under the reporting margin. The map, moreover, is not where the
 problem appears to sit: no probe configuration delivers an interval-supported
 advantage, and a cache with near-native perplexity still fails the
 task. We state the negative narrowly: no configuration we test produces a gain
-whose interval excludes zero, the one configuration that clears our replacement
-margin belongs to a near-chance student and gains nothing, and the probes leave
+whose interval excludes zero, the only configurations that clear the chosen replacement margin correspond to two near-chance
+students and show no measurable gain, and the probes leave
 a nonlinear or jointly structured extraction path untested rather than
 excluded. The evidence is consistent with an advantage that is weight-mediated
 rather than recoverable from raw KV states by the tested translators:
@@ -1080,8 +1081,8 @@ indices are applied to both methods being compared). Permutation tests use
 $1{,}000$ sign flips with the mean as the statistic and
 $p=(\#\text{extreme}+1)/(n_{\text{perm}}+1)$; no reported decision uses a
 $p$-value, and all gates are read from the intervals. The family-wise probe
-bound in Section~\ref{sec:results} is a max-statistic bootstrap over the same
-resampling scheme.
+bound in Section~\ref{sec:results} is a max-statistic bootstrap, $T^{*(b)}=\max_j \bar\Delta_j^{*(b)}$, over the same resampling scheme with a
+single set of resample indices shared by all configurations, so that sample-level correlation is preserved.
 
 \textbf{Gradient-trained rows.} Table~\ref{tab:main} reports a training range
 for the per-head MLP and the position-wise joint MLP because both are
