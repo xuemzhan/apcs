@@ -97,9 +97,25 @@ def main() -> int:
         pooled = float(_r2(ref.reshape(-1, Dd), pred.reshape(-1, Dd)))
         return pooled, float(np.mean(per_head))
 
+    def _make_mapper():
+        if args.mapper == "affine":
+            return AffineMapper(lam=_ridge_lambda(cfg, "K"))
+        if args.mapper == "ridge":
+            return RidgePerHeadMapper(lam=_ridge_lambda(cfg, "K"))
+        if args.mapper == "joint_mlp":
+            from apcs.mapper.joint_mlp import JointMLPMapper
+            m_cfg = cfg.get("mapper", {})
+            return JointMLPMapper(
+                hidden=int(m_cfg.get("joint_hidden", 256)),
+                epochs=int(m_cfg.get("joint_epochs", 300)),
+                lr=float(m_cfg.get("joint_lr", 1e-3)),
+                n_hidden_layers=int(m_cfg.get("joint_layers", 2)),
+                seed=int(m_cfg.get("joint_seed", 0)),
+            )
+        raise ValueError(f"unknown mapper {args.mapper}")
+
     for kind in kv_kinds(cfg):
-        mapper = AffineMapper(lam=_ridge_lambda(cfg, kind)) if args.mapper == "affine" \
-            else RidgePerHeadMapper(lam=_ridge_lambda(cfg, kind))
+        mapper = _make_mapper()
         # Variant 1: follow the configured de-RoPE path (the mapper's actual input).
         kind_dr = _de_rope_for_kind(cfg, kind, de_rope_fn)
         mapper.fit_batch(
@@ -107,8 +123,7 @@ def main() -> int:
             positions=None, de_rope_fn=kind_dr,
         )
         # Variant 2: raw KV (no de-RoPE), for reference.
-        mapper_raw = AffineMapper(lam=_ridge_lambda(cfg, kind)) if args.mapper == "affine" \
-            else RidgePerHeadMapper(lam=_ridge_lambda(cfg, kind))
+        mapper_raw = _make_mapper()
         mapper_raw.fit_batch(
             list(splits[kind]["calib"]), layer_map, kv_kind=kind,
             positions=None, de_rope_fn=None,
@@ -117,6 +132,7 @@ def main() -> int:
         for tag, mp, dr in (("de_rope", mapper, kind_dr), ("raw", mapper_raw, None)):
             pooled_list: list[float] = []
             perhead_list: list[float] = []
+            train_pooled: list[float] = []
             for kv_t, kv_s in splits[kind]["eval"]:
                 S = int(kv_t.shape[1])
                 pred = mp.transform(
@@ -126,14 +142,23 @@ def main() -> int:
                 pooled, perhead = _r2_perhead(pred, kv_s)
                 pooled_list.append(pooled)
                 perhead_list.append(perhead)
+            for kv_t, kv_s in splits[kind]["calib"]:
+                S = int(kv_t.shape[1])
+                pred = mp.transform(
+                    kv_t, layer_map, kv_kind=kind,
+                    positions=np.arange(S, dtype=np.float64), de_rope_fn=dr,
+                )
+                train_pooled.append(_r2_perhead(pred, kv_s)[0])
             entries[tag] = {
                 "mean_r2_pooled": float(np.mean(pooled_list)),
                 "mean_r2_per_layer_head": float(np.mean(perhead_list)),
+                "mean_r2_train": float(np.mean(train_pooled)),
                 "pooled_r2_per_context": pooled_list,
                 "per_layer_head_r2_per_context": perhead_list,
                 "n_heldout": len(pooled_list),
             }
-            print(f"[recon-r2] {kind}/{tag}: pooled={np.mean(pooled_list):+.4f}  "
+            print(f"[recon-r2] {kind}/{tag}: train={np.mean(train_pooled):+.4f}  "
+                  f"held-out pooled={np.mean(pooled_list):+.4f}  "
                   f"per-(layer,head)={np.mean(perhead_list):+.4f} (n_heldout={len(pooled_list)})")
         out["kinds"][kind] = entries
 

@@ -163,8 +163,12 @@ class HFKVProvider:
             try:
                 from ..data.hf_dataset import load as load_ds
 
+                extra: dict[str, Any] = {}
+                tt = self._cfg.get("datasets", {}).get("needle_target_tokens")
+                if tt and str(names[0]) in ("needle_mcqa", "needle_longctx"):
+                    extra["target_tokens"] = int(tt)
                 rows = load_ds(
-                    names[0], n=max(4, idx + 1), split=split, seed=seed
+                    names[0], n=max(4, idx + 1), split=split, seed=seed, **extra
                 )
                 if idx < len(rows):
                     r = rows[idx]

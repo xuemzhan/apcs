@@ -1,0 +1,85 @@
+{
+  "experiment": {
+    "name": "v12-4b-1.7b-taskmix-summary-tail100",
+    "run_id": "v12-4b-1.7b-taskmix-summary-tail100-20260912-193441"
+  },
+  "provider": {
+    "kv": "hf",
+    "score": "synthetic",
+    "timing": "hf"
+  },
+  "teacher": {
+    "model_id": "/workspace/models/Qwen3-4B",
+    "revision": "main",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "device_map": "cuda:0",
+    "num_layers": 36,
+    "num_kv_heads": 8,
+    "head_dim": 128
+  },
+  "student": {
+    "model_id": "/workspace/models/Qwen3-1.7B",
+    "revision": "main",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "device_map": "cuda:0",
+    "freeze": true,
+    "num_layers": 28,
+    "num_kv_heads": 8,
+    "head_dim": 128
+  },
+  "datasets": {
+    "fidelity": [
+      "hellaswag",
+      "arc_challenge"
+    ],
+    "teacher_advantage": {
+      "primary": "mmlu"
+    }
+  },
+  "context_lengths": [
+    512
+  ],
+  "mapper": {
+    "type": "task_aware",
+    "separate_kv": true,
+    "de_rope": true,
+    "de_rope_k": true,
+    "de_rope_v": false,
+    "ridge_lambda_k": 0.001,
+    "ridge_lambda_v": 0.001,
+    "inject_eval_calib_samples": 30,
+    "layer_selection": "proportional",
+    "inject_eval": true,
+    "rope_align": "rotated",
+    "task_loss_weight": 0.7,
+    "task_delta_mode": "diag",
+    "learn_layer_alpha": true,
+    "task_lr": 0.003,
+    "task_steps": 40,
+    "task_batch_size": 4
+  },
+  "inject_eval": {
+    "max_samples": 300,
+    "seed": 42,
+    "calib_eval_split": true,
+    "calib_samples": 30,
+    "calib_shuffle": true,
+    "persist_kv": false,
+    "native_rescale": true,
+    "summary_baseline": true,
+    "ablation_modes": [
+      "self_kv",
+      "native",
+      "kv_both"
+    ],
+    "eval_from_tail_n": 100
+  },
+  "seeds": [
+    42
+  ],
+  "output": {
+    "base_dir": "reports/runs"
+  }
+}

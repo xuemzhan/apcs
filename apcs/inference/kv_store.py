@@ -107,6 +107,10 @@ def save_mapper_params(store_dir: Path, mappers: dict[str, Any]) -> Path:
         if isinstance(W, dict) and W:
             for key, mat in W.items():
                 payload[f"W|{'|'.join(map(str, key))}"] = np.asarray(mat)
+        bias = getattr(mapper, "bias", None)
+        if isinstance(bias, dict) and bias:
+            for key, mat in bias.items():
+                payload[f"b|{'|'.join(map(str, key))}"] = np.asarray(mat)
         A = getattr(mapper, "A", None)
         B = getattr(mapper, "B", None)
         if isinstance(A, dict) and isinstance(B, dict) and A:
@@ -151,6 +155,9 @@ def load_mapper_params(store_dir: Path, mappers: dict[str, Any]) -> bool:
             mat = z[flat_key]
             if field == "W" and isinstance(getattr(mapper, "W", None), dict):
                 mapper.W[key] = mat
+                restored = True
+            elif field == "b" and isinstance(getattr(mapper, "bias", None), dict):
+                mapper.bias[key] = mat
                 restored = True
             elif field == "A" and isinstance(getattr(mapper, "A", None), dict):
                 mapper.A[key] = mat

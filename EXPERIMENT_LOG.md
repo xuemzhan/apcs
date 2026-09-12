@@ -21,6 +21,14 @@
 | P2-3 过度参数化译者 | 跨层/跨头 Joint MLP（hidden 256×2，~37M 参数，c30） | CHG −0.265 [−0.426,−0.111]，acc 0.233，PPL 31.6（流畅但不能力）；"不存在可用 mapper"反驳被更强的 negative 封堵 |
 | P2-5 长上下文任务 | needle-in-a-haystack 4 选（~1024 token，affine c30，n=30） | teacher 0.733 / student 0.533 / translated 0.233，CHG −0.285 [−0.534,−0.025]；失败非短上下文伪影 |
 | P2-1 跨家族/跨架构 | Qwen3-4B→{Llama-3.2-1B/3B, Gemma-2-2B, Gemma-3-1B, Qwen2.5-1.5B}，矩形 affine（head 均值池化+维度投影），c30，n=100 | H1 全通过；CHG +0.000/−0.044/−0.009/−0.061/−0.157；均无 capability（teacher gold 0.691 未恢复） |
+| 补 E2：joint MLP 重建诊断 | 20 fit / 10 held-out context，joint_mlp（~37M）| K: train 0.949 / held-out per-head 0.854；V: train 0.647 / held-out 0.481（对比 affine K 0.81 / V 0.32）⇒ 重建显著更好但下游仍失败，**表征保真 ≠ 能力保真** |
+| 补 E4：~4K 上下文 | needle_target_tokens=4096（实际 ~4.8K token），affine c30，n=20 | student 0.400/0.383、teacher 0.850/0.726、kv_both 0.350/0.348，CHG **−0.035 [−0.380,+0.313]**（n 小、CI 含 0，未确立）；self-kv +0.0001 ⇒ 4K 下仍无增益 |
+| 补 E7：复现覆盖 | 3 个跨架构 rect run 已在库；1K long-context 二次复现被外部 SIGTERM 终止（未完成）；4K 版本次成功 | 跨架构覆盖已补齐；long-context 复现以 4K run 部分替代 |
+| 补 E8：开放式任务 | 需新增 GSM8K/TriviaQA 短答适配器 | **未实现**（成本高，列为后续） |
+| 补 E5：冷启动成对产物 | persist_kv 离线 → online_kv_dir 在线（不加载 Teacher），c30 n=30 | 修复 `AffineMapper.bias` 未持久化的 bug 后，离线/在线逐样本 gold **最大绝对差 = 0.000**（bit-identical）；cold-start 路径可精确复现 |
+| 补 E6：text-channel 补 CI | v12 taskmix summary_baseline，tail n=100 | summary acc 0.440 / gold 0.404 vs student 0.520 / 0.512，CHG **−0.108 [−0.181,−0.036]**（CI 排除 0）⇒ 文本通道显著劣于学生，但仍远好于翻译 |
+| 补 E1：Heo-style top-k 跨层 ridge（c200, tail100） | layer_selection=topk，calib 上按 held-out R² 选源层，k=1/3/5 | CHG −0.273 [−0.380,−0.158] / −0.308 [−0.417,−0.200] / −0.291 [−0.399,−0.192]，**全部显著为负、gate FAIL**；H1 恒等通过 ⇒ 负结论非 proportional 逐层对应所致 |
+| 补 E3：边界学生 token-aligned | llama1b / gemma2-2b 的 rect-align，n=100 | Llama-1B −0.003 [−0.011,+0.005]（非劣）、Gemma-2-2B −0.007 [−0.018,+0.005]（对齐后下界过 −0.02）⇒ 对齐不改变 replacement 判定、仍无能力增益 |
 | 补：joint MLP 种子方差 | joint_mlp c30 × seeds {0,1,2}（+原 run） | CHG −0.302/−0.281/−0.269/−0.265，区间 [−0.30,−0.26]；亦为梯度训练、种子相关 |
 | 补：tokenizer 对齐跨架构 | rect-align（字符重叠对齐教师→学生 token 位置），c30，n=100 | Llama-3.2-3B CHG −0.024 [−0.047,−0.004]、Gemma-3-1B −0.073 [−0.134,−0.021]，均仍显著为负；Qwen2.5 与 Qwen3 分词相同，对齐为空操作 |
 | 复现审计 | 逐条重跑 23 个核心配置并与记录值对比 | 确定性族（ridge/affine/per-layer/task-aware/RAT/joint MLP、校准阶梯、探针/八分位、跨架构）逐位或 \|Δ\|≤0.002 复现；**per-head MLP 训练种子相关**：c30∈[−0.39,−0.26]、c200∈[−0.26,−0.23]，论文已改为区间并加复现说明 |

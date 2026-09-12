@@ -1,0 +1,452 @@
+{
+  "generated_at": "2026-09-12T20:22:56.449418",
+  "config_enriched": {
+    "experiment": {
+      "name": "v15-4b-to-1.7b-affine-c30-longctx4k",
+      "run_id": "v15-4b-to-1.7b-affine-c30-longctx4k-20260912-201607"
+    },
+    "provider": {
+      "kv": "hf",
+      "score": "synthetic",
+      "timing": "hf"
+    },
+    "teacher": {
+      "model_id": "/workspace/models/Qwen3-4B",
+      "revision": "main",
+      "dtype": "float16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "student": {
+      "model_id": "/workspace/models/Qwen3-1.7B",
+      "revision": "main",
+      "dtype": "float16",
+      "attention_implementation": "sdpa",
+      "device_map": "cuda:0",
+      "freeze": true,
+      "num_layers": 28,
+      "num_kv_heads": 8,
+      "head_dim": 128
+    },
+    "datasets": {
+      "fidelity": [
+        "needle_mcqa"
+      ],
+      "teacher_advantage": {
+        "primary": "mmlu"
+      },
+      "needle_target_tokens": 4096
+    },
+    "context_lengths": [
+      4096
+    ],
+    "mapper": {
+      "type": "affine",
+      "separate_kv": true,
+      "de_rope": true,
+      "de_rope_k": true,
+      "de_rope_v": false,
+      "ridge_lambda_k": 0.001,
+      "ridge_lambda_v": 0.001,
+      "rank": 16,
+      "inject_eval_calib_samples": 30,
+      "layer_selection": "proportional",
+      "inject_eval": true,
+      "rope_align": "rotated"
+    },
+    "inject_eval": {
+      "max_samples": 40,
+      "seed": 42,
+      "calib_eval_split": true,
+      "calib_samples": 20,
+      "calib_shuffle": true,
+      "persist_kv": false,
+      "native_rescale": true,
+      "summary_baseline": false,
+      "probe_mode": false,
+      "eval_from_tail_n": 0,
+      "ablation_modes": [
+        "self_kv",
+        "native",
+        "kv_both"
+      ]
+    },
+    "seeds": [
+      42
+    ],
+    "output": {
+      "base_dir": "reports/runs"
+    },
+    "teacher_model": "/workspace/models/Qwen3-4B",
+    "teacher_commit": "main",
+    "student_model": "/workspace/models/Qwen3-1.7B",
+    "student_commit": "main",
+    "tokenizer": "/workspace/models/Qwen3-4B",
+    "dtype": "float16",
+    "attention_implementation": "sdpa",
+    "rope_config": {
+      "theta": null,
+      "scaling": null
+    },
+    "cache_layout": "batch_first",
+    "context_length": 4096,
+    "dataset": "mmlu",
+    "split": "test",
+    "seed": 42,
+    "rank": 16,
+    "source_top_k": 2,
+    "alpha_max": 0.5,
+    "loss_weights": {
+      "lambda_task": 1.0,
+      "lambda_self": 0.1,
+      "lambda_teacher": 0.1,
+      "lambda_att": 1.0,
+      "lambda_reg": 0.01
+    },
+    "hardware": {
+      "cuda_available": true,
+      "device": "cuda:0"
+    },
+    "cache_residency": "cpu"
+  },
+  "config_missing_fields": [],
+  "metrics_enriched": {
+    "n_samples": 20,
+    "n_capability_records": 120,
+    "zero_prefill_verified": true,
+    "protocol_version": "1.1",
+    "git_hash": "4e99fa58a52ec9506a17050ac19bf3ef75089178",
+    "online": false,
+    "calib_eval_disjoint": true,
+    "rope_align": "rotated",
+    "method_stats": {
+      "ridge_kv_both": {
+        "total": 20,
+        "accuracy": 0.35,
+        "gold_prob_mean": 0.3481706996251234,
+        "conf_mean": 0.9962310317841295,
+        "ppl_mean": 6859.781185518584,
+        "logit_cos_mean": 0.019011959296033134
+      },
+      "ridge_native": {
+        "total": 20,
+        "accuracy": 0.2,
+        "gold_prob_mean": 0.15923354103326495,
+        "conf_mean": 0.7980073479604537,
+        "ppl_mean": 9513.467793247113,
+        "logit_cos_mean": 0.1579181267027179
+      },
+      "ridge_self_kv": {
+        "total": 20,
+        "accuracy": 0.4,
+        "gold_prob_mean": 0.3828930668400457,
+        "conf_mean": 0.8074817145019455,
+        "ppl_mean": 8.667037220709048,
+        "logit_cos_mean": 0.9999796058593196
+      },
+      "student": {
+        "total": 20,
+        "accuracy": 0.4,
+        "gold_prob_mean": 0.38276947503884984,
+        "conf_mean": 0.8074985198198018,
+        "ppl_mean": 5.567472065512393,
+        "logit_cos_mean": null
+      },
+      "teacher": {
+        "total": 20,
+        "accuracy": 0.85,
+        "gold_prob_mean": 0.7256253649386231,
+        "conf_mean": 0.7870610676399492,
+        "ppl_mean": null,
+        "logit_cos_mean": null
+      },
+      "text": {
+        "total": 20,
+        "accuracy": 0.15,
+        "gold_prob_mean": 0.1792153792463705,
+        "conf_mean": 0.6003003609669214,
+        "ppl_mean": null,
+        "logit_cos_mean": null
+      }
+    },
+    "chg_gold": {
+      "ridge_kv_both": {
+        "mean": -0.034598775413726406,
+        "ci_low": -0.38017256707426317,
+        "ci_high": 0.3131570374623406,
+        "p": 0.5744255744255744,
+        "n": 20,
+        "tgrr": -0.10091346374081728
+      },
+      "ridge_native": {
+        "mean": -0.22353593400558483,
+        "ci_low": -0.44939109531673854,
+        "ci_high": -0.018686341364197227,
+        "p": 0.958041958041958,
+        "n": 20,
+        "tgrr": -0.6519821901584684
+      },
+      "ridge_self_kv": {
+        "mean": 0.0001235918011958667,
+        "ci_low": -0.00027521179086489563,
+        "ci_high": 0.0006044090751491955,
+        "p": 0.33166833166833165,
+        "n": 20,
+        "tgrr": 0.00036047740417116995
+      }
+    },
+    "chg_accuracy": {
+      "ridge_kv_both": {
+        "mean": -0.05,
+        "ci_low": -0.45,
+        "ci_high": 0.3,
+        "p": 0.7062937062937062,
+        "n": 20
+      },
+      "ridge_native": {
+        "mean": -0.2,
+        "ci_low": -0.5,
+        "ci_high": 0.05,
+        "p": 0.942057942057942,
+        "n": 20
+      },
+      "ridge_self_kv": {
+        "mean": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "p": 1.0,
+        "n": 20
+      }
+    },
+    "capability_gate": {
+      "metric": "gold_prob",
+      "method": "ridge_kv_both",
+      "chg": -0.034598775413726406,
+      "ci_low": -0.38017256707426317,
+      "ci_high": 0.3131570374623406,
+      "p": 0.5744255744255744,
+      "gate": "FAIL"
+    },
+    "psr": {
+      "mean": -182.2805421779214,
+      "median": -158.60343813841885,
+      "n": 20,
+      "note": "t_handoff 含测量专用 PPL forward（部署时不需要），PSR 偏保守；校准阶段 student self-prefill 成本未计入（见 mapper 校准成本）。"
+    },
+    "kv_norm_diagnostics": {
+      "K": {
+        "teacher_per_layer": [
+          149.7989501953125,
+          35.812477111816406,
+          19.655094146728516,
+          22.151437759399414,
+          39.26892852783203,
+          58.48958206176758,
+          30.96295166015625,
+          21.092729568481445,
+          37.3257942199707,
+          20.488237380981445,
+          32.10426330566406,
+          31.581762313842773,
+          25.7332706451416,
+          21.00876808166504,
+          27.6676025390625,
+          22.004669189453125,
+          22.31378173828125,
+          22.13745880126953,
+          22.789134979248047,
+          22.956729888916016,
+          22.609554290771484,
+          23.470869064331055,
+          24.59258270263672,
+          27.255512237548828,
+          22.315048217773438,
+          24.183834075927734,
+          21.171913146972656,
+          20.513980865478516,
+          21.636999130249023,
+          21.48527717590332,
+          23.468746185302734,
+          21.362022399902344,
+          21.00201416015625,
+          20.058984756469727,
+          22.004934310913086,
+          33.605751037597656
+        ],
+        "student_per_layer": [
+          165.10708618164062,
+          81.46182250976562,
+          94.77082824707031,
+          56.961090087890625,
+          88.45088195800781,
+          95.22779083251953,
+          58.04374313354492,
+          52.923011779785156,
+          26.317340850830078,
+          40.865501403808594,
+          59.63431930541992,
+          26.748214721679688,
+          39.37523651123047,
+          21.726999282836914,
+          27.1716365814209,
+          54.45265579223633,
+          26.324703216552734,
+          32.894229888916016,
+          25.496158599853516,
+          25.73256492614746,
+          26.45551109313965,
+          26.779964447021484,
+          22.55579948425293,
+          30.551197052001953,
+          34.870880126953125,
+          30.79324722290039,
+          24.072673797607422,
+          34.341209411621094
+        ],
+        "ratio_mean": 1.6200323104858398
+      },
+      "V": {
+        "teacher_per_layer": [
+          0.3564944863319397,
+          0.5679658055305481,
+          0.8025562167167664,
+          1.103270411491394,
+          1.427283525466919,
+          1.6316598653793335,
+          2.115960121154785,
+          2.9430413246154785,
+          3.8628718852996826,
+          3.963510513305664,
+          5.103736400604248,
+          3.528393268585205,
+          3.8910605907440186,
+          3.581181049346924,
+          4.650419235229492,
+          4.405299186706543,
+          5.5034685134887695,
+          4.993836879730225,
+          5.5033979415893555,
+          6.821323394775391,
+          6.723578453063965,
+          7.597157955169678,
+          8.93638801574707,
+          9.014719009399414,
+          11.586674690246582,
+          10.713968276977539,
+          12.737251281738281,
+          14.07988452911377,
+          15.281970024108887,
+          22.94430923461914,
+          24.125276565551758,
+          27.7064151763916,
+          33.603782653808594,
+          49.78282165527344,
+          46.741336822509766,
+          34.72724151611328
+        ],
+        "student_per_layer": [
+          1.5908446311950684,
+          1.460976481437683,
+          1.8940935134887695,
+          4.57088041305542,
+          4.627133369445801,
+          5.569199562072754,
+          4.771817207336426,
+          7.378959655761719,
+          8.51353931427002,
+          11.067131042480469,
+          10.4579496383667,
+          14.038728713989258,
+          16.505905151367188,
+          18.219799041748047,
+          21.832006454467773,
+          28.666019439697266,
+          31.691640853881836,
+          52.67949676513672,
+          54.328094482421875,
+          69.59784698486328,
+          87.2997817993164,
+          111.18310546875,
+          132.47195434570312,
+          141.2393035888672,
+          174.2646942138672,
+          213.290283203125,
+          225.139892578125,
+          152.49440002441406
+        ],
+        "ratio_mean": 7.659201622009277
+      }
+    },
+    "method_means": {
+      "ridge_kv_both": 0.9962310317841295,
+      "ridge_native": 0.7980073479604537,
+      "ridge_self_kv": 0.8074817145019455,
+      "student": 0.8074985198198018,
+      "teacher": 0.7870610676399492,
+      "text": 0.6003003609669214
+    },
+    "ppl_means": {
+      "ridge_kv_both": 6859.781185518584,
+      "ridge_native": 9513.467793247113,
+      "ridge_self_kv": 8.667037220709048,
+      "student": 5.567472065512393
+    },
+    "chg": 0.18873251196432772,
+    "ridge_kv_both_score_mean": 0.9962310317841295,
+    "student_score_mean": 0.8074985198198018,
+    "student_score": null,
+    "teacher_score": null,
+    "handoff_score": null,
+    "retention": null,
+    "tgrr": null,
+    "pcr": null,
+    "psr_a": null,
+    "next_token_kl": null,
+    "jcr": null,
+    "attention_output_cosine": null,
+    "linear_cka": null,
+    "principal_angle": null,
+    "effective_rank": null
+  },
+  "config_schema": [
+    "teacher_model",
+    "teacher_commit",
+    "student_model",
+    "student_commit",
+    "tokenizer",
+    "dtype",
+    "attention_implementation",
+    "rope_config",
+    "cache_layout",
+    "context_length",
+    "dataset",
+    "split",
+    "seed",
+    "mapper",
+    "rank",
+    "source_top_k",
+    "alpha_max",
+    "loss_weights",
+    "hardware",
+    "cache_residency"
+  ],
+  "metrics_schema": [
+    "student_score",
+    "teacher_score",
+    "handoff_score",
+    "retention",
+    "chg",
+    "tgrr",
+    "pcr",
+    "psr_a",
+    "next_token_kl",
+    "jcr",
+    "attention_output_cosine",
+    "linear_cka",
+    "principal_angle",
+    "effective_rank"
+  ]
+}

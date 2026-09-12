@@ -744,6 +744,26 @@ class InjectionEvaluator:
         seq = int(self.cfg.get("context_lengths", [512])[0])
         from ..mapper.aggregate import fit_ridge_aggregate
 
+        m_cfg = self.cfg.get("mapper", {})
+        if str(m_cfg.get("layer_selection", "proportional")) == "topk":
+            if not (real_kv_calib and real_kv_calib.get("K")):
+                raise RuntimeError(
+                    "mapper.layer_selection=topk 需要真实配对校准 KV（real KV calibration）"
+                )
+            from ..alignment.topk import select_topk_layer_map
+
+            k_top = int(m_cfg.get("topk", 3))
+            kind0 = "K"
+            dr0 = _de_rope_for_kind(self.cfg, kind0, de_rope_fn)
+            self._layer_map = select_topk_layer_map(
+                real_kv_calib[kind0], n_t, n_s, k_top,
+                de_rope_fn=dr0, lam=_ridge_lambda(self.cfg, kind0),
+            )
+            logger.info(
+                "[inject-eval] Heo-style top-%d layer map (from calibration): %s",
+                k_top, self._layer_map,
+            )
+
         for kind in kinds:
             mapper = self._mapper_k if kind == "K" else self._mapper_v
 

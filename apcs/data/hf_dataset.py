@@ -641,16 +641,21 @@ def load(
     *,
     split: str = "train",
     seed: int = 0,
+    target_tokens: int | None = None,
 ) -> list[Sample]:
     """按 dataset 名取确定性 split 的 n 个样本。
 
     这层不让 runner 感知 HF / synthetic 的差异——runner 只看到 Stream of Sample。
+    target_tokens：仅 needle 类生成器使用（长上下文长度）。
     """
     if name not in _REGISTRY:
         raise KeyError(
             f"Unknown dataset {name!r}. Available: {sorted(_REGISTRY.keys())}"
         )
-    rows = _REGISTRY[name](n, split=split, seed=seed)
+    kwargs: dict[str, Any] = {}
+    if target_tokens is not None:
+        kwargs["target_tokens"] = int(target_tokens)
+    rows = _REGISTRY[name](n, split=split, seed=seed, **kwargs)
     # 双重防线：不同 split 的 manifest 不仅依赖调用者约定，也能在审计时
     # 用稳定 hash 复核。同一原始 sample_id 在不同 split 不会被重新命名。
     ids = [r.sample_id for r in rows]
