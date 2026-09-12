@@ -1,0 +1,133 @@
+# Paper Audit Configuration
+# Based on workspace requirements for paper review tools
+
+# General settings
+general:
+  project_name: "APCS - Cache Translation Across Heterogeneous LLMs"
+  venue: "ICLR/NeurIPS/ICML"
+  language: "en"
+  output_dir: "review_results"
+
+# Review criteria
+review_criteria:
+  # Major concerns (must be addressed)
+  major:
+    - "Empirical scope vs. claims mismatch"
+    - "Statistical rigor (sample size, CI coverage)"
+    - "Reproducibility and comparison with prior work"
+    - "Methodology soundness"
+  
+  # Minor concerns (should be addressed)
+  minor:
+    - "Writing clarity"
+    - "Figure quality"
+    - "Related work completeness"
+    - "Limitations discussion"
+
+# Audit framework components
+audit_framework:
+  # H1: Mechanics - Identity control verification
+  h1_mechanics:
+    description: "Verify cache injection mechanics without mapping"
+    metrics:
+      - "logit_cosine_similarity"
+      - "gold_probability_change"
+      - "perplexity_delta"
+  
+  # H2: Mapping - Translation quality assessment
+  h2_mapping:
+    description: "Evaluate mapper performance across families"
+    mappers:
+      - "ridge_per_head"
+      - "affine"
+      - "per_layer_affine"
+      - "task_aware"
+      - "rat"
+    calibration_sizes: [30, 50, 100, 200]
+  
+  # H3: Exploitability - Oracle bounds
+  h3_exploitability:
+    description: "Upper bound estimation without training"
+    blending_ratios: [0.1, 0.2, 0.3, 0.5]
+
+# Experiment tracking
+experiments:
+  # Model pairs
+  model_pairs:
+    - teacher: "qwen3-8b"
+      student: "qwen3-0.6b"
+    - teacher: "qwen3-8b"
+      student: "qwen3-1.7b"
+  
+  # Tasks
+  tasks:
+    - "hellaswag"
+    - "arc_challenge"
+  
+  # Metrics to track
+  metrics:
+    - "accuracy"
+    - "perplexity"
+    - "logit_cosine"
+    - "gold_probability_change"
+    - "pcr_retention"
+
+# Review report template
+report_template:
+  sections:
+    - "Overall Assessment"
+    - "Major Concerns"
+    - "Minor Concerns"
+    - "Strengths"
+    - "Weaknesses"
+    - "Questions for Authors"
+    - "Recommendation"
+  
+  scoring:
+    scale: "1-10"
+    thresholds:
+      accept: 7
+      weak_accept: 6
+      weak_reject: 4
+      reject: 3
+
+# Revision tracking
+revision_tracking:
+  enabled: true
+  format: "markdown"
+  fields:
+    - "issue_id"
+    - "severity"
+    - "status"
+    - "assigned_to"
+    - "deadline"
+    - "comments"
+
+# Figure generation
+figure_generation:
+  enabled: true
+  format: "pdf"
+  dpi: 300
+  style: "publication"
+  output_dir: "paper/figures"
+
+# Quality checks
+quality_checks:
+  - "statistical_significance"
+  - "confidence_intervals"
+  - "reproducibility"
+  - "baseline_comparisons"
+  - "ablation_studies"
+
+# Collaboration settings
+collaboration:
+  reviewers:
+    - role: "theory_expert"
+      focus: "methodology_soundness"
+    - role: "empirical_expert"
+      focus: "experimental_rigor"
+    - role: "writing_expert"
+      focus: "presentation_quality"
+  
+  review_deadline: "2026-09-30"
+  revision_deadline: "2026-10-15"

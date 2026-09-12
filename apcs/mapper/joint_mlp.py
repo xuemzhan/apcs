@@ -42,6 +42,7 @@ class JointMLPMapper:
         weight_decay: float = 0.0,
         batch_size: int = 512,
         n_hidden_layers: int = 2,
+        seed: int = 0,
     ):
         self.lam = lam
         self.hidden = int(hidden)
@@ -50,6 +51,7 @@ class JointMLPMapper:
         self.weight_decay = float(weight_decay)
         self.batch_size = int(batch_size)
         self.n_hidden_layers = int(n_hidden_layers)
+        self.seed = int(seed)
         self.W: dict[tuple[str, int, int], np.ndarray] = {}
         self._models: dict[tuple[str, int], Any] = {}
 
@@ -113,6 +115,7 @@ class JointMLPMapper:
             for _ in range(max(0, self.n_hidden_layers - 1)):
                 layers += [nn.Linear(self.hidden, self.hidden), nn.GELU()]
             layers += [nn.Linear(self.hidden, out_dim)]
+            torch.manual_seed(self.seed * 1_000_003 + s)
             model = nn.Sequential(*layers).to(device)
             opt = torch.optim.AdamW(
                 model.parameters(), lr=self.lr, weight_decay=self.weight_decay

@@ -21,6 +21,8 @@
 | P2-3 过度参数化译者 | 跨层/跨头 Joint MLP（hidden 256×2，~37M 参数，c30） | CHG −0.265 [−0.426,−0.111]，acc 0.233，PPL 31.6（流畅但不能力）；"不存在可用 mapper"反驳被更强的 negative 封堵 |
 | P2-5 长上下文任务 | needle-in-a-haystack 4 选（~1024 token，affine c30，n=30） | teacher 0.733 / student 0.533 / translated 0.233，CHG −0.285 [−0.534,−0.025]；失败非短上下文伪影 |
 | P2-1 跨家族/跨架构 | Qwen3-4B→{Llama-3.2-1B/3B, Gemma-2-2B, Gemma-3-1B, Qwen2.5-1.5B}，矩形 affine（head 均值池化+维度投影），c30，n=100 | H1 全通过；CHG +0.000/−0.044/−0.009/−0.061/−0.157；均无 capability（teacher gold 0.691 未恢复） |
+| 补：joint MLP 种子方差 | joint_mlp c30 × seeds {0,1,2}（+原 run） | CHG −0.302/−0.281/−0.269/−0.265，区间 [−0.30,−0.26]；亦为梯度训练、种子相关 |
+| 补：tokenizer 对齐跨架构 | rect-align（字符重叠对齐教师→学生 token 位置），c30，n=100 | Llama-3.2-3B CHG −0.024 [−0.047,−0.004]、Gemma-3-1B −0.073 [−0.134,−0.021]，均仍显著为负；Qwen2.5 与 Qwen3 分词相同，对齐为空操作 |
 | 复现审计 | 逐条重跑 23 个核心配置并与记录值对比 | 确定性族（ridge/affine/per-layer/task-aware/RAT/joint MLP、校准阶梯、探针/八分位、跨架构）逐位或 \|Δ\|≤0.002 复现；**per-head MLP 训练种子相关**：c30∈[−0.39,−0.26]、c200∈[−0.26,−0.23]，论文已改为区间并加复现说明 |
 | P2-2 target-side replay 诊断 | 翻译 cache 上再回读 context（非部署，违反 zero-prefill），affine c30，n=100 | replay 后 acc 0.290、CHG −0.232 [−0.333,−0.136]，与无 replay（−0.249）无显著差异；远低于 student self 0.520 ⇒ 朴素 replay 不能恢复，MoT 增益不能归因于 replay 本身 |
 

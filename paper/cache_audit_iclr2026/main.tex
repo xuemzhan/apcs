@@ -516,7 +516,7 @@ RAT, c=200, 1.7B & 0.238 / 0.276 / 1008.2 & $-0.221$ [$-0.340, -0.104$] & 63 \\
 RAT no-anchor rank-32, c=30, 1.7B & 0.267 / 0.280 / 23.7 & $-0.223$ [$-0.367, -0.088$] & 30 \\
 MLP per-head, c=30 (3 seeds), 1.7B & 0.156 / 0.163 / 80.0 & $-0.39$ to $-0.26$ & 30 \\
 MLP per-head, c=200 (3 seeds), 1.7B & 0.254 / 0.258 / 122.7 & $-0.26$ to $-0.23$ & 63 \\
-Joint MLP, c=30, 1.7B & 0.233 / 0.238 / 31.6 & $-0.265$ [$-0.426, -0.111$] & 30 \\
+Joint MLP, c=30 (3 seeds), 1.7B & 0.189 / 0.219 / 28.9 & $-0.30$ to $-0.26$ & 30 \\
 Affine per-head, c=200, 4B$\to$0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.081, +0.102$] & 63 \\
 Affine per-head, c=30, 8B$\to$0.6B & 0.270 / 0.269 / 99.0 & $-0.023$ [$-0.104, +0.064$] & 100 \\
 RAT, c=200, 4B$\to$0.6B & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.120, +0.038$] & 63 \\
@@ -551,10 +551,10 @@ sit inside the same band (Table~\ref{tab:main}). The per-head MLP is
 gradient-trained and seed-dependent: across independent trainings its CHG
 spans $-0.39$ to $-0.26$ at $c{=}30$ and $-0.26$ to $-0.23$ at $c{=}200$, ever
 inside the same negative band, and it does not close the gap. An over-parameterized joint mapper ($\sim$$37$M parameters)
-that reads all teacher layers and all KV heads also fails: CHG $-0.265$
-$[-0.426, -0.111]$ with accuracy $0.233$, even though it reconstructs a fluent
-cache (PPL $31.6$ versus $25.4$ for the student), reinforcing the
-perplexity--accuracy decoupling. The strong student never
+that reads all teacher layers and all KV heads also fails: across three
+training seeds its CHG spans $-0.26$ to $-0.30$ with accuracy $0.189$, even
+though it reconstructs a fluent cache (PPL $28.9$ versus $25.4$ for the
+student), reinforcing the perplexity--accuracy decoupling. The strong student never
 approaches its own prefill ($0.503$); the best mapper reaches $0.365$. Scaling
 the teacher to 8B under the same protocol does not change the verdict:
 self-injection remains an identity (logit cosine $0.99998$) and the ridge
@@ -585,7 +585,13 @@ non-inferior but gains nothing. Head groups are mean-pooled and head
 dimensions projected by the rectangular mapper; because the models tokenize
 independently, calibration pairs are matched position-by-position, so we read
 these as mechanism and replacement checks rather than fine-grained capability
-measurements.
+measurements. To address the tokenization confound directly, a token-aligned
+variant maps each student token to the teacher token with maximum character
+overlap before fitting and gives the same verdict on genuine cross-tokenizer
+pairs (Llama-3.2-3B: CHG $-0.024$ $[-0.047,-0.004]$; Gemma-3-1B: $-0.073$
+$[-0.134,-0.021]$), so the negative result is not an artifact of independent
+tokenization; Qwen2.5 shares the Qwen tokenizer, making alignment a no-op
+there.
 
 \begin{table}[t]
 \centering
@@ -594,7 +600,9 @@ and Qwen2.5 students under the within-family protocol (HellaSwag / ARC,
 $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG
 within $\pm0.001$). ``KV h/d'' gives the student's KV heads and head
 dimension; the rectangular mapper mean-pools head groups and projects the
-head dimension. No row recovers the teacher's gold probability ($0.691$).}
+head dimension. Rows marked ``token-aligned'' align teacher KV to student token
+positions by character overlap before fitting. No row recovers the teacher's
+gold probability ($0.691$).}
 \label{tab:crossarch}
 \footnotesize
 \begin{tabular}{lcccc}
@@ -606,6 +614,8 @@ Gemma-2-2B & 4/256 & 0.270 / 0.257 & 0.220 / 0.248 & $-0.009$ [$-0.020, +0.002$]
 Llama-3.2-3B & 8/128 & 0.390 / 0.281 & 0.200 / 0.237 & $-0.044$ [$-0.073, -0.013$] \\
 Qwen2.5-1.5B & 2/128 & 0.400 / 0.385 & 0.200 / 0.228 & $-0.157$ [$-0.209, -0.106$] \\
 Gemma-3-1B & 1/256 & 0.360 / 0.318 & 0.270 / 0.257 & $-0.061$ [$-0.135, +0.008$] \\
+Llama-3.2-3B (token-aligned) & 8/128 & 0.390 / 0.281 & 0.280 / 0.257 & $-0.024$ [$-0.047, -0.004$] \\
+Gemma-3-1B (token-aligned) & 1/256 & 0.360 / 0.318 & 0.250 / 0.245 & $-0.073$ [$-0.134, -0.021$] \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -778,7 +788,9 @@ protocol. RAT's analytic core assumes value projections are informative
 pullbacks of the residual stream; the real-model failure is itself an audit
 finding. We did
 not re-implement MoT's full replay pipeline; our claims concern the
-zero-re-prefill regime. The mapper-ladder results use a single seed per configuration; because the
+zero-re-prefill regime. H2 is scoped to translators trainable from the disjoint
+calibration budget we test ($\le 200$ examples), which includes the common
+linear and nonlinear families and a $37$M-parameter joint MLP. The mapper-ladder results use a single seed per configuration; because the
 mapper fit is deterministic given its calibration draw, five independent
 calibration draws bound mapper-training variance directly: gold CHG
 stays within $[-0.292, -0.249]$ (SD $\approx 0.018$), inside the

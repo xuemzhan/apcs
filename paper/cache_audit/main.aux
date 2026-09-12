@@ -80,20 +80,20 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.3}RAT Component Ablations Separate Fluency From Capability}{8}{subsection.5.3}\protected@file@percent }
 \newlabel{sec:ratresults}{{5.3}{8}{RAT Component Ablations Separate Fluency From Capability}{subsection.5.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.4}H3: No Teacher-Content Probe Improves on the Student}{8}{subsection.5.4}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. No row recovers the teacher's gold probability ($0.691$).}}{9}{table.3}\protected@file@percent }
-\newlabel{tab:crossarch}{{3}{9}{Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. No row recovers the teacher's gold probability ($0.691$)}{table.3}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache (RAT translator) degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: per-octant window injection (affine translator; octant $0$ = bottom eighth of student layers); only layers $10$--$13$ (octant $3$) are clearly harmful, while the top three octants are indistinguishable from the student.}}{9}{figure.3}\protected@file@percent }
-\newlabel{fig:probes}{{3}{9}{Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache (RAT translator) degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: per-octant window injection (affine translator; octant $0$ = bottom eighth of student layers); only layers $10$--$13$ (octant $3$) are clearly harmful, while the top three octants are indistinguishable from the student}{figure.3}{}}
+\citation{ffnmemory2021}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$).}}{9}{table.3}\protected@file@percent }
+\newlabel{tab:crossarch}{{3}{9}{Cross-architecture robustness checks. Qwen3-4B teacher to non-Qwen and Qwen2.5 students under the within-family protocol (HellaSwag / ARC, $c{=}30$, $n{=}100$); identity injection passes in every row (self-kv CHG within $\pm 0.001$). ``KV h/d'' gives the student's KV heads and head dimension; the rectangular mapper mean-pools head groups and projects the head dimension. Rows marked ``token-aligned'' align teacher KV to student token positions by character overlap before fitting. No row recovers the teacher's gold probability ($0.691$)}{table.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Perplexity and Accuracy Decouple}{9}{subsection.5.5}\protected@file@percent }
 \newlabel{sec:decoupling}{{5.5}{9}{Perplexity and Accuracy Decouple}{subsection.5.5}{}}
-\citation{ffnmemory2021}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student.}}{10}{figure.4}\protected@file@percent }
-\newlabel{fig:decoupling}{{4}{10}{Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student}{figure.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Channel Asymmetry}{10}{subsection.5.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6}Why Translation Fails: An Architectural Analysis}{10}{section.6}\protected@file@percent }
-\newlabel{sec:why}{{6}{10}{Why Translation Fails: An Architectural Analysis}{section.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}Implications for Cache-Translation Research}{11}{section.7}\protected@file@percent }
-\newlabel{sec:implications}{{7}{11}{Implications for Cache-Translation Research}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Channel Asymmetry}{9}{subsection.5.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Why Translation Fails: An Architectural Analysis}{9}{section.6}\protected@file@percent }
+\newlabel{sec:why}{{6}{9}{Why Translation Fails: An Architectural Analysis}{section.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache (RAT translator) degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: per-octant window injection (affine translator; octant $0$ = bottom eighth of student layers); only layers $10$--$13$ (octant $3$) are clearly harmful, while the top three octants are indistinguishable from the student.}}{10}{figure.3}\protected@file@percent }
+\newlabel{fig:probes}{{3}{10}{Oracle probes on Qwen3-4B$\to $1.7B. Left: blending teacher-cache content into the student's own cache (RAT translator) degrades gold probability and accuracy monotonically in the teacher fraction $\alpha $; $\alpha {=}0$ is the student's own cache. Right: per-octant window injection (affine translator; octant $0$ = bottom eighth of student layers); only layers $10$--$13$ (octant $3$) are clearly harmful, while the top three octants are indistinguishable from the student}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Implications for Cache-Translation Research}{10}{section.7}\protected@file@percent }
+\newlabel{sec:implications}{{7}{10}{Implications for Cache-Translation Research}{section.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student.}}{11}{figure.4}\protected@file@percent }
+\newlabel{fig:decoupling}{{4}{11}{Perplexity over the scoring suffix versus accuracy across all methods and runs (log scale). The identity control and the student sit at low PPL and high accuracy; translated caches span two regimes; the best-reconstructed cache (PPL 23.7) remains 23 accuracy points below the student}{figure.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{11}{section.8}\protected@file@percent }
 \newlabel{sec:limitations}{{8}{11}{Limitations}{section.8}{}}
 \bibstyle{plainnat}
@@ -108,10 +108,10 @@
 \bibcite{aristotelian2026}{{8}{2026}{{Gr{\"o}ger et~al.}}{{Gr{\"o}ger, Wen, and Brbi{\'c}}}}
 \bibcite{taskvectors2023}{{9}{2023}{{Hendel et~al.}}{{Hendel, Geva, and Globerson}}}
 \bibcite{platonic2024}{{10}{2024}{{Huh et~al.}}{{Huh, Cheung, Wang, and Isola}}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{12}{section.9}\protected@file@percent }
 \bibcite{vec2vec2025}{{11}{2025}{{Jha et~al.}}{{Jha, Zhang, Shmatikov, and Morris}}}
 \bibcite{mot2026}{{12}{2026}{{Lee et~al.}}{{Lee, Song, Oh, Han, Park, Jang, and Lim}}}
 \bibcite{cachegen2024}{{13}{2024}{{Liu et~al.}}{{Liu, Li, Cheng, Ray, Huang, Zhang, Du, Yao, Lu, Ananthanarayanan, Maire, Hoffmann, Holtzman, and Jiang}}}
-\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{12}{section.9}\protected@file@percent }
 \bibcite{relrep2022}{{14}{2022}{{Moschella et~al.}}{{Moschella, Maiorca, Fumero, Norelli, Locatello, and Rodol{\`a}}}}
 \bibcite{gist2023}{{15}{2023}{{Mu et~al.}}{{Mu, Li, and Goodman}}}
 \bibcite{kvcomm2025}{{16}{2025}{{Shi et~al.}}{{Shi, Chiesa, Maguire, and Kostic}}}
@@ -120,7 +120,7 @@
 \bibcite{cacheblend2025}{{19}{2025}{{Yao et~al.}}{{Yao, Li, Liu, Ray, Cheng, Zhang, Du, Lu, and Jiang}}}
 \bibcite{perfectplatonic2025}{{20}{2025}{{Ziyin and Chuang}}{{}}}
 \@writefile{toc}{\contentsline {section}{\numberline {A}Reproducibility}{13}{appendix.A}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Measurements}{13}{appendix.B}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Measurements}{14}{appendix.B}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {C}Target-Side Replay Diagnostic}{14}{appendix.C}\protected@file@percent }
 \newlabel{app:replay}{{C}{14}{Target-Side Replay Diagnostic}{appendix.C}{}}
 \gdef \@abspage@last{14}
