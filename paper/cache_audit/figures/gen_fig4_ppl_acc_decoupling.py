@@ -13,7 +13,6 @@ AUDIT_PREFIXES = ("v12-", "v13-", "v14-", "v15-",
                   "qwen3-affine-c30-tail-sanity")
 METHODS = {
     "ridge_self_kv": "reference",
-    "student": "reference",
     "ridge_native": "native",
     "ridge_kv_both": "translated",
     "ridge_k_only": "translated",
@@ -39,7 +38,7 @@ for run, entry in data.items():
 
 fig, ax = plt.subplots(1, 1, figsize=(4.8, 3.1))
 styles = {
-    "reference": (COLORS[2], "o", "student self-prefill / identity control"),
+    "reference": (COLORS[2], "o", "identity control (student suffix-native)"),
     "native": (COLORS[3], "^", "native teacher content"),
     "translated": (COLORS[0], "o", "translated cache"),
     "probe": (COLORS[1], "s", "probe mixture / window"),

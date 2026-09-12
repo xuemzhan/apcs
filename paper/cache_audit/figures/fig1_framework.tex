@@ -60,7 +60,7 @@
 
 % references and metric
 \node[lab] at (0,-2.15)
-  {baseline: student self-prefill $S(q\mid C_S(x))$ \qquad upper bound:
+  {baseline: student self-prefill $S(q\mid C_S(x))$ \qquad reference:
    teacher full prefill $T(q\mid C_T(x))$};
 \node[lab] at (0,-2.85)
   {score: gold-letter probability; \qquad
@@ -77,7 +77,8 @@ each with its own instrument and gate\par}
 \toprule
  & \textbf{Question} & \textbf{Instrument} & \textbf{Gate (fixed rule)} & \textbf{Outcome} \\
 \midrule
-\textbf{H1} & Is a foreign cache consumed without loss?
+\textbf{H1} & Injection mechanics: does the cache-injection pipeline preserve a
+valid student-space cache without loss?
  & Identity control: the student's own cache through the full pipeline
  & per-sample logit cosine $=1$ $\dagger$
  & pass: $0.99998$ \\
