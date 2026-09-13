@@ -1,0 +1,826 @@
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2026_conference,times}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc}
+\usepackage{microtype}
+\usepackage[hidelinks,pdftitle={Cache Translation Across Model Scale: An Audit with Identity Controls and Teacher-Content Probes},pdfauthor={Anonymous}]{hyperref}
+\usepackage{url}
+
+\newcommand{\kv}{\ensuremath{\mathrm{KV}}}
+\newcommand{\chg}{\ensuremath{\mathrm{CHG}}}
+\newcommand{\gold}{\ensuremath{p_{\mathrm{gold}}}}
+
+\title{Cache Translation Across Model Scale:\\
+An Audit with Identity Controls and Teacher-Content Probes}
+
+% Authors must not appear in the submitted version; they are hidden as long
+% as \iclrfinalcopy remains commented out.
+\author{Anonymous}
+% Camera-ready author block: uncomment together with \iclrfinalcopy above.
+% \author{Xuemin Zhang, Liangbin Hu, Kun Yi, Liheng Zhong, and Junpeng Yu\\
+% CETC\\
+% \texttt{\{zmx0813@gmail.com, huliangbing@xx.com, yikun@xx.com,
+% zhongliheng@xx.com, yujunpeng@xx.com\}}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A \kv{} cache is model-specific, so when several models at different scales
+serve the same long context, each of them prefills it again. Cross-model cache
+translation removes the later prefills by mapping the \kv{} cache a large
+teacher builds over that context into the cache space of a smaller student.
+Its reported outcomes span near-native retention and above-baseline gain on one
+side and severe deficits on the other. An end-to-end score conflates three
+questions that fail separately: whether the injection pipeline consumes a
+foreign cache
+correctly (\emph{mechanics}), whether a translator replaces the student's own cache
+at replacement level (\emph{mapping}), and whether the teacher's cache carries
+content the frozen student can exploit (\emph{exploitability}). We audit all
+three under strict zero re-prefill on Qwen3-4B$\to$1.7B and three further Qwen3
+scale pairs (four in total), using per-sample identity controls, disjoint
+calibration and evaluation splits, and gold-letter-probability metrics with
+bootstrap intervals. Mechanics passes to a numerical tolerance: every evaluated
+sample of the identity injection has logit cosine $\ge 0.9998$ against the
+student's own prefill (observed minimum $0.99986$, mean $0.99998$), with a change
+of $+0.0001$ $[-0.0006,+0.0009]$.
+No translator we test replaces the strong student's own prefill. The audit
+protocol records $133$ translation configurations across all tested pairs; on
+the primary strong-student pair the largest point estimate is $-0.138$, and
+every interval there lies below zero except the best one, which spans it. The deficit does not come
+from the calibration budget or from translator capacity:
+calibration volume from $10$ to $500$ examples moves the result by $0.02$,
+removing the analytic anchor of our most architecture-aware translator improves
+perplexity without improving answers, and a $37$M-parameter joint MLP does not
+help. Aligning our implementation with the closest published design---concatenating
+the selected source layers and calibrating on $1{,}024$-token web-text
+passages---leaves the verdict unchanged ($-0.223$ to $-0.279$). The weak $0.6$B
+student reaches $+0.010$ $[-0.089,+0.106]$, which establishes neither
+degradation nor the reporting margin we adopt ($\epsilon{=}0.02$).
+Teacher-content probes never produce a gain whose interval excludes zero, and the
+family-wise $95\%$ bootstrap upper estimate over the six confirmatory probe
+configurations is $+0.009$. Two decouplings survive: better \kv{}
+reconstruction (held-out $R^2$ $0.854$ for keys, $0.481$ for values) does not
+improve answers, and near-native perplexity does not either.
+\end{abstract}
+
+% EVIDENCE CHECK (abstract): 1.1 identity; 2.5 row count 133; 1.3 range; 1.4 calibration;
+% 3.7 anchor ablation; 3.9 joint MLP; 3.11 concatenation alignment; 1.6 weak student;
+% 4.1 family-wise bound; 5.1 + 5.2 reconstruction; 5.6 perplexity decoupling.
+
+\section{Introduction}
+\label{sec:intro}
+
+Serving systems increasingly reuse computation across models: the same long
+context is prefilled by several models at different scales. Because a \kv{}
+cache is model-specific, a second model must normally prefill the shared prefix
+again. Cache translation attacks this by fitting a translator from the teacher's
+stored cache into the student's cache space, after which the student answers a short
+query from the translated cache alone---\emph{strict zero
+re-prefill}~\citep{c2c2025,lsc2026,mot2026,heo2026,cachebridge2026,contextreuse2026}.
+Reported outcomes now span a wide range: near-native retention on Qwen3
+transfer directions~\citep{cachebridge2026}, accuracy above the receiving
+model's own baseline on LongBench2~\citep{contextreuse2026}, and large deficits
+elsewhere.
+
+This spread is hard to interpret because published evaluations score an
+end-to-end pipeline against a student baseline, which conflates three questions
+that can fail independently. Does the injection pipeline consume a foreign
+cache correctly (\emph{mechanics})? Does the translator replace the student's own cache
+at replacement level (\emph{mapping})? Does the teacher's cache carry content
+the frozen student can exploit at all (\emph{exploitability})? A positive delta
+could come from any of the three, and a null result cannot be attributed
+without measurements that separate them.
+
+We therefore evaluate cache translation as an audit with three gated
+hypotheses, one per question.
+\textbf{H1 (mechanics)}: injecting the student's own cache through the full
+translation-and-injection pipeline reproduces the student's own prefill.
+\textbf{H2 (mapping)}: some tested translator reaches replacement level, scored
+by the change in gold-letter probability over the student's own prefill.
+\textbf{H3 (exploitability)}: tested teacher-derived cache content provides an
+incremental benefit when introduced into an otherwise native student cache.
+
+Our contribution is the audit itself and what it returns, not a new translator.
+Three results follow, and each is bounded by the designs we tested.
+
+\begin{itemize}
+\item \textbf{Mechanics is not the failure mode.} The identity control
+reproduces the student to numerical tolerance, and an offline/online pair that
+reloads only the persisted cache and translator agrees to the last recorded
+digit on the translated and identity paths.
+\item \textbf{No tested translator replaces the strong student's cache.} Linear,
+per-layer, task-aware, architecture-anchored, and gradient-trained
+translators, calibration budgets from $10$ to $500$ examples, and the closest
+published design in both its averaged and concatenated form all fail: the
+largest point estimate on the strong pair is $-0.138$ $[-0.312,+0.037]$ and
+every other interval lies below zero. The weak $0.6$B student reaches $+0.010$
+$[-0.089,+0.106]$, which establishes neither degradation nor our reporting
+margin.
+\item \textbf{No teacher-content probe establishes gain.} Mixing teacher-derived
+content into the student's own cache degrades monotonically with the teacher
+fraction, replacing the top third of layers is neutral rather than helpful, and
+no probe configuration produces an interval that excludes zero on the positive
+side.
+\end{itemize}
+
+Two further results sharpen the negative. First, improving \kv{}
+reconstruction does not improve answers: a joint MLP that reaches held-out
+$R^2$ of $0.854$ (keys) and $0.481$ (values), against $0.810$ and $0.323$ for
+the per-head affine translator, still lands in the same CHG band. Second, repairing
+perplexity does not repair the answer deficit: a translator whose suffix
+perplexity is within $2.5$ of the identity control answers $26.7\%$ against the
+student's $50.0\%$. Reconstruction fidelity and fluency are therefore not
+substitutes for task quality in this setting.
+
+\textbf{Scope.} We measure a negative result about the designs we tested, not
+an impossibility claim. Our primary pair is one model family, four-choice
+classification with $n$ between $10$ and $100$ evaluation samples per run, and
+the reporting margin $\epsilon$ is not pre-registered
+(Section~\ref{sec:framework}). Section~\ref{sec:limitations} lists what this
+leaves open.
+
+% EVIDENCE CHECK (§1): 1.1; 3.1-3.15; 1.5; 1.6; 4.1-4.4; 5.1-5.6; 6.6.
+
+\section{Related Work}
+\label{sec:survey}
+
+\textbf{\kv{} reuse within one model.} Prompt caching, cache-augmented
+generation, and streaming attention reuse a model's own cache: streaming
+attention identifies early positions with outsized attention
+mass~\citep{streamingsink2023}; CacheGen compresses and streams a
+cache~\citep{cachegen2024}; CacheBlend fuses cached fragments for
+retrieval-augmented generation~\citep{cacheblend2025}; KVSharer shares caches
+across similar layers~\citep{kvsharer2024}. These systems assume one model on
+both sides, so their question is storage and attention cost rather than
+representation compatibility.
+
+\textbf{Cross-model cache translation.} C2C translates caches directly with a
+depth-ratio layer map~\citep{c2c2025}; LSC aligns caches through a shared latent
+space~\citep{lsc2026}; MoT combines gated translators over depth-ratio channel
+windows with a correction pass over the context~\citep{mot2026}; KVComm shares
+attention-ranked layers~\citep{kvcomm2025}; Interlat communicates last hidden
+states~\citep{interlat2025}; HCache restores caches from hidden-state
+translations~\citep{hcache2025}. The closest strict-zero-re-prefill design fits
+a closed-form linear map from selected source layers, with de-RoPE keys, and
+reports $73$--$98\%$ retention on matched-\kv{} pairs~\citep{heo2026}.
+Two recent entries widen the range of outcomes: CacheBridge replaces full-head
+mapping with architecture-indexed support---each target head matched to one
+source head, with attention-aligned calibration---and reports $99.83\%$ mean
+target retention on Qwen3 with an order of magnitude less calibration
+data~\citep{cachebridge2026}; a universal context-reuse layer reports that
+translated \kv{} states raise LongBench2 accuracy from $27.59\%$ to $34.48\%$
+for Qwen2.5-7B$\to$1.5B, $6.89$ points above the receiver's own
+prefill~\citep{contextreuse2026}. Retention measures how closely a translated
+cache reproduces the receiver's own prefill, not whether the receiver gains over
+it, and neither of these reports isolates mechanics with an identity control.
+With the deficits we measure, the published evidence now contains near-native
+retention, above-baseline gain, and severe degradation at the same time. That
+spread is the case for a shared audit rather than for or against any one
+translator.
+
+\textbf{Cross-model representation alignment.} Model stitching connects frozen
+networks with a learned layer~\citep{stitching2021}; relative representations
+enable zero-shot latent communication~\citep{relrep2022}; the Platonic
+representation hypothesis and its refinements argue for convergent
+representations across models~\citep{platonic2024,perfectplatonic2025,aristotelian2026};
+embedding-space methods align vocabularies post hoc~\citep{vec2vec2025}. This
+line supports a shared geometry but does not measure whether it carries a
+specific task's answer information.
+
+\textbf{Frozen-model controllability.} Task vectors, activation steering, and
+tuned lenses show that a frozen model's residual stream can be steered or
+read~\citep{taskvectors2023,actsteer2024,tunedlens2023,gist2023}. Our probes are
+the \kv{}-cache analogue of these interventions, and they come back empty on the
+pairs we test. FFN layers are key--value memories~\citep{ffnmemory2021}, which is
+one reason a weight-mediated capability gap need not survive as a cache-mediated
+one.
+
+\textbf{What this line does not establish.} Across these lines, no cited
+evaluation (i) separates mechanics, mapping, and exploitability, (ii) injects
+the student's own cache as an identity control, (iii) reports accuracy at
+matched perplexity, or (iv) constrains exploitability with a
+no-additional-training probe of teacher-derived content. This audit supplies those four measurements.
+
+% EVIDENCE CHECK (§2): all statements are external citations except the
+% "published evidence now spans..." framing sentence, which is interpretive and
+% labelled as such; 1.8.
+
+\section{Framework}
+\label{sec:framework}
+
+\subsection{Setting and metric}
+A teacher $T$ prefills a context $x$ and stores a cache
+$C_T(x)=\{K^T_\ell,V^T_\ell\}_{\ell=1}^{L_T}$ with $H$ \kv{} heads and head
+dimension $d$. A translator $g_\theta$ maps it to $\widehat C_S(x)$ in the space
+of a student $S$. The student answers a query $q$ from
+$\widehat C_S(x)$ alone, under strict zero re-prefill: no context token enters
+the student's forward pass. Three references anchor every comparison: the
+\emph{student self-prefill} $S(q\mid C_S(x))$, the \emph{identity injection}
+that feeds $C_S(x)$ through the injection pipeline, and the \emph{teacher
+full-prefill} reference $T(q\mid C_T(x))$.
+
+We score answer quality by the gold-letter probability $\gold$: the softmax over
+the four answer-letter logits at the final prompt position, using each model's
+own tokenizer id for each letter. Only four-choice examples are retained, so a
+student with no signal sits at $0.25$. Throughout, \emph{CHG} is the change in
+$\gold$ over the student's own prefill on the same examples, with $95\%$
+bootstrap intervals. All intervals use a paired percentile bootstrap over
+evaluation examples with $10^4$ resamples, including the family-wise probe
+bound in Section~\ref{sec:h3}. Figure~\ref{fig:framework} summarizes the
+setting and the three gates that test it.
+
+\begin{figure}[t]
+\centering
+\input{figures/fig1_framework}
+\caption{The audited setting and the three gated questions. \textbf{(a)}~A
+teacher prefills a long context and stores its cache; a translator maps that
+cache into the student's cache space; the student answers a short query from the
+translated cache alone, under strict zero re-prefill (red crossed path). The
+audit scores the handoff by the change in gold-letter probability against the
+student's own prefill, with the teacher's full prefill as a reference point.
+\textbf{(b)}~The three questions can fail independently, so each has its own
+gate.}
+\label{fig:framework}
+\end{figure}
+
+\subsection{Three hypotheses, three gates}
+\textbf{H1 (mechanics).} The identity injection matches the student's own
+prefill per sample. \emph{Gate}: every evaluated sample has logit cosine
+$\ge 0.9998$ against the student's own prefill. The tolerance is orders of
+magnitude away from every non-identity method we observe, whose cosines sit near
+$0.5$; we report the observed minimum alongside the gate so that the criterion
+is reproducible rather than an equality to one. H1 failing would mean the
+pipeline, not the translator, is broken.
+
+\textbf{H2 (mapping).} Some tested translator reaches replacement level.
+\emph{Gate}: the interval lower bound of CHG is above $-\epsilon$, with
+$\epsilon=0.02$ gold probability---a \emph{reporting margin} selected after the
+gate form was frozen, about $4\%$ of the $0.503$ student baseline, and not a
+pre-registered constant. A stricter gain gate additionally requires the lower
+bound to exceed $0$. We report two judgements per translated row, because they
+are conceptually independent: \emph{replacement} (\emph{pass} iff the interval
+lower bound is above $-\epsilon$, otherwise \emph{fail}) and \emph{direction}
+(\emph{degraded} if the interval upper bound is below zero, \emph{gain} if the
+lower bound is above zero, and \emph{neutral} otherwise). A row can therefore be
+practically non-inferior and statistically worse than the baseline at the same
+time; Table~\ref{tab:main} reports both judgements, and no row we record falls in
+that overlap.
+
+\textbf{H3 (exploitability).} Tested teacher-derived cache content provides an
+incremental benefit when introduced into an otherwise native student cache.
+\emph{Gate}: some probe configuration improves over the student's own cache with
+an interval that excludes zero on the positive side. The probe does not train a
+translator, so a positive effect would show that teacher-derived content is
+exploitable under controlled interventions; a null result constrains the
+extraction paths we test without excluding every nonlinear one. The gate is
+therefore about tested content, not about the intrinsic information content of
+the teacher's cache, and it is not specific to the end-to-end score of any
+single translator.
+
+\subsection{Evidence tiers}
+\label{sec:tiers}
+The audit grew while revising, so we label every claim by how it entered the
+protocol. \emph{Confirmatory} claims were fixed before the runs: the identity
+gate \emph{in form} (its numerical tolerance $0.9998$ is a revision-added
+operationalization, Appendix~\ref{app:repro}), the non-inferiority
+\emph{form} of the replacement gate and the
+$\epsilon$-free gain gate on the primary pair, and the fraction and window
+probes under the rule above. \emph{Frozen-gate extensions} were added while
+revising and scored under the same gates and metrics: the residual-anchored and
+MLP translators, the $8$B teacher, the calibration ladder, the
+cross-architecture and token-aligned students, the $1$K retrieval task, the
+octant sweep, and the refit-variance study. \emph{Exploratory} analyses were
+derived from the recorded runs afterwards and are worded as interpretations. We
+also report a joint bootstrap over the confirmatory family in
+Section~\ref{sec:h3}, since no wider correction was pre-specified.
+
+% EVIDENCE CHECK (§3): 2.1-2.4 (setup, metric, gates), 2.5 (tiers);
+% tier membership from docs/protocol/EXPERIMENT_LOG.md and configs/*.yaml.
+
+\section{Method}
+\label{sec:method}
+
+\textbf{Models and pairs.} The primary pair is Qwen3-4B (teacher) to Qwen3-1.7B
+(student)~\citep{qwen3}. We additionally run Qwen3-4B$\to$Qwen3-0.6B, Qwen3-8B$\to$Qwen3-1.7B,
+and Qwen3-8B$\to$Qwen3-0.6B, plus five alternative students under the same
+protocol: Llama-3.2-1B, Llama-3.2-3B, Gemma-2-2B, Gemma-3-1B, and Qwen2.5-1.5B.
+
+\textbf{Data.} Calibration and evaluation use four-choice items from HellaSwag
+and ARC with disjoint splits. The context-length check uses a four-choice
+needle-in-a-haystack task packed to a target length; the $4$K and $8$K runs
+store caches in float16, which we flag wherever those numbers appear.
+
+\textbf{Protocol.} Every translated row is produced under zero re-prefill, with
+the identity control present in the same run, a unified prompt format across
+models, native rescaling of the injected cache, and per-run recording of the git
+hash, protocol version, and per-sample scores. The main evaluation set for the
+comparisons above is a fixed tail of $100$ HellaSwag/ARC items; the translator
+ladder uses $n=30$ or $n=63$ items depending on the calibration budget, and we
+state $n$ for every number we quote.
+
+\textbf{Translators.} We test per-head ridge; per-head affine (centered, the
+strongest linear family); per-layer affine; a task-aware objective; a
+residual-anchored translator (RAT) built from the two
+models' own projections and a shared vocabulary alignment, with component
+ablations; a per-head MLP; and a position-wise joint MLP of about $37$M
+parameters. For the closest published design we implement top-$k$ source-layer
+selection with de-RoPE keys \citep{heo2026} in two forms: averaging the selected
+layers with $200$ audit contexts, and concatenating them with $100$ calibration
+sequences of $1{,}024$ tokens from a generated web-text-style corpus; the
+reference uses $500$ sequences (Appendix~\ref{app:impl}).
+
+To separate budget effects from evaluation items, we vary the calibration budget
+of the strongest linear family over $c\in\{10,30,60,100,200,500\}$ examples on
+the same fixed evaluation set.
+
+\textbf{Probes.} The fraction probe injects
+$\alpha\widehat C_S+(1-\alpha)C_S$ for $\alpha\in\{0.25,0.5,0.75\}$; the window
+probe replaces the bottom, middle, or top third of student layers with
+translated content; the octant probe replaces one of eight layer windows. All
+probes require the student's own prefill, so they are measurement tools,
+not deployable systems.
+
+\textbf{Diagnostics.} We measure held-out reconstruction $R^2$ of the student's
+own $K$ and $V$ from the teacher's states with the same fit budget for every
+family (20 calibration contexts, 10 disjoint held-out contexts), and we report
+\kv{} norm ratios between teacher and student.
+
+% EVIDENCE CHECK (§4): models/pairs and protocol from configs/*.yaml and each run's
+% config.json; calibration ladder 1.4; concatenation alignment 3.11 and appendix A;
+% probes 4.1-4.4; reconstruction budget 5.1-5.3.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{H1: mechanics is not the failure mode}
+\label{sec:h1}
+The identity injection reproduces the student's own prefill: on the primary pair
+the change is $+0.0001$ $[-0.0006,+0.0009]$ with per-sample logit cosine $0.99998$
+on average and $0.99986$ at worst ($n{=}30$), and the control holds in every
+other run we report, whose mean cosines lie between $0.99998$ and $0.99999$.
+The guarantee also survives persistence: an online run that
+reloads only the persisted cache and translator, never the teacher, reproduces the
+offline translated and identity results at the recorded precision ($-0.1376$ and
+$+0.00013$). The native-cache ablation differs between the two runs because the
+online path carries no native cache, so we scope equivalence to the translated
+and identity paths. Any deficit below is therefore attributable to the translator or to
+the content it moves.
+
+\subsection{H2: no tested translator replaces the strong student's cache}
+\label{sec:h2}
+Table~\ref{tab:main} collects the translator ladder. Every strong-student
+translation has a negative point estimate relative to the student's own
+prefill, from $-0.138$ to $-0.392$, and all but the best configuration are
+statistically degraded. The best configuration (per-head affine, $c{=}30$) is
+the only one whose interval reaches zero ($-0.138$ $[-0.312,+0.037]$), and it does not
+pass the replacement gate.
+Three controls show that this is not an artifact of our implementation choices.
+
+\emph{Calibration volume does not close the gap in the tested range.} On one fixed evaluation set the same
+family moves between $-0.2569$ and $-0.2378$ across the six budgets, a spread
+of $0.02$ against intervals of width $\ge 0.2$.
+
+\emph{Capacity and anchoring do not close the gap in the tested range.} A per-head MLP (five
+trainings, range $-0.39$ to $-0.26$) and a $37$M-parameter joint MLP (five
+trainings, $-0.30$ to $-0.26$) sit inside the linear band; removing RAT's
+analytic anchor raises suffix perplexity from $23.7$ to $501.6$ while changing
+CHG from $-0.223$ to $-0.268$---fluency moves, the answer deficit does not.
+
+\emph{Source-layer combination does not close the gap in the tested range.} The closest published design
+fails in both forms we can match---its source-layer combination and its
+sequence length---while differing in calibration volume and corpus
+(Appendix~\ref{app:impl}): averaging selected top-$k$ layers gives $-0.273$,
+$-0.308$, and $-0.291$ for $k{=}1,3,5$; concatenating them with long-sequence
+web-text calibration gives $-0.279$, $-0.223$, and $-0.254$. All six intervals
+lie below zero, and the identity control passes in all six runs.
+
+\emph{The weak student is a different story, but not a positive one.} It reaches
+$+0.010$ $[-0.089,+0.106]$, whose interval spans both zero and $-\epsilon$: we
+establish neither replacement nor degradation. Two further weak-student rows
+behave the same way ($-0.023$ $[-0.106,+0.060]$ with an $8$B teacher; $-0.041$
+$[-0.124,+0.038]$ for RAT). The largest point estimate anywhere in the audit is
+$+0.010$, and it belongs to this pair.
+
+\begin{table}[t]
+\centering
+\caption{Translator ladder on the primary pair unless noted. Acc/Gold/PPL: answer
+accuracy, gold-letter probability, and suffix perplexity of the translated
+cache; the student self-prefill row's perplexity is measured over the full
+context and is not directly comparable. CHG is the gold-probability change over
+the student's own prefill, with $95\%$ bootstrap intervals; ranges are over
+independent trainings. \emph{Repl.} is the replacement judgement of
+Section~\ref{sec:framework} (pass iff the interval lower bound exceeds
+$-\epsilon$, $\epsilon{=}0.02$). \emph{Dir.} is the direction
+(\emph{degraded} iff the interval upper bound is below zero, \emph{gain} iff the
+lower bound exceeds zero, \emph{neutral} otherwise). The two judgements are
+independent, so a row can be practically non-inferior while being significantly
+worse than the baseline. The identity row is scored by the H1 gate. $n$ is the
+evaluation sample count. Rows marked
+$^{\ddagger}$ are frozen-gate extensions; $^{\sharp}$ concatenates selected
+source layers and calibrates on $1{,}024$-token web-text passages.}
+\label{tab:main}
+\resizebox{\columnwidth}{!}{%
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccl}
+\toprule
+Configuration & Acc / Gold / PPL & Gold CHG [95\% CI] & $n$ & Repl. & Dir. \\
+\midrule
+Identity control (self-\kv), 1.7B & 0.500 / 0.503 / 21.2 & $+0.0001$ [$-0.0006, +0.0009$] & 30 & pass & neutral \\
+Student self-prefill, 1.7B & 0.500 / 0.503 / 25.4 & -- & 30 & -- & -- \\
+Teacher full prefill, 1.7B & 0.767 / 0.693 / -- & -- & 30 & -- & -- \\
+Native cache injection, 1.7B & 0.167 / 0.169 / $5.4\times10^{5}$ & $-0.334$ [$-0.510, -0.149$] & 30 & fail & degraded \\
+Ridge per-head, c30, 1.7B & 0.200 / 0.207 / 88.5 & $-0.296$ [$-0.470, -0.112$] & 30 & fail & degraded \\
+Affine per-head, c30, 1.7B & 0.367 / 0.365 / 46.1 & $-0.138$ [$-0.312, +0.037$] & 30 & fail & neutral \\
+Affine per-head, c200, 1.7B & 0.254 / 0.258 / 56.4 & $-0.239$ [$-0.353, -0.122$] & 63 & fail & degraded \\
+Affine per-layer, c200, 1.7B & 0.206 / 0.222 / $8.1\times10^{4}$ & $-0.275$ [$-0.404, -0.140$] & 63 & fail & degraded \\
+Task-aware, c200, 1.7B & 0.270 / 0.280 / 142.1 & $-0.216$ [$-0.336, -0.093$] & 63 & fail & degraded \\
+RAT, c30, 1.7B$^{\ddagger}$ & 0.233 / 0.235 / 501.6 & $-0.268$ [$-0.439, -0.092$] & 30 & fail & degraded \\
+RAT, c200, 1.7B$^{\ddagger}$ & 0.238 / 0.276 / 1008.2 & $-0.221$ [$-0.342, -0.099$] & 63 & fail & degraded \\
+RAT no-anchor rank-32, c30$^{\ddagger}$ & 0.267 / 0.280 / 23.7 & $-0.223$ [$-0.369, -0.086$] & 30 & fail & degraded \\
+Per-head MLP, c30 (5 trainings)$^{\ddagger}$ & 0.133--0.267 / 0.111--0.246 / 65--96 & $-0.39$ to $-0.26$ & 30 & fail & degraded \\
+Per-head MLP, c200 (5 trainings)$^{\ddagger}$ & 0.175--0.302 / 0.241--0.271 / 109--149 & $-0.26$ to $-0.23$ & 63 & fail & degraded \\
+Joint MLP, c30 (5 trainings)$^{\ddagger}$ & 0.167--0.233 / 0.201--0.239 / 26--32 & $-0.30$ to $-0.26$ & 30 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}1$$^{\ddagger}$ & 0.240 / 0.238 / 78.5 & $-0.273$ [$-0.386, -0.159$] & 100 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}3$$^{\ddagger}$ & 0.190 / 0.203 / 2630 & $-0.308$ [$-0.414, -0.199$] & 100 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}5$$^{\ddagger}$ & 0.210 / 0.220 / $6.9\times10^{4}$ & $-0.291$ [$-0.396, -0.184$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}1$$^{\sharp}$ & 0.230 / 0.233 / $1.6\times10^{5}$ & $-0.279$ [$-0.407, -0.148$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}3$$^{\sharp}$ & 0.290 / 0.289 / $4.6\times10^{4}$ & $-0.223$ [$-0.364, -0.081$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}5$$^{\sharp}$ & 0.270 / 0.257 / 3678 & $-0.254$ [$-0.391, -0.117$] & 100 & fail & degraded \\
+Ridge per-head, c500, 8B$\to$1.7B$^{\ddagger}$ & 0.310 / 0.288 / 146.1 & $-0.224$ [$-0.327, -0.122$] & 100 & fail & degraded \\
+Affine per-head, c200, 4B$\to$0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.089, +0.106$] & 63 & fail & neutral \\
+Affine per-head, c30, 8B$\to$0.6B$^{\ddagger}$ & 0.270 / 0.269 / 99.0 & $-0.023$ [$-0.106, +0.060$] & 100 & fail & neutral \\
+RAT, c200, 4B$\to$0.6B$^{\ddagger}$ & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.124, +0.038$] & 63 & fail & neutral \\
+Affine per-head, c30, 1K retrieval$^{\ddagger}$ & 0.233 / 0.232 / 6554 & $-0.285$ [$-0.549, -0.003$] & 30 & fail & degraded \\
+Affine per-head, c10, 4K retrieval$^{\ddagger}$ & 0.200 / 0.200 / $1.6\times10^{4}$ & $-0.596$ [$-0.939, -0.135$] & 10 & fail & degraded \\
+Affine per-head, c10, 8K retrieval$^{\ddagger}$ & 0.200 / 0.203 / $2.4\times10^{4}$ & $-0.577$ [$-0.943, -0.082$] & 10 & fail & degraded \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{H3: no teacher-content probe establishes gain}
+\label{sec:h3}
+Appendix Table~\ref{tab:probes} reports the probes under the confirmatory
+translator (RAT, $c{=}30$) together with a replication under the strongest
+linear translator (affine, $c{=}30$).
+
+The fraction probe degrades monotonically with the teacher fraction under both
+translators, so adding teacher-derived content to the student's own cache does
+not help. The window probe shows a real asymmetry, but not a useful one:
+replacing the top third of layers is neutral (its interval contains zero in both
+translators), while the middle and bottom thirds are harmful; the ordering
+between middle and bottom is translator-dependent, so we claim only that the
+top window is neutral.
+
+Over the six confirmatory configurations (three fractions, three windows, RAT
+source) we bootstrap the maximum of the mean CHG over evaluation samples
+($10^4$ resamples). The observed maximum is $-0.001$ and the $95\%$ upper
+estimate for the maximum gain is $+0.009$. This is a percentile bound on a
+maximum, not a centered max-$t$ construction; we therefore read it as
+``the bootstrap $95\%$ upper estimate of the best achievable gain in this family
+is about one gold-probability point'', and not as a simultaneous $95\%$
+exclusion statement. Under the affine replication every configuration is again
+non-positive, and a best-of-eight octant sweep reaches $+0.020$
+$[-0.012,+0.052]$, whose interval contains zero. Across all $48$ probe rows
+recorded under the protocol, none has an interval that lies entirely above zero.
+
+% EVIDENCE CHECK (§5): H1 = 1.1, 6.6; H2 = 3.1-3.15 (Table 1 rows all verified against
+% reports/runs/*/inject-eval/metrics.json); H3 = 4.1-4.4, tmp/confirmatory_maxstat.json.
+% Gradient-family rows report ranges because same-seed refits disagree (6.5).
+
+\section{Decouplings and the Reach of the Deficit}
+\label{sec:analysis}
+
+Two of the audit's findings are inequalities rather than mechanisms, and both
+come directly from the recorded runs: better reconstruction does not buy better
+answers, and neither does better perplexity.
+
+\subsection{Reconstruction fidelity does not imply functional equivalence}
+Appendix Table~\ref{tab:r2} reports held-out reconstruction under one fixed
+budget (20 calibration contexts, 10 disjoint held-out contexts) for four
+configurations.
+
+Two contrasts carry the point. The joint MLP reaches $R^2_V = 0.481$ against the
+per-head affine translator's $0.323$ and still produces a CHG between $-0.30$ and $-0.26$,
+inside the band of every other strong-student translator. The choice of
+source-layer combination moves reconstruction in opposite directions (averaging
+degrades it with $k$; concatenation improves it) while leaving the verdict
+unchanged. Whatever the translators recover does not appear to include the part
+of the cache the student needs in order to answer.
+
+\subsection{Fluency does not imply capability}
+The same pattern appears on perplexity. Our most fluent failing translator
+reaches suffix perplexity $23.7$, within $2.5$ of the identity control's $21.2$,
+and still answers $26.7\%$ against the student's $50.0\%$; the joint MLP is
+fluent too ($31.6$) with gold probability $0.238$ against $0.503$. Perplexity
+tracks whether the cache permits a fluent continuation, accuracy tracks whether
+it supports the task, and the two dissociate across the recorded runs---which
+matters because perplexity is cheap and commonly reported as a quality proxy.
+
+\subsection{Channel asymmetry}
+At $c{=}30$ with the ridge family, mapping only values answers $36.7\%$ of
+items, mapping only keys answers $30.0\%$, and mapping both answers $20.0\%$,
+while suffix perplexity orders the three in the opposite direction
+($1.85\times10^{7}$, $253$, and $88.5$). Mapping keys therefore repairs fluency
+while damaging task behavior. We report this as an observation about the tested
+channel translators. Without attention-map analysis we do not claim to have
+identified the mechanism; the reading most consistent with the pattern is that
+key-side routing errors produce the asymmetry.
+
+\subsection{Other contexts, students, and repair attempts}
+The deficit is not specific to short contexts. A four-choice retrieval task
+packed to roughly $1$K tokens gives $-0.285$ $[-0.549,-0.003]$ ($n{=}30$);
+with caches stored in float16 and the fixed-tail protocol disabled, a true
+$4$K run gives $-0.596$ $[-0.939,-0.135]$ and a true $8$K run gives $-0.577$
+$[-0.943,-0.082]$ (both $n{=}10$). These two rows are a different evaluation
+regime from the $1$K row, and we read them as further degradation rather than as
+a calibrated length sweep.
+
+The deficit is also not specific to one architecture family: five alternative
+students give three negative rows (Llama-3.2-3B $-0.044$, Gemma-3-1B $-0.061$,
+Qwen2.5-1.5B $-0.157$; all $n{=}100$) and two near-parity rows on students
+close to chance (Llama-3.2-1B $+0.000$, Gemma-2-2B $-0.009$), while token
+alignment leaves the ranking unchanged (Appendix~\ref{app:extra}). A naive
+target-side re-read, which violates zero re-prefill, does not recover the
+student either ($-0.232$ $[-0.335,-0.134]$ against $-0.249$ $[-0.353,-0.149]$);
+we did not re-implement any published correction loss, so this bounds a naive
+replay rather than those systems.
+
+A text-channel control points the same way: summarizing the teacher's context
+into text reaches $0.440$ accuracy and $0.404$ gold against the student's $0.520$
+and $0.512$, a difference of $-0.108$ ($n{=}100$).
+
+Over all rows recorded under the protocol, the largest translation point
+estimate is $+0.010$ $[-0.089,+0.106]$, from the weak-student pair, and no probe
+row places its interval above zero (Appendix~\ref{app:repro}).
+
+% EVIDENCE CHECK (§6): 5.1-5.7, 6.1-6.4, 6.7, 1.5, 3.8 (range), 3.7.
+
+\section{Implications for Cache-Translation Research}
+\label{sec:implications}
+
+Three checks would have caught what an end-to-end score hides. Report an identity
+control that injects the student's own cache through the full pipeline, because
+it separates a broken pipeline from a broken translator. Report accuracy, not
+only retention or perplexity, because retention measures similarity to the
+receiver's own prefill rather than the receiver's gain over it, and because
+fluency and task quality dissociate in our runs. Report a no-additional-training probe of teacher-derived
+content before investing in translator capacity: the probe takes its content from
+a fixed, already-calibrated translator and trains nothing new, and in our audit
+no probe configuration produces an interval that excludes zero.
+
+The decouplings above carry the scientific weight: reconstruction quality and
+perplexity are not substitutes for task quality, so a translation result
+reported only through them is underdetermined. The reading that the teacher's
+advantage is mediated by parameter-dependent computation is consistent with our
+results, since FFN layers act as key--value memories, but we present it as an
+interpretation rather than an impossibility result: a translator outside our
+tested families might behave differently.
+
+% EVIDENCE CHECK (§7): interpretive; grounded in 5.1-5.6 and 3.1-3.15; no new numbers.
+
+\section{Limitations}
+\label{sec:limitations}
+
+Our scale pairs all come from one model family on the primary axis, with $n$
+between $10$ and $100$ evaluation samples per run, so the intervals are wide.
+The $4$K and $8$K retrieval rows use
+$n{=}10$, a float16 cache regime, and a different evaluation protocol, so they
+qualify the context-length claim rather than establishing a length sweep.
+
+\textbf{One primary pair.} The ladder, the calibration study, and the probes are
+all run on Qwen3-4B$\to$1.7B. The cross-architecture check covers five
+alternative students but three of them are near chance, so it establishes
+mechanics and gate-level replacement rather than capability.
+
+\textbf{Exploitability is tested, not exhausted.} Our probes cover linear
+blending, layer-window replacement, and an octant sweep under two translators. A
+nonlinear or jointly structured extraction path outside this family would not be
+detected, and the null result is evidence about the tested interventions rather
+than a proof of impossibility. A positive probe result would have been decisive;
+ours is not.
+
+\textbf{Gradient-trained families are seed-dependent and not always
+reproducible.} The per-head MLP is the clearest case: two runs with the same
+configuration and the same recorded seed differ by $0.046$ in CHG
+($-0.303$ versus $-0.257$). We therefore report those families as ranges over
+trainings, and we do not treat any single MLP number as a reproducible point
+estimate. The joint MLP reproduces its seed to within $0.001$.
+
+\textbf{The reporting margin is not pre-registered.} $\epsilon{=}0.02$ was
+chosen after the gate form was frozen, as a practical reporting margin; the
+sensitivity of our conclusions to that choice is reported in
+Appendix~\ref{app:repro}.
+
+Some measurements remain thin. The cold-start equivalence rests on a single
+offline/online pair and covers the translated and identity paths only. The
+held-out reconstruction $R^2$ comes from one fit of 20 contexts with 10 held-out
+contexts, so it constrains rather than characterizes what a translator can recover.
+Our implementation of the closest published design matches the reference's
+combination and sequence length; it uses $100$ calibration sequences instead of
+$500$, drawn from a generated corpus. We report no deployment-cost claim: the
+recorded pipeline measure includes a measurement-only forward pass and is
+negative ($-9.7$ at best).
+
+% EVIDENCE CHECK (§8): 6.1, 6.3-6.6, 3.8, 2.4, 5.1, 3.11 (calibration volume),
+% 6.8 (no cost claim).
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+Under strict zero re-prefill, no tested translator establishes replacement for
+our primary strong-student pair, and the only rows that clear the reporting
+replacement margin sit on near-chance alternative students and show no
+measurable gain. The injection pipeline itself is exact to numerical
+tolerance, so the failure is not mechanical: the deficit on the primary pair
+persists across the tested calibration
+budgets, translator capacities, source-layer combinations, and token-alignment
+controls; and it is not repaired by matching the closest published design's
+source-layer composition and calibration sequence length under our generated
+calibration corpus and $100$-sequence volume. The
+two findings we expect to outlast this setting are the decouplings: cache
+reconstruction quality and cache-induced fluency are not substitutes for task
+quality. We release the runs, the protocol, and the three checks so that future
+translation claims can be checked against all of them.
+
+% EVIDENCE CHECK (§9): restatement of 3.x, 4.x, 5.x; no new numbers.
+
+\bibliographystyle{iclr2026_conference}
+\bibliography{references}
+
+\appendix
+
+\section{Implementation Differences from the Closest Published Design}
+\label{app:impl}
+
+\begin{table}[h]
+\centering
+\caption{Our implementation of the closest strict-zero-re-prefill design
+\citep{heo2026} and where it differs from the reference. Both configurations of
+our implementation fail (Table~\ref{tab:main}).}
+\label{tab:impl}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+Aspect & This audit & Reference \\
+\midrule
+Source-layer combination & concatenation (aligned); averaged variant also reported & concatenation \\
+Key mapping & de-RoPE keys & yes (de-RoPE keys) \\
+Penalty & $\lambda=10^{-3}$, $K$ and $V$ fitted separately & not specified \\
+Candidate source layers & all teacher layers & not specified \\
+Calibration corpus & generated web-text-style $1{,}024$-token passages & FineWeb-Edu web text \\
+Calibration volume & $100$ sequences & $500$ sequences \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\section{Reproducibility and Recorded Inventory}
+\label{app:repro}
+
+Every number in this paper comes from a recorded run directory containing the
+run's configuration, per-sample scores, the git hash, the protocol version, and
+a zero-re-prefill verification flag. At the time of writing the repository
+contains $177$ evaluation runs with metrics and $181$ configuration rows under
+the audit protocol ($133$ translations, $48$ probes). A re-run audit of $23$
+core configurations reproduced the deterministic families to within $|\Delta|
+\le 0.002$ in CHG; the per-head MLP family did not reproduce across runs with
+the same seed (Section~\ref{sec:limitations}), which is why it is reported as a
+range. For the gradient-trained families the runs set Python, NumPy, and PyTorch
+seeds (CPU and CUDA) but do not enable deterministic kernel selection, so the
+residual source of nondeterminism has not been isolated.
+
+The margin sensitivity referenced in Section~\ref{sec:framework} is recorded in
+the same directory: conclusions about the strong-student pair are unchanged for
+$\epsilon\in\{0.01,0.02,0.05\}$ because their intervals lie below zero, while
+the weak-student pair fails the replacement gate under all three.
+
+Intervals are recomputed from those per-sample scores with $10^4$ paired
+percentile bootstrap resamples (\texttt{scripts/bootstrap\_ci\_report.py},
+artifact \texttt{reports/bootstrap\_1e4/ci\_1e4.json}); an earlier draft's
+$10^3$-draw endpoints differ by up to $0.02$, the Monte-Carlo noise of $10^3$
+draws at these sample sizes, so the $10^4$-draw values are reported.
+The identity gate's \emph{form} was fixed before the runs, while the numerical
+tolerance $0.9998$ was introduced during revision as a reproducible
+operationalization of the original ``within numerical tolerance'' criterion;
+the recorded runs store logit cosines rather than logits, so the residual
+identity difference (minimum $0.99986$) is not decomposed further.
+
+\begin{table}[t]
+\centering
+\caption{Gradient-trained families: interval detail for the rows
+Table~\ref{tab:main} reports as training ranges ($10^4$-draw paired
+bootstrap). Every recorded training of every family has an interval upper
+bound below zero, which is what its \emph{degraded} direction label requires.}
+\label{tab:mlp-ci}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Family & Trainings & Point estimates & Largest CI upper & Per-training CI uppers \\
+\midrule
+Per-head MLP, $c{=}30$ & 5 & $-0.392$ to $-0.257$ & $-0.069$ & $-0.148 / -0.069 / -0.136 / -0.231 / -0.167$ \\
+Per-head MLP, $c{=}200$ & 5 & $-0.256$ to $-0.226$ & $-0.104$ & $-0.104 / -0.139 / -0.144 / -0.104 / -0.118$ \\
+Joint MLP, $c{=}30$ & 5 & $-0.302$ to $-0.264$ & $-0.095$ & $-0.115 / -0.095 / -0.128 / -0.120 / -0.143$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\section{Additional Measurements}
+\label{app:extra}
+
+\textbf{Cross-architecture and token-aligned rows.} Under the rectangular translator
+(head mean-pooling plus dimension projection), $n{=}100$: Llama-3.2-1B $+0.000$
+$[-0.012,+0.011]$, Gemma-2-2B $-0.009$ $[-0.020,+0.002]$, Llama-3.2-3B $-0.044$
+$[-0.074,-0.013]$, Gemma-3-1B $-0.061$ $[-0.132,+0.006]$, Qwen2.5-1.5B
+$-0.157$ $[-0.212,-0.106]$. With character-overlap token alignment applied to
+the two tokenizers that differ most: Llama-3.2-3B $-0.024$ $[-0.047,-0.002]$,
+Gemma-3-1B $-0.073$ $[-0.131,-0.018]$, Llama-3.2-1B $-0.003$
+$[-0.012,+0.006]$, Gemma-2-2B $-0.007$ $[-0.018,+0.004]$. Alignment changes
+neither the replacement verdict nor the absence of capability gain; for the
+shared-tokenizer student it is a no-operation by construction.
+
+\textbf{Octant sweep.} Under the affine translator at $c{=}30$, the best of
+eight layer windows reaches $+0.020$ $[-0.012,+0.052]$ ($n{=}30$); no window's
+interval lies above zero.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.68\columnwidth]{figures/fig4_ppl_acc_decoupling.pdf}
+\caption{Perplexity over the scoring suffix against accuracy for every recorded
+method and run (log scale). The identity control---the student's suffix-native
+reference---sits in the top-left; translated caches spread across a broad band,
+including a point with near-native perplexity ($23.7$) whose accuracy stays $23$
+points below the student's $0.500$. Perplexity does not order methods the way
+the task metric does.}
+\label{fig:decoupling}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Held-out $R^2$ for recovering the student's own $K$ and $V$ from the
+teacher's states (per-(layer, head) macro-average; training-split values in
+parentheses where recorded). Better reconstruction does not move the task
+verdict: the joint MLP nearly doubles the value-channel $R^2$ of the affine
+translator and lands in the same CHG band (Table~\ref{tab:main}).}
+\label{tab:r2}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llccc}
+\toprule
+Translator & Source-layer combination & $R^2_K$ & $R^2_V$ & Downstream CHG \\
+\midrule
+Affine per-head, $c{=}30$ & -- & 0.810 & 0.323 & $-0.138$ [$-0.312,+0.037$] \\
+Joint MLP, $c{=}30$ & all layers & 0.854 (0.949) & 0.481 (0.647) & $-0.30$ to $-0.26$ \\
+Top-$k$ ridge, $k{=}1,3,5$ & averaged & 0.822 / 0.787 / 0.762 & 0.317 / 0.248 / 0.182 & $-0.273$ / $-0.308$ / $-0.291$ \\
+Top-$k$ ridge, $k{=}1,3,5$ & concatenated & 0.826 / 0.858 / 0.864 & 0.326 / 0.419 / 0.428 & $-0.279$ / $-0.223$ / $-0.254$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig3_oracle_probes.pdf}
+\caption{Teacher-content probes on the primary pair ($n{=}30$). Left: gold-letter
+probability as translated content replaces the student's own cache, for three
+mixture fractions under both translators. Right: layer windows. Every
+configuration degrades or is neutral relative to the student's own prefill; the
+top-third window is the only neutral one. These are the rows of
+Table~\ref{tab:probes}.}
+\label{fig:probes}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Teacher-content probes on the primary pair, $n{=}30$. The gold column
+is the gold-letter probability of the mixture; CHG is against the student's own
+prefill. The first row is the student's own cache. Both translators agree that
+every probe degrades or is neutral, and that replacing the top third of layers
+is neutral.}
+\label{tab:probes}
+\resizebox{\columnwidth}{!}{%
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lcccc}
+\toprule
+Probe & Gold (RAT c30) & CHG (RAT c30) & Gold (affine c30) & CHG (affine c30) \\
+\midrule
+Student cache only ($\alpha{=}0$) & 0.503 & $+0.0001$ [$-0.0006, +0.0009$] & 0.503 & $+0.0001$ [$-0.0006, +0.0009$] \\
+Fraction $\alpha{=}0.25$ & 0.380 & $-0.123$ [$-0.258, +0.009$] & 0.417 & $-0.086$ [$-0.183, +0.003$] \\
+Fraction $\alpha{=}0.50$ & 0.279 & $-0.224$ [$-0.374, -0.077$] & 0.356 & $-0.147$ [$-0.322, +0.026$] \\
+Fraction $\alpha{=}0.75$ & 0.249 & $-0.254$ [$-0.423, -0.083$] & 0.292 & $-0.211$ [$-0.400, -0.012$] \\
+Window: top third & 0.502 & $-0.001$ [$-0.010, +0.010$] & 0.487 & $-0.016$ [$-0.120, +0.080$] \\
+Window: middle third & 0.265 & $-0.238$ [$-0.383, -0.106$] & 0.244 & $-0.259$ [$-0.413, -0.112$] \\
+Window: bottom third & 0.224 & $-0.279$ [$-0.445, -0.105$] & 0.321 & $-0.182$ [$-0.306, -0.070$] \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{Family-wise detail.} The confirmatory family comprises three mixture
+fractions and three layer windows under the RAT translator. The joint bootstrap
+over $10^4$ resamples gives an observed maximum of $-0.001$ and a $95\%$ upper
+estimate of $+0.009$.
+
+\end{document}

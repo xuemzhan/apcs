@@ -1,17 +1,21 @@
 # APCS: Cross-Model KV Cache Runtime Capability Transfer
 
-**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文已按 audit-7 定稿（Accept 7/10）
+**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文已按 audit-8 定稿并完成投稿前 final polish
+（Accept 7/10；普通 bootstrap 统一为 10⁴ 次重采样；`scripts/paper_consistency_check.py` 四份稿 48/48 通过）
 
 **论文只有两个在库版本**（数字与图表同源，2026-09-13 起）：
 
 | 版本 | 位置 | 形态 |
 |---|---|---|
-| **arXiv 完整稿** | `paper/arxiv/` | 13 页（正文 9 页 + 参考文献 + 附录），署名（Xuemin Zhang、Liangbin Hu、Kun Yi、Liheng Zhong、Junpeng Yu），图 4、表 4，含 `arxiv_submission.zip` 提交包 |
+| **arXiv 完整稿** | `paper/arxiv/` | 14 页（正文 9 页 + 参考文献 + 附录），署名（Xuemin Zhang、Liangbin Hu、Kun Yi、Liheng Zhong、Junpeng Yu），图 4、表 5，含 `arxiv_submission.zip` 提交包 |
 | **ICLR 2026 投稿稿** | `paper/iclr2026/` | 正文 **9 页**（参考文献自第 10 页起），双盲匿名，ICLR 2026 样式，证据不足项已下沉到附录 |
 
 其余历史版本（`cache_audit` 全量长文、匿名版、旧 ICLR 全量稿、官方模板、更早的
 prior-projection 稿与预览）统一放入 `paper/archive/`，**不入库**（本地保留，git 历史可追）。
 图表与结论的对应关系、逐轮审稿意见与修改记录见 `docs/`。
+
+另有 `paper/humanized/`：与上面两版**正文同源**的去 AI 味改写副本（同样已过 audit-8，
+arXiv 13 页 / ICLR 正文 9 页），如需启用可直接覆盖回 `paper/arxiv`、`paper/iclr2026`。
 
 ---
 
@@ -31,7 +35,7 @@ prior-projection 稿与预览）统一放入 `paper/archive/`，**不入库**（
 | 假说 | 判定 | 关键证据 |
 |---|---|---|
 | **H1 机制无损** | ✅ 通过 | `self_kv` 恒等注入 ≡ 学生自 prefill，逐样本 logit 余弦 1.000 |
-| **H2 替换级** | ⚠️ 弱学生近平局但未过 ε=0.02 非劣；强学生全族失败 | 7 族 mapper，CHG −0.14 ~ −0.39；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（per-head MLP 5 次训练区间 −0.39~−0.26、joint MLP 4 次训练 −0.30~−0.26）；5 个跨架构学生中 1 个（Llama-3.2-1B，近随机）过替换 gate 但无增益，其余 4 个未过 |
+| **H2 替换级** | ⚠️ 弱学生近平局但未过 ε=0.02 非劣；强学生全族失败 | 7 族 mapper，CHG −0.14 ~ −0.39；校准预算惰性（c30/c200 差 0.005）；非线性不帮助（per-head MLP 5 次训练区间 −0.39~−0.26、joint MLP 5 次训练 −0.30~−0.26，每次训练 CI 上界均 < 0）；4 个跨架构行（Llama-3.2-1B 与 Gemma-2-2B 的对齐/未对齐）按 10⁴ bootstrap 过 reporting margin 但均无增益，其余跨架构行未过 |
 | **H3 能力迁移** | ❌ 原理性否定 | oracle 探针（fraction/三分位/八分位）单调劣化 + 原生内容对照 + PPL/acc 解耦（PPL 23.7 但 acc 0.267）；长上下文（~1k token）同样失败；朴素 target-side replay 不能恢复 |
 
 **核心机理**（论文口径：与"教师优势由权重中介"一致，非不可能性证明）：V 状态经

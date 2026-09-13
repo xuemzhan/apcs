@@ -122,6 +122,11 @@ paper/iclr2026/*.aux
 paper/iclr2026/*.blg
 paper/iclr2026/*.log
 paper/iclr2026/*.out
+# 去 AI 味改写副本（paper/humanized）：同样只留源文件 / main.bbl / 成品 PDF
+paper/humanized/*/*.aux
+paper/humanized/*/*.blg
+paper/humanized/*/*.log
+paper/humanized/*/*.out
 # 其余历史版本与预览（含 paper/archive/）不入库
 paper/legacy_*/*.aux
 

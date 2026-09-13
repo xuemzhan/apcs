@@ -6,7 +6,7 @@
 |---|---|
 | `design/` | `design.md`（设计规格；代码注释里的 "design.md §NN" 指此文件）、`BRIEF.md`、`INNOVATION.md` |
 | `protocol/` | `PROTOCOL.md`（实验协议 v1.1→v1.5）、`EXPERIMENT_LOG.md`（历轮实验终审表，含 audit-6 的 4K 勘误） |
-| `audits/` | 逐轮审稿意见 `audit1.md`…`audit6_1.md`；`AUDIT6_GPU_CORRESPONDENCE.md` 为第六轮意见与 GPU 实验的逐条对应 |
+| `audits/` | 逐轮审稿意见 `audit1.md`…`audit8_1.md`；`AUDIT6_GPU_CORRESPONDENCE.md` 为第六轮意见与 GPU 实验的逐条对应；`AUDIT7_REWRITE_COMPLIANCE.md`／`AUDIT8_REWRITE_COMPLIANCE.md` 为第七、八轮意见的逐条处理；`HUMANIZATION_REPORT_20260913.md` 为去 AI 味评估与改写报告 |
 | `plans/` | 各轮修改方案（`REVISION_PLAN*.md`）、`SUPPLEMENT_EXPERIMENTS_PLAN.md`、`GPU_PLAN_AUDIT6.md`，以及需求/用户故事 |
 
 ## 阅读顺序建议
@@ -19,6 +19,7 @@
 
 ## 未完成事项
 
-暂无。论文已按 audit-7 定稿：`paper/arxiv/`（完整稿、署名）与 `paper/iclr2026/`
-（正文 9 页、匿名）两版同源，均编译通过、无未定义引用；历史版本在 `paper/archive/`（不入库）。
-审稿意见的逐条完成情况见 `audits/AUDIT7_REWRITE_COMPLIANCE.md`。
+暂无。论文已按 audit-8 定稿：`paper/arxiv/`（完整稿、署名）与 `paper/iclr2026/`
+（正文 9 页、匿名）两版同源，均编译通过、无未定义引用；`paper/humanized/` 为其去 AI 味改写副本
+（数字同源、同样已过 audit-8）；历史版本在 `paper/archive/`（不入库）。
+审稿意见的逐条完成情况见 `audits/AUDIT8_REWRITE_COMPLIANCE.md`。
