@@ -2,7 +2,7 @@
 
 **Status**: ✅ v1.5 闭环完成 + 论文定稿（2026-08-29 深夜）——三假说终审 + 两轮独立审稿
 **audit-6 (2026-09-13)**: ✅ G1 完成——Heo 设计下的严格检验（top-$k$ concatenation + FineWeb-Edu 1,024-token 校准，3 连跑），结论与 average 变体一致（全部显著为负、gate FAIL）。
-**Paper**: `paper/cache_audit/main.pdf`（11 页）
+**Paper**: `paper/arxiv/main.pdf`（arXiv 完整稿）与 `paper/iclr2026/main.pdf`（ICLR 2026 投稿稿，正文 9 页）
 **历史数据（v1.0 及以前）**: ⚠️ UNVERIFIED，见文末历史节
 
 ---

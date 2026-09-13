@@ -1,0 +1,173 @@
+\begin{thebibliography}{25}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bansal et~al.(2021)Bansal, Nakkiran, and Barak]{stitching2021}
+Yamini Bansal, Preetum Nakkiran, and Boaz Barak.
+\newblock Revisiting model stitching to compare neural representations.
+\newblock In \emph{NeurIPS}, 2021.
+\newblock \doi{10.48550/arxiv.2106.07682}.
+
+\bibitem[Belrose et~al.(2023)Belrose, Ostrovsky, McKinney, Furman, Smith,
+  Halawi, Biderman, and Steinhardt]{tunedlens2023}
+Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Furman, Logan Smith, Danny
+  Halawi, Stella Biderman, and Jacob Steinhardt.
+\newblock Eliciting latent predictions from transformers with the tuned lens.
+\newblock \emph{arXiv preprint arXiv:2303.08112}, 2023.
+
+\bibitem[Dery et~al.(2026)Dery, Yahav, Prior, Feng, Shen, and Szlam]{lsc2026}
+L.~M. Dery, Z.~Yahav, H.~Prior, Q.~Feng, J.~Shen, and A.~Szlam.
+\newblock Latent space communication via {KV} cache alignment.
+\newblock \emph{arXiv preprint arXiv:2601.06123}, 2026.
+
+\bibitem[Du et~al.(2025)Du, Wang, Bai, Cao, Zhu, Cheng, Zheng, Chen, and
+  Ying]{interlat2025}
+Zhuoyun Du, Runze Wang, Huiyu Bai, Zouying Cao, Xiaoyong Zhu, Yu~Cheng,
+  Bo~Zheng, Wei Chen, and Haochao Ying.
+\newblock Enabling agents to communicate entirely in latent space.
+\newblock \emph{arXiv preprint arXiv:2511.09149}, 2025.
+
+\bibitem[Fu et~al.(2025)Fu, Min, Zhang, Yan, Dai, Ouyang, and Wang]{c2c2025}
+Tianyu Fu, Zhen Min, Hang Zhang, Jun Yan, Guohao Dai, Wanli Ouyang, and
+  Yu~Wang.
+\newblock Cache-to-cache: Direct semantic communication between large language
+  models.
+\newblock \emph{arXiv preprint arXiv:2510.03215}, 2025.
+
+\bibitem[Gao et~al.(2025)Gao, Chen, and Shu]{hcache2025}
+Shiwei Gao, Youmin Chen, and Jiwu Shu.
+\newblock Fast state restoration in {LLM} serving with {HCache}.
+\newblock In \emph{Proceedings of the Twentieth European Conference on Computer
+  Systems (EuroSys)}, 2025.
+\newblock Cited from MoT's baseline description (MoT-h variant).
+
+\bibitem[Geva et~al.(2021)Geva, Schuster, Berant, and Levy]{ffnmemory2021}
+Mor Geva, Roei Schuster, Jonathan Berant, and Omer Levy.
+\newblock Transformer feed-forward layers are key-value memories.
+\newblock In \emph{Proceedings of EMNLP}, 2021.
+\newblock \doi{10.18653/v1/2021.emnlp-main.446}.
+
+\bibitem[Gr{\"o}ger et~al.(2026)Gr{\"o}ger, Wen, and
+  Brbi{\'c}]{aristotelian2026}
+Fabian Gr{\"o}ger, Shuo Wen, and Maria Brbi{\'c}.
+\newblock Revisiting the platonic representation hypothesis: An aristotelian
+  view.
+\newblock \emph{arXiv preprint arXiv:2602.14486}, 2026.
+
+\bibitem[Hendel et~al.(2023)Hendel, Geva, and Globerson]{taskvectors2023}
+Roee Hendel, Mor Geva, and Amir Globerson.
+\newblock In-context learning creates task vectors.
+\newblock In \emph{Findings of EMNLP}, 2023.
+\newblock \doi{10.18653/v1/2023.findings-emnlp.624}.
+
+\bibitem[Heo et~al.(2026)Heo, Shafipour, Zhao, Golub, Kamani, Borkar, Chandran,
+  Zardoshti, and Rouhani]{heo2026}
+Taekyung Heo, Rasoul Shafipour, Ritchie Zhao, Maximilian Golub, Mohammad~Mahdi
+  Kamani, Ritika Borkar, Makesh~Tarun Chandran, Pantea Zardoshti, and
+  Bita~Darvish Rouhani.
+\newblock Cross-model {KV} cache transfer in {LLM} families: A closed-form
+  linear mapping for prefill reuse.
+\newblock \emph{arXiv preprint arXiv:2608.03893}, 2026.
+
+\bibitem[Huh et~al.(2024)Huh, Cheung, Wang, and Isola]{platonic2024}
+Minyoung Huh, Brian Cheung, Tongzhou Wang, and Phillip Isola.
+\newblock The platonic representation hypothesis.
+\newblock In \emph{arXiv preprint arXiv:2405.07987}, 2024.
+
+\bibitem[Jha et~al.(2025)Jha, Zhang, Shmatikov, and Morris]{vec2vec2025}
+Rishi Jha, Collin Zhang, Vitaly Shmatikov, and John~X. Morris.
+\newblock Harnessing the universal geometry of embeddings.
+\newblock In \emph{NeurIPS}, 2025.
+\newblock \doi{10.52202/085713-1530}.
+
+\bibitem[Lee et~al.(2026)Lee, Song, Oh, Han, Park, Jang, and Lim]{mot2026}
+Jin-woo Lee, Minkyung Song, Junghyun Oh, Seunghoon Han, Soyoung Park, Gwangseon
+  Jang, and Sungsu Lim.
+\newblock Mixture-of-translators: Translating {KV} caches across heterogeneous
+  large language models.
+\newblock \emph{arXiv preprint arXiv:2607.28979}, 2026.
+
+\bibitem[Li et~al.(2026)Li, Jiang, Zhao, and Li]{contextreuse2026}
+Yi~Li, Dongming Jiang, Yi~Zhao, and Bingzhe Li.
+\newblock A universal context-reuse layer for cross-model {KV} sharing.
+\newblock \emph{arXiv preprint arXiv:2608.30963}, 2026.
+
+\bibitem[Liu et~al.(2024)Liu, Li, Cheng, Ray, Huang, Zhang, Du, Yao, Lu,
+  Ananthanarayanan, Maire, Hoffmann, Holtzman, and Jiang]{cachegen2024}
+Yuhan Liu, Hanchen Li, Yihua Cheng, Siddhant Ray, Yuyang Huang, Qizheng Zhang,
+  Kuntai Du, Jiayi Yao, Shan Lu, Ganesh Ananthanarayanan, Michael Maire, Henry
+  Hoffmann, Ari Holtzman, and Junchen Jiang.
+\newblock {CacheGen}: {KV} cache compression and streaming for fast large
+  language model serving.
+\newblock In \emph{Proceedings of the ACM SIGCOMM Conference}, 2024.
+\newblock \doi{10.1145/3651890.3672274}.
+
+\bibitem[Moschella et~al.(2022)Moschella, Maiorca, Fumero, Norelli, Locatello,
+  and Rodol{\`a}]{relrep2022}
+Luca Moschella, Valentino Maiorca, Marco Fumero, Antonio Norelli, Francesco
+  Locatello, and Emanuele Rodol{\`a}.
+\newblock Relative representations enable zero-shot latent space communication.
+\newblock \emph{arXiv preprint arXiv:2209.15430 (ICLR 2023)}, 2022.
+
+\bibitem[Mu et~al.(2023)Mu, Li, and Goodman]{gist2023}
+Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
+\newblock Learning to compress prompts with gist tokens.
+\newblock In \emph{NeurIPS}, 2023.
+\newblock \doi{10.48550/arxiv.2304.08467}.
+
+\bibitem[Qu et~al.(2026)Qu, Lu, Chen, Wang, and Lin]{cachebridge2026}
+Xingyu Qu, Siyuan Lu, Zhiyu Chen, Sheng Wang, and Tao Lin.
+\newblock {CacheBridge}: Efficient cross-model {KV} cache transfer.
+\newblock \emph{arXiv preprint arXiv:2609.00891}, 2026.
+
+\bibitem[{Qwen Team}(2025)]{qwen3}
+{Qwen Team}.
+\newblock {Qwen3} model family and technical report, 2025.
+\newblock Model card and technical documentation; Qwen3-4B/1.7B/0.6B
+  configurations used in this audit.
+
+\bibitem[Shi et~al.(2025)Shi, Chiesa, Maguire, and Kostic]{kvcomm2025}
+Xiangyu Shi, Marco Chiesa, Jr. Maguire, Gerald~Q., and Dejan Kostic.
+\newblock {KVComm}: Enabling efficient {LLM} communication through selective
+  {KV} sharing.
+\newblock \emph{arXiv preprint arXiv:2510.03346}, 2025.
+
+\bibitem[Stolfo et~al.(2024)Stolfo, Balachandran, Yousefi, Horvitz, and
+  Nushi]{actsteer2024}
+Alessandro Stolfo, Vidhisha Balachandran, Safoora Yousefi, Eric Horvitz, and
+  Besmira Nushi.
+\newblock Improving instruction-following in language models through activation
+  steering.
+\newblock \emph{arXiv preprint arXiv:2410.12877}, 2024.
+
+\bibitem[Xiao et~al.(2023)Xiao, Tian, Chen, Han, and Lewis]{streamingsink2023}
+Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis.
+\newblock Efficient streaming language models with attention sinks.
+\newblock In \emph{arXiv preprint arXiv:2309.17453}, 2023.
+
+\bibitem[Yang et~al.(2024)Yang, Cao, Chen, Qin, Yang, Zhao, and
+  Chen]{kvsharer2024}
+Yifei Yang, Zouying Cao, Qiguang Chen, Libo Qin, Dongjie Yang, Hai Zhao, and
+  Zhi Chen.
+\newblock {KVSharer}: Efficient inference via layer-wise dissimilar {KV} cache
+  sharing.
+\newblock \emph{arXiv preprint arXiv:2410.18517}, 2024.
+
+\bibitem[Yao et~al.(2025)Yao, Li, Liu, Ray, Cheng, Zhang, Du, Lu, and
+  Jiang]{cacheblend2025}
+Jiayi Yao, Hanchen Li, Yuhan Liu, Siddhant Ray, Yihua Cheng, Qizheng Zhang,
+  Kuntai Du, Shan Lu, and Junchen Jiang.
+\newblock {CacheBlend}: Fast large language model serving for {RAG} with cached
+  knowledge fusion.
+\newblock In \emph{Proceedings of the ACM EuroSys Conference}, 2025.
+\newblock \doi{10.1145/3689031.3696098}.
+
+\bibitem[Ziyin \& Chuang(2025)Ziyin and Chuang]{perfectplatonic2025}
+Liu Ziyin and Isaac~L. Chuang.
+\newblock Proof of a perfect platonic representation hypothesis.
+\newblock \emph{arXiv preprint arXiv:2507.01098}, 2025.
+
+\end{thebibliography}

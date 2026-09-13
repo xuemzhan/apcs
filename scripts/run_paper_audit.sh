@@ -104,7 +104,7 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  $0 generate"
-    echo "  $0 audit paper/cache_audit/main.tex \"Cache Translation Across Heterogeneous LLMs\""
+    echo "  $0 audit paper/iclr2026/main.tex \"Cache Translation Across Model Scale\""
     echo "  $0 check"
 }
 

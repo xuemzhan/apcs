@@ -1,0 +1,97 @@
+% Figure 1 body: (a) the audited setting, (b) the three gated questions.
+% Requires in the surrounding preamble: tikz (arrows.meta), amsmath, amssymb,
+% and the macro \chg.
+\begin{tikzpicture}[
+  font=\scriptsize,
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
+              minimum height=8mm, font=\scriptsize},
+  tbox/.style={box, fill=blue!8, minimum width=20mm},
+  sbox/.style={box, fill=green!10, minimum width=20mm},
+  mbox/.style={box, fill=orange!14, minimum width=20mm},
+  lab/.style={font=\tiny, align=center},
+  flow/.style={-{Latex[length=2mm]}, thick, black!75},
+  block/.style={-{Latex[length=2mm]}, thick, dashed, red!75!black},
+  ref/.style={-{Latex[length=1.6mm]}, densely dotted, black!55},
+  kvk/.style={draw=black!55, fill=blue!18, minimum width=4.6mm,
+              minimum height=1.9mm, inner sep=0pt},
+  kvv/.style={draw=black!55, fill=orange!28, minimum width=4.6mm,
+              minimum height=1.9mm, inner sep=0pt},
+]
+% ---------------- panel (a): the audited setting ----------------
+\node[lab, anchor=west] at (-6.3, 2.25) {\textbf{(a)} the audited setting};
+
+% context, query, models
+\node[mbox] (X) at (-5.2, 1.55) {long context $x$};
+\node[mbox] (Q) at ( 5.2,-1.45) {query $q$};
+\node[tbox] (T) at (-5.2, 0) {\textbf{Teacher} $T$\\frozen};
+\node[sbox] (S) at ( 5.2, 0) {\textbf{Student} $S$\\frozen};
+
+% caches as per-layer K/V stacks
+\foreach \i in {0,1,2}{
+  \pgfmathsetmacro{\yy}{0.30-0.30*\i}
+  \node[kvk] at (-3.22,\yy) {};
+  \node[kvv] at (-2.72,\yy) {};
+  \node[kvk] at ( 2.72,\yy) {};
+  \node[kvv] at ( 3.22,\yy) {};
+}
+\node[lab] at (-2.97, 0.68) {$\mathbf{K}$ $\mathbf{V}$};
+\node[lab] at (-2.97,-0.80) {$C_T(x)$};
+\node[lab] at ( 2.97, 0.68) {$\mathbf{K}$ $\mathbf{V}$};
+\node[lab] at ( 2.97,-0.80) {$\hat{C}_S(x)$};
+
+% translator
+\node[mbox] (g) at (0, 0) {translator $g_\theta$};
+\node[lab] at (0,-0.80) {reads only $C_T$};
+
+% flow through the caches
+\draw[flow] (T.east) -- (-3.62, 0);
+\draw[flow] (-2.32, 0) -- (g.west);
+\draw[flow] (g.east) -- (2.32, 0);
+\draw[flow] (3.62, 0) -- (S.west);
+\draw[flow] (X) -- (T);
+\draw[flow] (Q) -- (S);
+
+% the forbidden path: context straight into the student
+\draw[block] (X.east) -- (5.2, 1.55) coordinate (turn);
+\draw[block] (turn) -- (S.north);
+\node[lab] at (0, 2.25)
+  {strict zero re-prefill: no context token enters the student};
+\node[lab, fill=white, inner sep=0.6pt] at (0, 1.55) {\large$\oslash$};
+
+% references and metric
+\node[lab] at (0,-2.15)
+  {baseline: student self-prefill $S(q\mid C_S(x))$ \qquad reference:
+   teacher full prefill $T(q\mid C_T(x))$};
+\node[lab] at (0,-2.85)
+  {score: gold-letter probability; \qquad
+   $\chg = \mathrm{gold}(\text{handoff})-\mathrm{gold}(\text{self-prefill})$};
+\end{tikzpicture}
+
+\vspace{1.6mm}
+{\footnotesize\textbf{(b)} three questions that can fail independently,
+each with its own instrument and gate\par}
+\vspace{1.2mm}
+{\footnotesize
+\setlength{\tabcolsep}{3pt}%
+\begin{tabular}{@{}p{0.62cm}p{2.85cm}p{3.55cm}p{3.05cm}p{2.45cm}@{}}
+\toprule
+ & \textbf{Question} & \textbf{Instrument} & \textbf{Gate (fixed rule)} & \textbf{Outcome} \\
+\midrule
+\textbf{H1} & Injection mechanics: does the cache-injection pipeline preserve a
+valid student-space cache without loss?
+ & Identity control: the student's own cache through the full pipeline
+ & every sample's logit cosine $\ge 0.9998$ $\dagger$
+ & pass: mean $0.99998$, min $0.99986$ \\
+\addlinespace[1pt]
+\textbf{H2} & Does any translator reach replacement level?
+ & Translator families; calibration $10$--$500$ on one fixed evaluation set
+ & $95\%$ CI lower bound $>-\epsilon$, $\epsilon{=}0.02^{\S}$ $\dagger\ddagger$
+ & not met on the primary pair (best $-0.138$); two near-chance students
+ (three aligned/unaligned configurations) clear it with no measurable gain \\
+\addlinespace[1pt]
+\textbf{H3} & Does tested teacher-derived content help?
+ & Teacher-content probes: teacher fraction, layer window, octant; native content as control
+ & some configuration's interval excludes $0$ on the positive side $\dagger\ddagger$
+ & none \\
+\bottomrule
+\end{tabular}}

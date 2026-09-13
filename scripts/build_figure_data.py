@@ -42,8 +42,8 @@ NEW_RUN_PREFIXES = [
 ]
 
 TARGETS = [
-    Path("paper/cache_audit/figures/data/all_results.json"),
-    Path("paper/cache_audit_iclr2026/figures/data/all_results.json"),
+    Path("paper/arxiv/figures/data/all_results.json"),
+    Path("paper/iclr2026/figures/data/all_results.json"),
 ]
 
 
@@ -80,6 +80,7 @@ def main() -> int:
     for tgt in TARGETS:
         data = json.loads(tgt.read_text(encoding="utf-8")) if tgt.exists() else {}
         data.update(added)
+        tgt.parent.mkdir(parents=True, exist_ok=True)
         tgt.write_text(json.dumps(data, indent=1), encoding="utf-8")
         print("wrote", tgt, "entries", len(data))
     return 0

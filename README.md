@@ -1,30 +1,17 @@
 # APCS: Cross-Model KV Cache Runtime Capability Transfer
 
-**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文改稿中
-**Paper**: 四份同步稿，正文与数字一致（2026-09-13 起）：
-`paper/cache_audit/main.pdf`（完整版，19 页）、`paper/cache_audit/arxiv/main.pdf`
-（arXiv 打包）、`paper/cache_audit_anon/main.pdf`（匿名版，19 页）、
-`paper/cache_audit_iclr2026/main.pdf`（ICLR 2026 模板，19 页）。图 1–4 与
-表 1–4 均按最新数据重绘/重排；图表与结论的对应关系见
-`paper/cache_audit/EVIDENCE_MAP.md`。
-作者：Xuemin Zhang（zmx0813@gmail.com）、Liangbin Hu、Kun Yi、Liheng Zhong、
-Junpeng Yu。署名版为 `cache_audit` 与 `arxiv` 两份；`cache_audit_iclr2026`
-保持匿名投稿态，真实作者块以注释形式留在 tex 中，camera-ready 时取消注释并
-打开 `\iclrfinalcopy`。
-匿名审稿版：`paper/cache_audit_anon/`（`main.pdf` + 源码 + 图，已去除作者块、
-PDF 元数据作者为 Anonymous、仓库名中性化），并打包为
-`paper/cache_audit_anon/anonymous_review_package.zip`。审稿包内**不含**代码仓库
-（git 历史含作者信息），如需给代码请另做无 `.git` 的快照。
+**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文已按 audit-7 定稿（Accept 7/10）
 
-**投稿版（ICLR 正文 ≤9 页）**：⚠️ 尚未完成。
-`paper/cache_audit_iclr2026/main.tex` 是 ICLR 版式的完整稿；
-`paper/cache_audit_iclr2026/main_submission.tex` 是正在压缩的投稿版，已把相关工作四条主线、
-Evidence Tiers 与多重性分析、mapper landscape 图、跨架构表、perplexity/通道不对称分析、
-Implications、What remains unmeasured 整块下沉到附录（只搬迁、未删除证据）。
-主文目前 12 页，距 9 页上限还差约 3 页，剩余压缩需要在主结果表瘦身、
-§6 架构分析等"核心证据降级到附录"的选项里取舍，尚未定稿。
-另注：仓库内的 `paper/cache_audit_iclr2026/main.pdf` 与当前 tex 不同步（缺附录），
-需在有 LaTeX 的机器上重新编译。
+**论文只有两个在库版本**（数字与图表同源，2026-09-13 起）：
+
+| 版本 | 位置 | 形态 |
+|---|---|---|
+| **arXiv 完整稿** | `paper/arxiv/` | 13 页（正文 9 页 + 参考文献 + 附录），署名（Xuemin Zhang、Liangbin Hu、Kun Yi、Liheng Zhong、Junpeng Yu），图 4、表 4，含 `arxiv_submission.zip` 提交包 |
+| **ICLR 2026 投稿稿** | `paper/iclr2026/` | 正文 **9 页**（参考文献自第 10 页起），双盲匿名，ICLR 2026 样式，证据不足项已下沉到附录 |
+
+其余历史版本（`cache_audit` 全量长文、匿名版、旧 ICLR 全量稿、官方模板、更早的
+prior-projection 稿与预览）统一放入 `paper/archive/`，**不入库**（本地保留，git 历史可追）。
+图表与结论的对应关系、逐轮审稿意见与修改记录见 `docs/`。
 
 ---
 
@@ -98,12 +85,10 @@ KVCache/
 │   ├── audits/               # 逐轮审稿意见 audit1..audit6 + AUDIT6_GPU_CORRESPONDENCE.md（实验↔审稿逐条对应）
 │   └── plans/                # REVISION_PLAN*.md / SUPPLEMENT_EXPERIMENTS_PLAN.md / GPU_PLAN_AUDIT6.md + 需求与用户故事
 ├── paper/
-│   ├── cache_audit/          # 主稿：main.tex + figures + references.bib + EVIDENCE_MAP.md + arxiv/ 打包
-│   ├── cache_audit_anon/     # 匿名审稿版（去作者块）
-│   ├── cache_audit_iclr2026/ # ICLR 版式：main.tex（完整）+ main_submission.tex（9 页投稿版，进行中）
-│   ├── iclr2026_template/    # 官方模板样式文件
-│   └── archive/              # 早期 draft（v2–v4 docx/pdf、旧 arxiv 稿、旧图）——不入库，仅本地留存
-├── reports/runs/             # 171 个记录在案的评测 run（metrics.json，git hash 落盘）；聚合口径见 scripts/aggregate_claims.py
+│   ├── arxiv/                # arXiv 完整稿：main.tex/.bbl/.pdf + figures/ + references.bib + arxiv_submission.zip
+│   ├── iclr2026/             # ICLR 2026 投稿稿（正文 9 页、匿名）+ 样式文件 + figures/
+│   └── archive/              # 历史版本（全量长文、匿名版、旧 ICLR 稿、官方模板、prior-projection 稿）——不入库
+├── reports/runs/             # 记录在案的评测 run（metrics.json，git hash 落盘）；聚合口径见 scripts/aggregate_claims.py
 ├── review_results/           # 审稿报告生成物（scripts/run_paper_audit.sh 的输出目录）
 └── scripts/                  # 聚合/复现/审稿工具 + 运行脚本（run_all_tasks.sh、run_optimization.sh、run_dag*.ps1、run_real_gpu.*）
 ```
@@ -117,25 +102,26 @@ pip install -e .
 pytest tests/ -v                      # 单元测试（133 passed, 1 skip）
 # 单次审计评测（协议 v1.5）：
 python -m apcs.cli inject-eval --config configs/v15_4b_1.7b_affine_c30_tail.yaml --new-run
-# 编译论文：
-cd paper/cache_audit && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex && pdflatex main.tex
-# 交叉引用/浮动体需要跑到无 "Warning: Reference" 为止（ICLR 版尤其如此）
-# ICLR 版（完整 / 9 页投稿版）：
-cd paper/cache_audit_iclr2026 && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
-cd paper/cache_audit_iclr2026 && pdflatex main_submission.tex && bibtex main_submission && pdflatex main_submission.tex
+# 编译论文（两版都跑到无 "Warning: Reference" 为止）：
+cd paper/arxiv    && pdflatex main && bibtex main && pdflatex main && pdflatex main
+cd paper/iclr2026 && pdflatex main && bibtex main && pdflatex main && pdflatex main
+# arXiv 提交包（含 main.bbl 与 figures/，可由 zip 直接上传）：
+#   paper/arxiv/arxiv_submission.zip
 # GPU 机整轮实验（Linux）：
 bash scripts/run_real_gpu.sh
 ```
 
 ## Documentation
 
-- `docs/audits/`：逐轮审稿意见（`audit1.md` … `audit6_1.md`），
-  `AUDIT6_GPU_CORRESPONDENCE.md` 是第六轮审稿意见与 GPU 实验的逐条对应
+- `docs/audits/`：逐轮审稿意见（`audit1.md` … `audit7_1.md`）、`AUDIT6_GPU_CORRESPONDENCE.md`
+  （第六轮意见↔GPU 实验逐条对应）、`AUDIT6_REWRITE_COMPLIANCE.md` / `AUDIT7_REWRITE_COMPLIANCE.md`
+  （重写与两轮意见的逐条完成情况）
 - `docs/protocol/PROTOCOL.md`：实验协议（§11 v1.1 / §12 v1.2-1.3 / §13 RAT 与探针）
 - `docs/protocol/EXPERIMENT_LOG.md`：历轮实验终审表（含 audit-6 勘误）
 - `docs/design/design.md`：设计规格；代码注释中的 "design.md §NN" 均指该文件
 - `docs/plans/`：各轮修改方案、补充实验计划、GPU 计划
-- `paper/cache_audit/review_report.md`、`paper/cache_audit/EVIDENCE_MAP.md`：审稿记录与"图表↔结论"对照
+- `docs/paper/CLAIM_MAP.md`：写作前的 claim→证据→置信级别对照表
+- `paper/arxiv/README_SUBMIT.md`：arXiv 元数据表单值与纯文本摘要
 
 ---
 

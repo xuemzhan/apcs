@@ -19,6 +19,6 @@
 
 ## 未完成事项
 
-- ICLR 投稿版（正文 ≤9 页）：`paper/cache_audit_iclr2026/main_submission.tex` 主文目前 12 页，
-  还需约 3 页的取舍（详见 `../README.md` 的"投稿版"一节与 `audits/AUDIT6_GPU_CORRESPONDENCE.md`）。
-- `paper/cache_audit_iclr2026/main.pdf` 与当前 tex 不同步（缺附录），需重新编译。
+暂无。论文已按 audit-7 定稿：`paper/arxiv/`（完整稿、署名）与 `paper/iclr2026/`
+（正文 9 页、匿名）两版同源，均编译通过、无未定义引用；历史版本在 `paper/archive/`（不入库）。
+审稿意见的逐条完成情况见 `audits/AUDIT7_REWRITE_COMPLIANCE.md`。

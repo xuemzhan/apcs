@@ -112,23 +112,18 @@ output/pdf/*.out
 archive/
 paper/cache_audit/project_context.md
 
-# arXiv 提交包：仅保留源文件/bbl/成品 PDF，编译中间产物不入库
-paper/cache_audit/arxiv/*.aux
-paper/cache_audit/arxiv/*.blg
-paper/cache_audit/arxiv/*.out
-paper/cache_audit/arxiv/*.log
-
-# 论文各版本与图片预览的编译中间产物（.aux/.bbl/.blg/.out）不入库；
-# 早期已被跟踪的 main.aux/main.bbl 等不受影响（.gitignore 不改动已跟踪文件）
-paper/cache_audit/*.aux
-paper/cache_audit/*.bbl
-paper/cache_audit/*.blg
-paper/cache_audit/*.out
-paper/cache_audit/figures/*.aux
-paper/cache_audit_anon/*.aux
-paper/cache_audit_anon/*.bbl
-paper/cache_audit_anon/*.blg
-paper/cache_audit_anon/*.out
+# 论文只有两个在库版本：paper/arxiv（arXiv 完整稿）与 paper/iclr2026（ICLR 2026 投稿稿）。
+# 两处都只保留源文件 / main.bbl / 成品 PDF：编译中间产物不入库。
+paper/arxiv/*.aux
+paper/arxiv/*.blg
+paper/arxiv/*.log
+paper/arxiv/*.out
+paper/iclr2026/*.aux
+paper/iclr2026/*.blg
+paper/iclr2026/*.log
+paper/iclr2026/*.out
+# 其余历史版本与预览（含 paper/archive/）不入库
+paper/legacy_*/*.aux
 
 # KV cache / mapper params（可复现生成的二进制，非跨机资产）
 *.npz
