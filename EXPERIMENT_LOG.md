@@ -1,8 +1,58 @@
 # APCS Experiment Log
 
 **Status**: ✅ v1.5 闭环完成 + 论文定稿（2026-08-29 深夜）——三假说终审 + 两轮独立审稿
+**audit-6 (2026-09-13)**: ✅ G1 完成——Heo 设计下的严格检验（top-$k$ concatenation + FineWeb-Edu 1,024-token 校准，3 连跑），结论与 average 变体一致（全部显著为负、gate FAIL）。
 **Paper**: `paper/cache_audit/main.pdf`（11 页）
 **历史数据（v1.0 及以前）**: ⚠️ UNVERIFIED，见文末历史节
+
+---
+
+## audit-6 / G1：Heo 设计下的严格检验（concatenation + FineWeb-Edu 校准，2026-09-13 12:35–13:38，3 连跑）
+
+**目的**：把 Heo-style baseline 从"设计元素移植"升级为"该设计下的严格检验"。参考工作把选中
+的 top-$k$ 源层 KV **拼接（concatenate）**后拟合 ridge，并用 **500 条 FineWeb-Edu、每条
+1,024 token** 校准；此前审计实现为**取平均 + 200 条审计上下文（512 token）**。
+
+**本轮实现**：
+- `apcs/mapper/concat.py::ConcatRidgeMapper`：每 (student layer, head) 对选中源层 KV 在
+  特征维拼接后拟合 $W:\mathbb{R}^{kD_t}\to\mathbb{R}^{D_s}$（正则矩阵尺寸 $kD_t$）。
+- 校准语料 `calib_corpus=fineweb_edu`，`calib_corpus_tokens=1024`（确定性 FineWeb-Edu 风格
+  长文，离线可得；来源差异已在附录注明）。
+- 其余协议不变：Qwen3-4B→1.7B、固定 tail-100（与 E1 c200 完全同一条评估集，逐 id 校验）、
+  `self_kv` 恒等对照、`de_rope_k: true`、$\lambda=10^{-3}$、$k\in\{1,3,5\}$。
+- 落盘：`capability_score_artifact.json`、`replacement_score_artifact.json`、**新增
+  `layer_mapping.json`**（上一轮缺失）。
+
+**环境约束（如实记录）**：容器 cgroup `memory.max≈63GB`，且 `/etc/csghub/mem_monitor.sh`
+每 10s 杀掉当前 RSS 最高的进程。参考口径 **500×1,024** 需约 300GB，无法执行；为在预算内
+对齐序列长度，本轮用 **100×1,024**（校准总 token 数与 c200×512 相同），并将**校准 KV 以
+float16 存储**、丢弃未被消费的合并 (L,S,H,2D) 中间量。`topk_select_samples=8`（1,024-token）。
+
+| run | acc | gold | PPL | Gold CHG [95% CI] | self_kv | gate |
+|---|---|---|---|---|---|---|
+| heo-concat-fwe k=1, c100×1024 | 0.230 | 0.233 | 159446.7 | −0.2787 [−0.4103, −0.1448] | ~0 | FAIL |
+| heo-concat-fwe k=3, c100×1024 | 0.290 | 0.289 | 45921.5 | −0.2227 [−0.3676, −0.0838] | ~0 | FAIL |
+| heo-concat-fwe k=5, c100×1024 | 0.270 | 0.257 | 3677.7 | −0.2544 [−0.3821, −0.1217] | ~0 | FAIL |
+
+教师 0.770/0.6907、学生 0.520/0.5116；`ridge_self_kv` 与 student 逐位一致（CHG≈0）。
+
+**与 average 实现（E1, c200×512）对照**：
+
+| k | average CHG（旧） | concat+FWE CHG（本轮） | average PPL | concat PPL |
+|---|---|---|---|---|
+| 1 | −0.273 [−0.380, −0.158] | −0.279 [−0.410, −0.145] | 78.5 | 159446.7 |
+| 3 | −0.308 [−0.417, −0.200] | −0.223 [−0.368, −0.084] | 2629.6 | 45921.5 |
+| 5 | −0.291 [−0.399, −0.192] | −0.254 [−0.382, −0.122] | 68966.1 | 3677.7 |
+
+**结论**：在拼接组合 + FineWeb-Edu 长序列校准（1,024 token）下，所有 $k$ 的 Gold CHG
+**仍显著为负（CI 上界 < 0）、gate FAIL**，且 `self_kv` 恒等通过 ⇒ 负结论不是此前
+"取平均"实现造成的。k=3 的负幅略小、k=1 略大，三者 CI 互相重叠；PPL 与 k 的关系在两种
+实现下不同（concat 的 k=5 反而比 average 流畅得多），说明**组合方式影响的是流畅度/稳定性，
+而不是能否产生能力增益**。判据落在 GPU 计划的分支一：§2.2/§5.2 可将措辞升级为
+"在该设计（拼接 + 网文长序列校准）下同样失败"，附录如实标注校准**条数**仍为 100（非参考的
+500，受 63GB 容器内存限制）。
+
+运行目录：`reports/runs/v15-4b-to-1.7b-heo-concat-fwe-k{1,3,5}-c100-2026-09-13-*`。
 
 ---
 
@@ -26,6 +76,24 @@
 | 补 V2：Heo-style concat 组合 | `concat_ridge`（拼接选中层 KV 再拟合 ridge），同 20 fit/10 held-out，k=1/3/5 | per-head held-out R²：concat K 0.826/0.858/0.864、V 0.326/0.419/0.428，**随 k 单调改善**；对比 average K 0.823/0.787/0.762、V 0.317/0.248/0.182（单调变差）⇒ 先前"k 越大重建越差"是 **average 实现**所致，concatenate 是更优的同一设计实现 |
 | 补 B1：Heo-style 重建诊断（k=1/3/5） | 同 20 fit/10 held-out 口径，per-head held-out R² + 下游 PPL | K: 0.823/0.787/0.762；V: 0.317/0.248/0.182；PPL: 78.5/2629.6/68966.1；CHG ≈ −0.27/−0.31/−0.29 ⇒ k 越大、多源层平均使重建与流畅度同步变差（几何/源混杂问题，非"更好重建破坏几何"） |
 | 补 E4：~4K 上下文 | needle_target_tokens=4096（实际 ~4.8K token），affine c30，n=20 | student 0.400/0.383、teacher 0.850/0.726、kv_both 0.350/0.348，CHG **−0.035 [−0.380,+0.313]**（n 小、CI 含 0，未确立）；self-kv +0.0001 ⇒ 4K 下仍无增益 |
+
+> ⚠️ **勘误（2026-09-13）**：上表 E4 的 "实际 ~4.8K token" **不成立**。`inject-eval` 的
+> `_load_sample_rows` 未把配置里的 `needle_target_tokens` 传给 `needle_mcqa` loader，长上下文
+> 配置实际回退到 loader 默认的 **1,024 token**（`fit_batch` 打印的样本长度为 ~1000，非 ~4000）。
+> `seeds`/`needle_target_tokens` 只在未使用的 provider 路径生效。该 plumbing bug 已修复
+> （`apcs/inference/cli.py` 现在透传 `target_tokens`；`needle_mcqa` 的 `@_register` 装饰器
+> 也被 de02b86 误删，已恢复）。
+>
+> **修复后的真实长上下文结果**（affine，`kv_cache_dtype=float16`，`eval_from_tail_n=0`）：
+>
+> | 目标 | 实际长度 | n | acc/gold/PPL | Gold CHG [95% CI] | gate |
+> |---|---|---|---|---|---|
+> | 4K | ~3.8K | 10 | 0.200 / 0.200 / 15855.1 | **−0.596 [−0.929, −0.170]** | FAIL |
+> | 8K | ~7.6K | 10 | 0.200 / 0.200 / 24247.4 | **−0.577 [−0.932, −0.118]** | FAIL |
+>
+> 真实 4K/8K 下负幅**变大**（−0.60 / −0.58），而非此前 "4K"（实为 1K）的 CI 含 0（−0.035）。
+> 1K 行（P2-5, CHG −0.285）本身不受影响。任务运行时受 63GB cgroup 限制仅能做到 n=10。
+
 | 补 E7：复现覆盖 | 3 个跨架构 rect run 已在库；1K long-context 二次复现被外部 SIGTERM 终止（未完成）；4K 版本次成功 | 跨架构覆盖已补齐；long-context 复现以 4K run 部分替代 |
 | 补 E8：开放式任务 | 需新增 GSM8K/TriviaQA 短答适配器 | **未实现**（成本高，列为后续） |
 | 补 E5：冷启动成对产物 | persist_kv 离线 → online_kv_dir 在线（不加载 Teacher），c30 n=30 | 修复 `AffineMapper.bias` 未持久化的 bug 后，离线/在线逐样本 gold **最大绝对差 = 0.000**（bit-identical）；cold-start 路径可精确复现 |

@@ -66,7 +66,14 @@ def _load_sample_rows(cfg: dict[str, Any]) -> list[Any]:
             try:
                 from ..data.hf_dataset import load as load_ds
 
-                rows = load_ds(name, n=per_ds, split="test", seed=seed)
+                # Long-context loaders need the configured target length; this
+                # was previously dropped here, so needle runs silently fell back
+                # to the 1,024-token default.
+                extra: dict[str, Any] = {}
+                _tt = ds_cfg.get("needle_target_tokens")
+                if _tt and str(name) in ("needle_mcqa", "needle_longctx"):
+                    extra["target_tokens"] = int(_tt)
+                rows = load_ds(name, n=per_ds, split="test", seed=seed, **extra)
                 if rows:
                     buckets.append(list(rows))
                     loaded_names.append(str(name))

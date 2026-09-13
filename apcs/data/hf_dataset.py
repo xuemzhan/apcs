@@ -680,6 +680,7 @@ _EDU_PARAGRAPHS: list[str] = [
 
 
 
+@_register("needle_mcqa")
 def load_needle_mcqa(
     n: int,
     split: str = "test",

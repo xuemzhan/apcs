@@ -7,8 +7,8 @@ datasets:
   teacher_advantage:
     primary: mmlu
 experiment:
-  name: v15-4b-to-1.7b-heo-concat-fwe-k3-c200
-  run_id: v15-4b-to-1.7b-heo-concat-fwe-k3-c200-${run.timestamp}
+  name: v15-4b-to-1.7b-heo-concat-fwe-k3-c100
+  run_id: v15-4b-to-1.7b-heo-concat-fwe-k3-c100-${run.timestamp}
 inject_eval:
   ablation_modes:
   - self_kv
@@ -17,14 +17,15 @@ inject_eval:
   calib_samples: 100
   calib_shuffle: true
   eval_from_tail_n: 100
-  max_samples: 200
+  max_samples: 300
   native_rescale: true
   persist_kv: false
   probe_mode: false
   seed: 42
   summary_baseline: false
   calib_corpus: fineweb_edu
-  calib_corpus_tokens: 512
+  calib_corpus_tokens: 1024
+  kv_cache_dtype: float16
 mapper:
   de_rope: true
   de_rope_k: true
@@ -39,7 +40,7 @@ mapper:
   separate_kv: true
   type: concat_ridge
   topk: 3
-  topk_select_samples: 10
+  topk_select_samples: 8
 output:
   base_dir: reports/runs
 provider:

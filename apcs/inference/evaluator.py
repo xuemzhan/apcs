@@ -484,6 +484,11 @@ class InjectionEvaluator:
         # ⚠️ 探针需要学生对评估行做自 prefill —— 仅诊断用，非部署路径
         self._probe_mode = bool(ie_cfg.get("probe_mode", False))
         self._cross_token_align = bool(ie_cfg.get("cross_token_align", False))
+        # Memory-constrained calibration: store *calibration* KV in float16 to
+        # roughly halve RSS for long-context (1,024-token) corpora. Evaluation
+        # rows keep float32 so the injected path is bit-identical to the audit.
+        _kvd = str(ie_cfg.get("kv_cache_dtype", "float32")).lower()
+        self._calib_kv_dtype = np.float16 if _kvd in ("float16", "fp16") else np.float32
 
     # ------------------------------------------------------------------
     # 模型生命周期管理（§53 单卡执行顺序）
@@ -778,6 +783,25 @@ class InjectionEvaluator:
                 "[inject-eval] Heo-style top-%d layer map (from calibration): %s",
                 k_top, self._layer_map,
             )
+            try:
+                _lm_dir = self.run_dir / "inject_eval"
+                _lm_dir.mkdir(parents=True, exist_ok=True)
+                _write_json(
+                    _lm_dir / "layer_mapping.json",
+                    {
+                        "strategy": "topk",
+                        "k": k_top,
+                        "selection_samples": len(_sel),
+                        "n_teacher_layers": n_t,
+                        "n_student_layers": n_s,
+                        "layer_map": self._layer_map,
+                    },
+                )
+                logger.info("[inject-eval] Wrote layer_mapping.json")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "[inject-eval] layer_mapping.json write failed: %s", e
+                )
 
         for kind in kinds:
             mapper = self._mapper_k if kind == "K" else self._mapper_v
@@ -1734,7 +1758,7 @@ class InjectionEvaluator:
                 # 1b. 预提取 context-only teacher KV（for ridge_handoff in Phase 2）
                 # P1.4: 捕获文本 = prefill_prefix + context（与 self_kv 对照一致）
                 try:
-                    from .backends import _extract_kv_numpy, _extract_kv_separate
+                    from .backends import _extract_kv_separate
                     context_ids = self._teacher_tokenizer(
                         self._handoff_context_text(row), return_tensors="np"
                     ).input_ids.reshape(-1)
@@ -1746,9 +1770,16 @@ class InjectionEvaluator:
                     n_t = int(
                         getattr(self._teacher_model.config, "num_hidden_layers", 0)
                     ) or len(ctx_out.past_key_values)
-                    teacher_pkv_np = _extract_kv_numpy(ctx_out.past_key_values, n_t)
                     k_np, v_np = _extract_kv_separate(ctx_out.past_key_values, n_t)
-                    teacher_kv_cache[row.sample_id] = (k_np, v_np, teacher_pkv_np, len(context_ids))
+                    # NOTE: the combined (L,S,H,2D) tensor is never consumed
+                    # downstream; dropping it halves teacher-cache RSS for
+                    # long-context corpora. When kv_cache_dtype=float16, the
+                    # cast applies to every row (needed for 8K contexts); the
+                    # default float32 path is bit-identical to the audit.
+                    _dt = self._calib_kv_dtype
+                    teacher_kv_cache[row.sample_id] = (
+                        k_np.astype(_dt), v_np.astype(_dt), None, len(context_ids),
+                    )
                     # B1: KV 落盘（离线阶段产物，在线阶段免 Teacher 冷启动）
                     if self._persist_kv:
                         from .kv_store import save_kv_sample
@@ -1765,7 +1796,6 @@ class InjectionEvaluator:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # ── Phase 1.5: Collect real paired KV calibration data ──
         # §53: Student Load → run on same prompts as teacher → capture student KV
         # This provides real (teacher_kv, student_kv) pairs for mapper fitting.
         real_kv_calib: dict[str, list] = {"K": [], "V": []}
@@ -1833,20 +1863,34 @@ class InjectionEvaluator:
                                 s_k_np, np.arange(min_S, dtype=np.float64), rope_inv_freq
                             )
 
+                        # Memory-constrained calibration: downcast the student
+                        # targets. The teacher target is already stored at the
+                        # calibration dtype in Phase 1, so only cast when
+                        # cross-token alignment produced a new (float32) array
+                        # — otherwise keep the cache view to avoid a 2x copy.
+                        if t_k_np.dtype != self._calib_kv_dtype:
+                            t_k_np = t_k_np.astype(self._calib_kv_dtype)
+                        if t_v_np.dtype != self._calib_kv_dtype:
+                            t_v_np = t_v_np.astype(self._calib_kv_dtype)
+                        if self._calib_kv_dtype == np.float16:
+                            s_k_np = s_k_np.astype(np.float16)
+                            s_v_np = s_v_np.astype(np.float16)
+
                         # Append all paired samples; the rectangular mapper
                         # handles cross-family head-dim and KV-head mismatch.
                         real_kv_calib["K"].append((t_k_np, s_k_np))
                         real_kv_calib["V"].append((t_v_np, s_v_np))
                         student_kv_by_id[row.sample_id] = (s_k_np, s_v_np)
                         # P0.6: 逐层平均 L2 范数（教师 vs 学生）
+                        # Compute in float32: squaring float16 values overflows.
                         norm_acc["K"]["teacher"].append(
-                            np.linalg.norm(t_k_np, axis=-1).mean(axis=(1, 2)))
+                            np.linalg.norm(t_k_np.astype(np.float32), axis=-1).mean(axis=(1, 2)))
                         norm_acc["K"]["student"].append(
-                            np.linalg.norm(s_k_np, axis=-1).mean(axis=(1, 2)))
+                            np.linalg.norm(s_k_np.astype(np.float32), axis=-1).mean(axis=(1, 2)))
                         norm_acc["V"]["teacher"].append(
-                            np.linalg.norm(t_v_np, axis=-1).mean(axis=(1, 2)))
+                            np.linalg.norm(t_v_np.astype(np.float32), axis=-1).mean(axis=(1, 2)))
                         norm_acc["V"]["student"].append(
-                            np.linalg.norm(s_v_np, axis=-1).mean(axis=(1, 2)))
+                            np.linalg.norm(s_v_np.astype(np.float32), axis=-1).mean(axis=(1, 2)))
                     except Exception as e:  # noqa: BLE001
                         logger.warning(
                             "[inject-eval] Calibration KV capture failed for %s: %s",

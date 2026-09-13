@@ -53,26 +53,35 @@ class ConcatRidgeMapper:
         L_s, _, H, D_s = samples[0][1].shape
         L_t, _, _, D_t = samples[0][0].shape
 
-        # Precompute de-RoPE'd teacher layers once: T[t] = [(S_i, H, D_t), ...]
-        T: list[list[np.ndarray]] = [[] for _ in range(L_t)]
-        for kv_t, kv_s in samples:
-            S_i = int(min(kv_t.shape[1], kv_s.shape[1]))
-            pos = np.arange(S_i, dtype=np.float64) if positions is None else positions[:S_i]
-            for t in range(L_t):
-                T[t].append(_apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos).astype(np.float64))
-
         for s in range(L_s):
             teachers = self._teachers(layer_map, s, L_t)
             k = len(teachers)
+            # De-RoPE only this student layer's selected source layers. Peak
+            # memory then scales with k rather than with all L_t teacher
+            # layers, which keeps R=500 x 1024-token calibration corpora
+            # within RAM (a global float64 cache of every teacher layer could
+            # exceed the machine's memory).
+            Tc: list[list[np.ndarray]] = [[] for _ in teachers]
+            Ss: list[np.ndarray] = []
+            for kv_t, kv_s in samples:
+                S_i = int(min(kv_t.shape[1], kv_s.shape[1]))
+                pos = np.arange(S_i, dtype=np.float64) if positions is None else positions[:S_i]
+                for j, t in enumerate(teachers):
+                    Tc[j].append(
+                        _apply_or_skip(de_rope_fn, kv_t[t, :S_i], pos).astype(np.float64)
+                    )
+                Ss.append(kv_s[s, :S_i].astype(np.float64))
             for h in range(H):
-                xs: list[np.ndarray] = []
-                ys: list[np.ndarray] = []
-                for i, (_kv_t, kv_s) in enumerate(samples):
-                    S_i = T[teachers[0]][i].shape[0]
-                    xs.append(np.concatenate([T[t][i][:, h, :] for t in teachers], axis=-1))
-                    ys.append(kv_s[s, :S_i, h, :].astype(np.float64))
-                X = np.concatenate(xs, axis=0)
-                Y = np.concatenate(ys, axis=0)
+                X = np.concatenate(
+                    [
+                        np.concatenate(
+                            [Tc[j][i][:, h, :] for j in range(k)], axis=-1
+                        )
+                        for i in range(len(samples))
+                    ],
+                    axis=0,
+                )
+                Y = np.concatenate([Ss[i][:, h, :] for i in range(len(samples))], axis=0)
                 xm = X.mean(axis=0, keepdims=True)
                 ym = Y.mean(axis=0, keepdims=True)
                 Xc = X - xm

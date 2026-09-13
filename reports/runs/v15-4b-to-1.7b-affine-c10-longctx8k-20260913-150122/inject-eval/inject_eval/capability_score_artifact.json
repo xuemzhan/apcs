@@ -1,0 +1,607 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "needle_mcqa",
+  "provenance": {
+    "teacher_model_id": "/workspace/models/Qwen3-4B",
+    "student_model_id": "/workspace/models/Qwen3-1.7B",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "080022fda68b675ad06ff10507b011a4b94018bc",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 10,
+    "n_eval_samples": 10,
+    "calib_sample_ids": [
+      "nlm-nc-42-151",
+      "nlm-nc-42-91",
+      "nlm-nc-42-141",
+      "nlm-nc-42-71",
+      "nlm-nc-42-121",
+      "nlm-nc-42-101",
+      "nlm-nc-42-61",
+      "nlm-nc-42-191",
+      "nlm-nc-42-31",
+      "nlm-nc-42-1"
+    ],
+    "eval_sample_ids": [
+      "nlm-nc-42-161",
+      "nlm-nc-42-51",
+      "nlm-nc-42-111",
+      "nlm-nc-42-181",
+      "nlm-nc-42-21",
+      "nlm-nc-42-41",
+      "nlm-nc-42-171",
+      "nlm-nc-42-11",
+      "nlm-nc-42-131",
+      "nlm-nc-42-81"
+    ],
+    "rope_align": "rotated",
+    "ablation_modes": [
+      "self_kv",
+      "kv_both"
+    ]
+  },
+  "omitted_methods": [
+    "base_only",
+    "base_plus_adv",
+    "full_apcs"
+  ],
+  "omitted_reason": "advantage branch frozen (T08); methods not yet trained",
+  "method_accuracy": {
+    "teacher": {
+      "accuracy": 0.9,
+      "correct": 9,
+      "total": 10,
+      "score_mean": 0.8443648113202153,
+      "gold_prob_mean": 0.799387620711072
+    },
+    "student": {
+      "accuracy": 0.8,
+      "correct": 8,
+      "total": 10,
+      "score_mean": 0.8892770251627464,
+      "gold_prob_mean": 0.780118188710451
+    },
+    "text": {
+      "accuracy": 0.4,
+      "correct": 4,
+      "total": 10,
+      "score_mean": 0.6261815914852193,
+      "gold_prob_mean": 0.3393408699036815
+    },
+    "ridge_self_kv": {
+      "accuracy": 0.8,
+      "correct": 8,
+      "total": 10,
+      "score_mean": 0.8883918544922814,
+      "gold_prob_mean": 0.779590266102488
+    },
+    "ridge_kv_both": {
+      "accuracy": 0.2,
+      "correct": 2,
+      "total": 10,
+      "score_mean": 0.9487939937141757,
+      "gold_prob_mean": 0.20299209969660498
+    }
+  },
+  "records": [
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-11",
+      "seed": 42,
+      "score": 0.4496926483237532,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.4496926483237532
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-21",
+      "seed": 42,
+      "score": 0.8562974286178539,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": 0.8562974286178539
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-41",
+      "seed": 42,
+      "score": 0.9505468212273218,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9505468212273218
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-51",
+      "seed": 42,
+      "score": 0.9914016172824199,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9914016172824199
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-81",
+      "seed": 42,
+      "score": 0.9343816290334743,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9343816290334743
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-111",
+      "seed": 42,
+      "score": 0.9947833016935889,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9947833016935889
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-131",
+      "seed": 42,
+      "score": 0.6458230413594221,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.6458230413594221
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-161",
+      "seed": 42,
+      "score": 0.7115286788408648,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.26175677274943204
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-171",
+      "seed": 42,
+      "score": 0.9116136296778417,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": 0.9116136296778417
+    },
+    {
+      "method": "teacher",
+      "sample_id": "nlm-nc-42-181",
+      "seed": 42,
+      "score": 0.9975793171456118,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9975793171456118
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-161",
+      "seed": 42,
+      "score": 0.9586428568388764,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9586428568388764,
+      "ppl": 1.273224394741742,
+      "prefill_ms": 344.26867589354515
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-161",
+      "seed": 42,
+      "score": 0.7222252316365773,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.2595370703578647
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-161",
+      "seed": 42,
+      "score": 0.9579733868926062,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9579733868926062,
+      "ppl": 7.078531960188334,
+      "logit_cos_vs_student": 0.9999871370905502
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-161",
+      "seed": 42,
+      "score": 0.7501421707855839,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.028081373719999133,
+      "ppl": 15833.432423411432,
+      "logit_cos_vs_student": -0.11288612095908904
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-51",
+      "seed": 42,
+      "score": 0.9942180041083366,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9942180041083366,
+      "ppl": 1.2525031742039971,
+      "prefill_ms": 334.0011481195688
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-51",
+      "seed": 42,
+      "score": 0.6855543790951518,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.6855543790951518
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-51",
+      "seed": 42,
+      "score": 0.9943417510536257,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9943417510536257,
+      "ppl": 9.727091979407835,
+      "logit_cos_vs_student": 0.9999819628136465
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-51",
+      "seed": 42,
+      "score": 0.9950397706050017,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.003364668963278295,
+      "ppl": 17175.0999186504,
+      "logit_cos_vs_student": 0.1652894965627851
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-111",
+      "seed": 42,
+      "score": 0.999993603966959,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.999993603966959,
+      "ppl": 1.2605270238293382,
+      "prefill_ms": 344.83705647289753
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-111",
+      "seed": 42,
+      "score": 0.6549424525117593,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.6549424525117593
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-111",
+      "seed": 42,
+      "score": 0.9999936466227228,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9999936466227228,
+      "ppl": 7.755174885902105,
+      "logit_cos_vs_student": 0.9999866159159806
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-111",
+      "seed": 42,
+      "score": 0.9997543360361455,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.0001819872698625094,
+      "ppl": 20628.741747164728,
+      "logit_cos_vs_student": -0.04011996694661805
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-181",
+      "seed": 42,
+      "score": 0.9599451804839201,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9599451804839201,
+      "ppl": 1.2586259155522153,
+      "prefill_ms": 340.27433954179287
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-181",
+      "seed": 42,
+      "score": 0.5424200199764105,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.4191497044352956
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-181",
+      "seed": 42,
+      "score": 0.9586556480504235,
+      "decision": 3,
+      "correct": true,
+      "gold_prob": 0.9586556480504235,
+      "ppl": 8.281662328977536,
+      "logit_cos_vs_student": 0.9999898842717776
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-181",
+      "seed": 42,
+      "score": 0.9990414036827792,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.000306586890828708,
+      "ppl": 16751.227307200636,
+      "logit_cos_vs_student": 0.009135749381892122
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-21",
+      "seed": 42,
+      "score": 0.9684902665778187,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.01577696449428235,
+      "ppl": 1.2658228598435468,
+      "prefill_ms": 342.9923728108406
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-21",
+      "seed": 42,
+      "score": 0.6127930851195245,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.01633038257239578
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-21",
+      "seed": 42,
+      "score": 0.968772260401237,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.0159675862635124,
+      "ppl": 9.773892720394583,
+      "logit_cos_vs_student": 0.9999933551329913
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-21",
+      "seed": 42,
+      "score": 0.9998975842505428,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": 0.9998975842505428,
+      "ppl": 18212.979776249627,
+      "logit_cos_vs_student": -0.2618190389499508
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-41",
+      "seed": 42,
+      "score": 0.9302486950199796,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9302486950199796,
+      "ppl": 1.27377680465701,
+      "prefill_ms": 343.10596249997616
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-41",
+      "seed": 42,
+      "score": 0.5427018235855093,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.05458095657706282
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-41",
+      "seed": 42,
+      "score": 0.929228055011612,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.929228055011612,
+      "ppl": 6.757939015273998,
+      "logit_cos_vs_student": 0.9999889887502752
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-41",
+      "seed": 42,
+      "score": 0.9949862619165057,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.0010301269581075227,
+      "ppl": 18487.358496918412,
+      "logit_cos_vs_student": -0.1688965068310782
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-171",
+      "seed": 42,
+      "score": 0.5468500752019743,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.40797501276255776,
+      "ppl": 1.2513847446137911,
+      "prefill_ms": 340.9876376390457
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-171",
+      "seed": 42,
+      "score": 0.7267501994095588,
+      "decision": 1,
+      "correct": false,
+      "gold_prob": 0.004511147536463193
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-171",
+      "seed": 42,
+      "score": 0.5449796240192842,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.4097684142590753,
+      "ppl": 6.032721142635493,
+      "logit_cos_vs_student": 0.9999945498905339
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-171",
+      "seed": 42,
+      "score": 0.992304517139871,
+      "decision": 0,
+      "correct": true,
+      "gold_prob": 0.992304517139871,
+      "ppl": 28086.863389505223,
+      "logit_cos_vs_student": 0.016206773267748477
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-11",
+      "seed": 42,
+      "score": 0.9035466889786731,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.9035466889786731,
+      "ppl": 1.2746356694821606,
+      "prefill_ms": 340.0086350739002
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-11",
+      "seed": 42,
+      "score": 0.8054831899824515,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.8054831899824515
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-11",
+      "seed": 42,
+      "score": 0.9033669727733612,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.9033669727733612,
+      "ppl": 8.797868931649951,
+      "logit_cos_vs_student": 0.9999973003947903
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-11",
+      "seed": 42,
+      "score": 0.9998509077802358,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.00013886823267078582,
+      "ppl": 56309.99013411316,
+      "logit_cos_vs_student": -0.3113451497338548
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-131",
+      "seed": 42,
+      "score": 0.6646223679950775,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.6646223679950775,
+      "ppl": 1.2747604442291864,
+      "prefill_ms": 339.993491768837
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-131",
+      "seed": 42,
+      "score": 0.4695967785046155,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.4695967785046155
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-131",
+      "seed": 42,
+      "score": 0.6609614037064997,
+      "decision": 1,
+      "correct": true,
+      "gold_prob": 0.6609614037064997,
+      "ppl": 8.345605358775707,
+      "logit_cos_vs_student": 0.9999946220621128
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-131",
+      "seed": 42,
+      "score": 0.7573575795985227,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 0.004603459850656106,
+      "ppl": 13121.808139725797,
+      "logit_cos_vs_student": -0.29559223730702017
+    },
+    {
+      "method": "student",
+      "sample_id": "nlm-nc-42-81",
+      "seed": 42,
+      "score": 0.9662125124558484,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9662125124558484,
+      "ppl": 1.258215885795629,
+      "prefill_ms": 337.9004839807749
+    },
+    {
+      "method": "text",
+      "sample_id": "nlm-nc-42-81",
+      "seed": 42,
+      "score": 0.4993487550306342,
+      "decision": 3,
+      "correct": false,
+      "gold_prob": 0.02372263746375502
+    },
+    {
+      "method": "ridge_self_kv",
+      "sample_id": "nlm-nc-42-81",
+      "seed": 42,
+      "score": 0.9656457963914418,
+      "decision": 2,
+      "correct": true,
+      "gold_prob": 0.9656457963914418,
+      "ppl": 6.010997956355627,
+      "logit_cos_vs_student": 0.9999934344694394
+    },
+    {
+      "method": "ridge_kv_both",
+      "sample_id": "nlm-nc-42-81",
+      "seed": 42,
+      "score": 0.9995654053465688,
+      "decision": 0,
+      "correct": false,
+      "gold_prob": 1.1823690233187294e-05,
+      "ppl": 37866.765596901474,
+      "logit_cos_vs_student": -0.07834496453307893
+    }
+  ]
+}

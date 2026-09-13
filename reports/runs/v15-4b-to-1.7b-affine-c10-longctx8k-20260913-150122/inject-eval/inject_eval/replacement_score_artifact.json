@@ -1,0 +1,124 @@
+{
+  "evidence_grade": "measured_task",
+  "zero_prefill_verified": true,
+  "task_scoring_verified": true,
+  "split": "test",
+  "dataset": "needle_mcqa",
+  "provenance": {
+    "teacher_model_id": "/workspace/models/Qwen3-4B",
+    "student_model_id": "/workspace/models/Qwen3-1.7B",
+    "teacher_revision": "main",
+    "student_revision": "main",
+    "teacher_dtype": "float16",
+    "student_dtype": "float16",
+    "teacher_num_layers": 36,
+    "student_num_layers": 28,
+    "tokenizer_available": false,
+    "protocol_version": "1.1",
+    "git_hash": "080022fda68b675ad06ff10507b011a4b94018bc",
+    "calib_eval_disjoint": true,
+    "n_calib_samples": 10,
+    "n_eval_samples": 10,
+    "calib_sample_ids": [
+      "nlm-nc-42-151",
+      "nlm-nc-42-91",
+      "nlm-nc-42-141",
+      "nlm-nc-42-71",
+      "nlm-nc-42-121",
+      "nlm-nc-42-101",
+      "nlm-nc-42-61",
+      "nlm-nc-42-191",
+      "nlm-nc-42-31",
+      "nlm-nc-42-1"
+    ],
+    "eval_sample_ids": [
+      "nlm-nc-42-161",
+      "nlm-nc-42-51",
+      "nlm-nc-42-111",
+      "nlm-nc-42-181",
+      "nlm-nc-42-21",
+      "nlm-nc-42-41",
+      "nlm-nc-42-171",
+      "nlm-nc-42-11",
+      "nlm-nc-42-131",
+      "nlm-nc-42-81"
+    ],
+    "rope_align": "rotated",
+    "ablation_modes": [
+      "self_kv",
+      "kv_both"
+    ]
+  },
+  "records": [
+    {
+      "sample_id": "nlm-nc-42-161",
+      "student_score": 0.9586428568388764,
+      "handoff_score": 0.7501421707855839,
+      "student_gold_prob": 0.9586428568388764,
+      "handoff_gold_prob": 0.028081373719999133
+    },
+    {
+      "sample_id": "nlm-nc-42-51",
+      "student_score": 0.9942180041083366,
+      "handoff_score": 0.9950397706050017,
+      "student_gold_prob": 0.9942180041083366,
+      "handoff_gold_prob": 0.003364668963278295
+    },
+    {
+      "sample_id": "nlm-nc-42-111",
+      "student_score": 0.999993603966959,
+      "handoff_score": 0.9997543360361455,
+      "student_gold_prob": 0.999993603966959,
+      "handoff_gold_prob": 0.0001819872698625094
+    },
+    {
+      "sample_id": "nlm-nc-42-181",
+      "student_score": 0.9599451804839201,
+      "handoff_score": 0.9990414036827792,
+      "student_gold_prob": 0.9599451804839201,
+      "handoff_gold_prob": 0.000306586890828708
+    },
+    {
+      "sample_id": "nlm-nc-42-21",
+      "student_score": 0.9684902665778187,
+      "handoff_score": 0.9998975842505428,
+      "student_gold_prob": 0.01577696449428235,
+      "handoff_gold_prob": 0.9998975842505428
+    },
+    {
+      "sample_id": "nlm-nc-42-41",
+      "student_score": 0.9302486950199796,
+      "handoff_score": 0.9949862619165057,
+      "student_gold_prob": 0.9302486950199796,
+      "handoff_gold_prob": 0.0010301269581075227
+    },
+    {
+      "sample_id": "nlm-nc-42-171",
+      "student_score": 0.5468500752019743,
+      "handoff_score": 0.992304517139871,
+      "student_gold_prob": 0.40797501276255776,
+      "handoff_gold_prob": 0.992304517139871
+    },
+    {
+      "sample_id": "nlm-nc-42-11",
+      "student_score": 0.9035466889786731,
+      "handoff_score": 0.9998509077802358,
+      "student_gold_prob": 0.9035466889786731,
+      "handoff_gold_prob": 0.00013886823267078582
+    },
+    {
+      "sample_id": "nlm-nc-42-131",
+      "student_score": 0.6646223679950775,
+      "handoff_score": 0.7573575795985227,
+      "student_gold_prob": 0.6646223679950775,
+      "handoff_gold_prob": 0.004603459850656106
+    },
+    {
+      "sample_id": "nlm-nc-42-81",
+      "student_score": 0.9662125124558484,
+      "handoff_score": 0.9995654053465688,
+      "student_gold_prob": 0.9662125124558484,
+      "handoff_gold_prob": 1.1823690233187294e-05
+    }
+  ]
+}

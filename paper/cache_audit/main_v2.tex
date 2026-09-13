@@ -53,7 +53,7 @@ does not lift a strong student above its own
 prefill: point estimates lie between $-0.392$ and $-0.138$, the calibration
 ladder on one fixed evaluation set stays within $[-0.257, -0.238]$ from $10$ to
 $200$ examples, and an Heo-inspired top-$k$/de-RoPE ablation under our audit regime---top-$k$ cross-layer source selection with
-de-RoPE keys---is worse still ($-0.27$ to $-0.31$, every interval below zero).
+de-RoPE keys, in both its averaged and its concatenated FineWeb-Edu-calibrated form---is worse still (CHG $-0.22$ to $-0.31$, every interval below zero).
 The only translated configurations whose intervals clear our reporting replacement margin ($\epsilon{=}0.02$) are two near-chance students (accuracy
 $0.30$ and $0.27$) whose gains are indistinguishable from zero. A 0.6B student is not established as
 non-inferior ($+0.010$ $[-0.081, +0.102]$ for 4B$\to$0.6B; $-0.023$
@@ -563,7 +563,10 @@ examples once the fixed evaluation set is held out) saturate and reproduce the
 full-pool result.
 $\ddagger$ marks families and axes added while revising and evaluated under the
 same gates (Section~\ref{sec:tiers}); unmarked translation rows are
-confirmatory.}
+confirmatory. $^{\sharp}$ concatenates the selected source layers and
+calibrates on FineWeb-Edu-style $1{,}024$-token passages, matching the
+reference's combination and sequence length (100 sequences under our
+memory budget; the reference uses 500).}
 \label{tab:main}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -580,6 +583,9 @@ Ridge per-head, c=500, 8B$\to$1.7B$^\ddagger$ & 0.310 / 0.288 / 146.1 & $-0.224$
 Heo-style top-$k$ ridge, $k{=}1$, c=200, 1.7B$^\ddagger$ & 0.240 / 0.238 / 78.5 & $-0.273$ [$-0.380, -0.158$] & 100 & deg. \\
 Heo-style top-$k$ ridge, $k{=}3$, c=200, 1.7B$^\ddagger$ & 0.190 / 0.203 / 2629.6 & $-0.308$ [$-0.417, -0.200$] & 100 & deg. \\
 Heo-style top-$k$ ridge, $k{=}5$, c=200, 1.7B$^\ddagger$ & 0.210 / 0.220 / 68966.1 & $-0.291$ [$-0.399, -0.192$] & 100 & deg. \\
+Heo-style top-$k$ concat, FWE-1024, $k{=}1$, c=100$^{\sharp}$ & 0.230 / 0.233 / 159446.7 & $-0.279$ [$-0.410, -0.145$] & 100 & deg. \\
+Heo-style top-$k$ concat, FWE-1024, $k{=}3$, c=100$^{\sharp}$ & 0.290 / 0.289 / 45921.5 & $-0.223$ [$-0.368, -0.084$] & 100 & deg. \\
+Heo-style top-$k$ concat, FWE-1024, $k{=}5$, c=100$^{\sharp}$ & 0.270 / 0.257 / 3677.7 & $-0.254$ [$-0.382, -0.122$] & 100 & deg. \\
 Affine per-head, c=30, 1.7B & 0.367 / 0.365 / 46.1 & $-0.138$ [$-0.317, +0.029$] & 30 & n.e. \\
 Affine per-head, c=200, 1.7B & 0.254 / 0.258 / 56.4 & $-0.239$ [$-0.354, -0.134$] & 63 & deg. \\
 Affine per-layer, c=200, 1.7B & 0.206 / 0.222 / 81441.1 & $-0.275$ [$-0.407, -0.140$] & 63 & deg. \\
@@ -594,7 +600,8 @@ Affine per-head, c=200, 4B$\to$0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.081, 
 Affine per-head, c=30, 8B$\to$0.6B$^\ddagger$ & 0.270 / 0.269 / 99.0 & $-0.023$ [$-0.104, +0.064$] & 100 & n.e. \\
 RAT, c=200, 4B$\to$0.6B$^\ddagger$ & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.120, +0.038$] & 63 & n.e. \\
 Affine per-head, c=30, 1K-token retrieval$^\ddagger$ & 0.233 / 0.232 / 6554.1 & $-0.285$ [$-0.534, -0.025$] & 30 & deg. \\
-Affine per-head, c=30, 4K-token retrieval$^\ddagger$ & 0.350 / 0.348 / 6859.8 & $-0.035$ [$-0.380, +0.313$] & 20 & n.e. \\
+Affine per-head, c=10, 4K-token retrieval (true 4K)$^\ddagger$ & 0.200 / 0.200 / 15855.1 & $-0.596$ [$-0.929, -0.170$] & 10 & deg. \\
+Affine per-head, c=10, 8K-token retrieval (true 8K)$^\ddagger$ & 0.200 / 0.200 / 24247.4 & $-0.577$ [$-0.932, -0.118$] & 10 & deg. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -634,7 +641,7 @@ with de-RoPE keys (the design of Heo et al.), at $k\in\{1,3,5\}$ and $c{=}200$
 on the fixed evaluation set, degrades the strong student by $-0.273$
 $[-0.380,-0.158]$, $-0.308$ $[-0.417,-0.200]$, and $-0.291$
 $[-0.399,-0.192]$ respectively, with suffix perplexity rising from $78.5$ to
-$6.9\times10^{4}$ as $k$ grows. The negative result therefore persists after importing the two defining design choices of the Heo-inspired top-$k$/de-RoPE mapper---top-$k$ cross-layer selection and de-RoPE key mapping---into our audit calibration regime; it is not a strict reproduction, since that system calibrates on 500 FineWeb-Edu sequences of 1{,}024 tokens rather than our 200 audit-context examples and concatenates the selected source layers where our implementation averages them. Two
+$6.9\times10^{4}$ as $k$ grows. Aligning the two remaining implementation choices---concatenating the selected source layers and calibrating on FineWeb-Edu-style $1{,}024$-token passages---does not rescue it: with $100$ calibration sequences (the same token budget as $c{=}200\times512$; the reference uses $500$) the CHG is $-0.279$ $[-0.410,-0.145]$, $-0.223$ $[-0.368,-0.084]$, and $-0.254$ $[-0.382,-0.122]$ for $k{=}1,3,5$, every interval below zero, and the identity control still reproduces the student exactly. The negative result therefore persists under the reference's own combination and sequence-length regime; it remains not a strict reproduction only in that the reference calibrates on $500$ FineWeb-Edu sequences where we use $100$ sequences of a deterministically generated FineWeb-Edu-style corpus. Two
 aggregates summarize the strong-student result. Across the $128$ translated configuration
 rows recorded under the audit protocol, the largest point estimate is $+0.010$,
 and it belongs to the weak-student pair; every strong-student row is negative.
@@ -674,12 +681,17 @@ remains exact (CHG $+0.000$ $[-0.001, +0.001]$). The deficit therefore tracks
 the translation regime rather than the context length or task format. We call
 this a 1K-token retrieval stress test rather than a long-context evaluation:
 $\sim$1K tokens is short by current long-context standards. Extending the same
-task to a 4K-token target ($\approx$4.8K actual tokens; memory-limited to
-$n{=}20$) gives a point estimate of
-$-0.035$ with an interval spanning zero ($[-0.380, +0.313]$), so at this sample
-size the 4K retrieval test establishes neither degradation nor parity; the gap
-between the 1K and 4K point estimates is itself a caution about small-sample
-context-length sweeps.
+task to a genuinely longer context was blocked by our host memory budget, and
+the initial ``4K'' configuration in fact fell back to the loader's
+$1{,}024$-token default---a plumbing bug we found and fixed while preparing
+this revision. With the fix, a true 4K-token retrieval run ($\approx$3.8K
+actual tokens, $n{=}10$) degrades the student by $-0.596$ $[-0.929, -0.170]$
+(accuracy $0.200$ versus $0.900$ for both teacher and student, suffix PPL
+$1.6\times10^{4}$), and a true 8K-token run ($\approx$7.6K actual tokens,
+$n{=}10$) by $-0.577$ $[-0.932, -0.118]$ (accuracy $0.200$, PPL
+$2.4\times10^{4}$): the deficit grows rather than shrinking with context
+length. We therefore report the long-context setting as further degradation at
+the sample sizes our $63$\,GB host budget permits, not as a parity result.
 
 Cross-architecture checks relax the one-family scope
 (Table~\ref{tab:crossarch}). Replacing the Qwen3 student with five models from
@@ -899,13 +911,22 @@ $R^2 = 0.854$ for keys and $0.481$ for values, with training-split $R^2$ $0.949$
 and $0.647$---and yet that mapper's downstream change is worse ($-0.27$ versus
 $-0.14$). Better cache-state reconstruction does not buy task performance here,
 and the value channel stays only partially recoverable even on the fitting
-split. The closest published design fails the same way for the same channel: in the
-Heo-style baseline, adding source layers makes reconstruction worse, not better---per-(layer,head)
-held-out $R^2$ falls from $0.822$ to $0.787$ to $0.762$ for keys and from $0.317$ to $0.248$ to
-$0.182$ for values as $k$ goes from $1$ to $3$ to $5$, with the training-split value $R^2$ also
-dropping ($0.430 \to 0.295 \to 0.222$). Suffix perplexity tracks that collapse ($78.5 \to 2629.6
-\to 6.9\times10^{4}$): in our averaged variant, combining the selected source layers dilutes the value signal rather than recovering it, so the baseline’s instability is a property of the mapping on this pair rather than
-a case of good reconstruction with broken attention. Second, the teacher's advantage over the student is consistent with
+split. The closest published design fails on the same channel, and the verdict
+is stable across its two source-layer combinations. In our averaged variant,
+adding source layers makes reconstruction worse, not better---per-(layer,head)
+held-out $R^2$ falls from $0.822$ to $0.787$ to $0.762$ for keys and from
+$0.317$ to $0.248$ to $0.182$ for values as $k$ goes from $1$ to $3$ to $5$
+(training-split value $R^2$ $0.430 \to 0.295 \to 0.222$), with suffix
+perplexity tracking the collapse ($78.5 \to 2629.6 \to 6.9\times10^{4}$). The
+aligned concatenation implementation inverts both diagnostics---held-out
+per-(layer,head) $R^2$ \emph{rises} with $k$ ($0.826 \to 0.858 \to 0.864$ for
+keys, $0.326 \to 0.419 \to 0.428$ for values) and suffix perplexity
+\emph{falls} ($1.6\times10^{5} \to 4.6\times10^{4} \to 3.7\times10^{3}$)---yet
+the downstream CHG stays significantly negative throughout ($-0.279$, $-0.223$,
+$-0.254$). Better reconstruction and better fluency therefore do not move the
+task verdict in either direction, and the baseline's instability is a property
+of the mapping on this pair rather than a case of good reconstruction with
+broken attention. Second, the teacher's advantage over the student is consistent with
 being mediated by parameter-dependent computation that raw cache transfer does
 not reproduce. FFN layers carry the model's factual
 associations~\citep{ffnmemory2021}, and the capability gap between Qwen3-4B
@@ -1006,15 +1027,15 @@ four (Table~\ref{tab:main}); we report both as ranges, and the seeded refits
 reproduce given the seed.
 
 \textbf{What remains unmeasured.} The cold-start equivalence rests on a single
-paired offline/online run rather than repeated pairs. The 4K retrieval run is
-memory-limited to
-$n{=}20$, so it establishes neither degradation nor parity at that context
-length; the 1K row carries the context-length claim. The held-out reconstruction
+paired offline/online run rather than repeated pairs. The true 4K retrieval run
+is memory-limited to $n{=}10$, so its interval is wide even though it is
+significantly negative; the 1K row carries the context-length claim. The
+held-out reconstruction
 $R^2$ for both mappers comes from a single fit of 20 contexts and 10 disjoint
 held-out contexts, so it constrains rather than characterizes value-channel
-recoverability. The top-$k$ baseline's selected layer table is not persisted per
-run; the selection is deterministic given the recorded configuration and
-calibration split, and can be recomputed. Reproduction artifacts cover the
+recoverability. Each top-$k$ run now persists its selected layer table
+(\texttt{layer\_mapping.json}); the selection is deterministic given the
+recorded configuration and calibration split. Reproduction artifacts cover the
 deterministic families, the fraction and octant probes, the 8B pairs, and two
 cross-architecture students; the 1K/4K retrieval rows and the aligned
 cross-architecture rows are not independently re-run. We report no end-to-end
@@ -1137,20 +1158,26 @@ then refit on the full calibration split & not specified in the reference \\
 Key mapping & de-RoPE keys (\texttt{de\_rope\_k}) & yes (de-RoPE keys) \\
 Penalty & $\lambda=10^{-3}$, K and V fitted separately & not specified \\
 Candidate source layers & all teacher layers & not specified \\
-Calibration volume & 200 audit-context examples (as in the affine $c{=}200$ row) & 500 FineWeb-Edu sequences of 1{,}024 tokens \
-Source-layer combination & average of the selected layers & concatenation of the selected layers \
+Calibration corpus & FineWeb-Edu-style $1{,}024$-token passages, replacing the
+audit-context calibration rows & FineWeb-Edu web text of the same length \\
+Calibration volume & 100 sequences, the same token budget as the $c{=}200\times512$ audit row & 500 FineWeb-Edu sequences of $1{,}024$ tokens \\
+Source-layer combination & concatenation of the selected layers (aligned; our
+earlier averaged variant is also reported) & concatenation of the selected layers \\
 \bottomrule
 \end{tabular}\end{center}
 
 \textbf{Supplementary runs.} The revision-added runs referenced above are
 recorded under the repository's run directory: the closest-published-baseline
-grid (the \texttt{heo-topk} runs), the cold-start pair (the \texttt{persist} and
+grid (the \texttt{heo-topk} averaged runs and the \texttt{heo-concat-fwe}
+concatenation/FineWeb-Edu runs), the cold-start pair (the \texttt{persist} and
 \texttt{online} runs), the token-aligned margin rows (the \texttt{rect-align}
 runs for Llama-3.2-1B and Gemma-2-2B), the 4K retrieval run
 (\texttt{longctx4k}), the text-channel run with per-sample scores
 (\texttt{taskmix-summary}), and the joint-MLP reconstruction diagnostic
 (\texttt{joint\_mlp\_reconstruction}). The top-$k$ selection code is
-\texttt{apcs.alignment.topk}.
+\texttt{apcs.alignment.topk} and the concatenation mapper is
+\texttt{apcs.mapper.concat.ConcatRidgeMapper}; each run records its selected
+layer map in \texttt{layer\_mapping.json}.
 
 All numbers come from the \texttt{apcs} repository's recorded runs
 (\texttt{reports/runs/*/inject-eval/}), each carrying its git commit, the
