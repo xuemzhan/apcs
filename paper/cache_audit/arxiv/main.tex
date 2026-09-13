@@ -15,14 +15,14 @@
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{microtype}
 \usepackage[noblocks]{authblk}
-\usepackage[hidelinks,pdftitle={Cache Translation Across Model Scale: An Audit with Identity Controls and Oracle Probes},pdfauthor={Xuemin Zhang, Liangbin Hu, Kun Yi, Liheng Zhong, Junpeng Yu}]{hyperref}
+\usepackage[hidelinks,pdftitle={Cache Translation Across Model Scale: An Audit with Identity Controls and Teacher-Content Probes},pdfauthor={Xuemin Zhang, Liangbin Hu, Kun Yi, Liheng Zhong, Junpeng Yu}]{hyperref}
 
 \newcommand{\kv}{\mathrm{KV}}
 \newcommand{\chg}{\mathrm{CHG}}
 \newcommand{\gold}{p_{\mathrm{gold}}}
 
 \title{Cache Translation Across Model Scale:\\
-An Audit with Identity Controls and Oracle Probes}
+An Audit with Identity Controls and Teacher-Content Probes}
 
 \author[1]{Xuemin Zhang\\\texttt{\small zmx0813@gmail.com}}
 \author[1]{Liangbin Hu\\\texttt{\small huliangbing@xx.com}}
@@ -46,7 +46,7 @@ own cache through the full translation-and-injection pipeline and reproduces
 the student's own prefill (per-sample logit cosine $0.99998$; gold-probability
 change $+0.0001$, 95\% CI $[-0.0006, +0.0009]$), separating pipeline mechanics
 from mapping; a cold-start run that loads only the persisted cache and mapper
-parameters reproduces the offline evaluation exactly. \emph{Oracle probes} then mix teacher-cache content into the
+parameters reproduces the offline evaluation exactly. \emph{Teacher-content probes} then mix teacher-cache content into the
 student's own cache at controlled fractions and layer windows. Across seven
 mapper families, four scale pairs, and five alternative students, translation
 does not lift a strong student above its own
@@ -86,7 +86,15 @@ Mixture-of-Translators (MoT), which preserves 51.0\% closed-set QA accuracy at
 7B$\to$0.5B scale~\citep{mot2026}, Cache-to-Cache semantic
 communication~\citep{c2c2025}, latent-space
 communication~\citep{lsc2026}, and selective KV
-sharing~\citep{kvcomm2025}.
+sharing~\citep{kvcomm2025}. The most recent entries widen the range:
+architecture-indexed mapper support reports $99.83\%$ mean target retention on
+Qwen3 with an order of magnitude less calibration
+data~\citep{cachebridge2026}, and a universal context-reuse layer reports
+LongBench2 accuracy rising from $27.59\%$ to $34.48\%$ when a Qwen2.5-7B cache
+is handed to a Qwen2.5-1.5B receiver, i.e.\ $6.89$ points above that
+receiver's own prefill~\citep{contextreuse2026}. Reported outcomes therefore
+already span near-native retention and above-baseline gain, while our audit
+measures large deficits on the pairs it covers.
 
 % Problem gap: claims conflate three things; none of the evaluations separate them.
 These reports conflate three questions that can fail independently. Does the
@@ -109,8 +117,9 @@ reaches replacement level; its instrument is a ladder of seven mapper families
 under a disjoint calibration ladder of 30 to 200 examples, including a
 residual-anchored translator (RAT) that we derive from the two models' own
 projections and a shared vocabulary alignment. \textbf{H3 (exploitability)}
-asks whether the teacher's cache contains any student-readable advantage at
-all; its instrument is an oracle probe that mixes teacher-cache content into
+asks whether tested teacher-derived cache content provides an incremental
+benefit when introduced into an otherwise native student cache; its instrument
+is a teacher-content probe that mixes teacher-cache content into
 the student's own cache at controlled fractions and layer windows. Figure~\ref{fig:framework}
 shows the setting, the instruments, and the gates.
 
@@ -119,8 +128,9 @@ The audit returns three verdicts; Section~\ref{sec:tiers} labels which of them
 were pre-specified and which are extensions made while revising. H1 passes: the
 identity control reproduces the student's own prefill (per-sample logit cosine
 $0.99998$; gold-probability change $+0.0001$, $95\%$ CI $[-0.0006, +0.0009]$),
-so mechanics is not the failure mode. no tested strong-student mapper establishes replacement:
-gold-probability change over the student's own prefill ranges from $-0.138$
+so mechanics passes. No tested mapper establishes replacement for the strong
+student, and the weak-student result is inconclusive. Gold-probability change
+over the student's own prefill ranges from $-0.138$
 (best configuration) to $-0.392$ (worst) across the mapper ladder, the best
 configuration reaches $0.365$ against a $0.503$ student baseline, and on one
 fixed evaluation set the calibration ladder stays within $[-0.257, -0.238]$.
@@ -140,21 +150,22 @@ accuracy at $0.267$: a cache can read fluently and still miss the answer.
 % Contributions.
 Three things fall out of the audit. The first is a framework: identity
 controls, disjoint calibration/evaluation splits, gold-probability metrics
-with bootstrap intervals and permutation tests, and oracle probes that test
+with bootstrap intervals and permutation tests, and teacher-content probes that test
 exploitability without training anything (Section~\ref{sec:method}). The
 second is a bounded design space: seven mapper families, a calibration ladder,
 and component ablations, all under one protocol
 (Section~\ref{sec:method}, Section~\ref{sec:results}); we additionally derive
 the most architecture-informed translator we could (RAT), and it fails too,
 which strengthens the negative. The third is a verdict
-with consequences: mechanics passes, no strong-student mapper establishes replacement
-and is inconclusive for the weak one, no probe configuration with teacher
+with consequences: mechanics passes; no tested mapper establishes replacement
+for the strong student while the weak-student result remains inconclusive; no
+probe configuration with teacher
 content produces an interval-excluded gain, and perplexity
 cannot stand in for accuracy as evidence (Section~\ref{sec:results},
 Section~\ref{sec:implications}). H2's null result routes the audit to H3
 because the probes measure what a frozen student can extract from
-teacher-cache content without training anything, so a null result cannot
-be blamed on the mapper.
+teacher-cache content without training anything, so a null probe result is not
+specific to the end-to-end replacement score of a single mapper.
 
 \begin{figure}[t]
 \centering
@@ -166,8 +177,8 @@ and the student answers a short query $q$ from the translated cache
 $\hat{C}_S(x)$. The red crossed path is the strict zero-re-prefill constraint:
 no context token enters the student's forward pass. The audit scores the
 handoff by the change in gold-letter probability against the student's own
-prefill (baseline), with the teacher's full prefill as the capability upper
-bound. \textbf{(b)}~The three questions can fail independently
+prefill (baseline), with the teacher's full prefill as a reference
+point. \textbf{(b)}~The three questions can fail independently
 (Section~\ref{sec:intro}), so each carries its own instrument and gate;
 $\dagger$ marks gates fixed before the runs, and $\ddagger$ marks families and
 axes added while revising and evaluated under the same gates
@@ -225,7 +236,19 @@ reported for closed-form cache transfer on matched-KV
 pairs~\citep{heo2026}. The two quantities are not like for like: retention
 measures how closely a translated cache reproduces the receiver's own prefill,
 not whether the receiver gains over it, and the calibration and evaluation
-splits differ. Other systems in this line additionally relax zero re-prefill:
+splits differ. Two very recent entries span the range of outcomes directly.
+CacheBridge replaces full-head mapping with architecture-indexed support---each
+target head matched to one source head, with attention-aligned calibration---and
+reports $99.83\%$ mean target retention on Qwen3 with an order of magnitude
+less calibration data~\citep{cachebridge2026}. A universal context-reuse layer
+reports that translated KV states raise LongBench2 accuracy from $27.59\%$ to
+$34.48\%$ for Qwen2.5-7B$\to$1.5B, $6.89$ points above the receiver's own
+prefill baseline~\citep{contextreuse2026}. Neither separates retention from
+capability gain or evaluates an identity injection, and the same protocol
+reports large deficits on the pairs we cover, so the literature now contains
+near-native retention, above-baseline gain, and severe degradation side by
+side. That spread is the case for a unified audit rather than for or against
+any one translator. Other systems in this line additionally relax zero re-prefill:
 MoT reconstructs the target-side cache with source-guided sparse attention and
 a correction loss. We also implement the closest strict-zero-reprefill design:
 per-target-layer top-$k$ source selection by held-out ridge reconstruction
@@ -273,7 +296,7 @@ directions or task-vector representations than in per-head KV entries.
 Across the four lines, no work (i) separates mechanics from mapping from
 exploitability, (ii) injects the student's own cache as an identity control,
 (iii) reports accuracy at matched perplexity, or (iv) constrains exploitability
-with an oracle that requires no training. The claims of the translation line
+with a training-free teacher-content probe. The claims of the translation line
 therefore rest on pipelines whose components have never been isolated. The
 audit below supplies the missing instruments.
 
@@ -304,6 +327,8 @@ Interlat~\citep{interlat2025} & last hidden state & latent message & no &
 the last layer summarizes the cache \\
 HCache~\citep{hcache2025} & hidden states & translator & no & states
 determine caches \\
+CacheBridge~\citep{cachebridge2026} & KV (matched-head) & architecture-indexed heads & no & retention $\neq$ capability \\
+Context reuse~\citep{contextreuse2026} & KV via reuse layer & universal reuse layer & no & gain not isolated per pair \\
 \midrule
 Closed-form ridge~\citep{heo2026} & full KV (ridge) & top-$k$ layer selection, de-RoPE
 keys & no & retention $\neq$ gain; shared splits \\
@@ -352,19 +377,21 @@ Replacement asks only that the student is not degraded; gain asks that the
 teacher's cache provides a measurable lift. We report replacement results at $\epsilon = 0.02$ gold probability; the non-inferiority gate form was frozen before the audit runs, whereas this numeric tolerance was selected later as a practical reporting margin (Appendix~\ref{app:repro} reports sensitivity to alternative margins), about $4\%$ relative to the $0.503$ student baseline---making the replacement gate a
 standard non-inferiority test of $H_0\colon \chg \le -\epsilon$ against
 $H_1\colon \chg > -\epsilon$; unlike a naive significance test, it does not
-additionally require the point estimate to be non-negative. \textbf{H3}: the teacher's cache contains student-readable
-advantage (gate: some oracle probe configuration with teacher content
-improves over the student's own cache). H3's probe does not depend on training
-a translator: a positive effect would demonstrate student-readable
-teacher-cache content directly, while a null result constrains the extraction
-paths we test without excluding every nonlinear one.
+additionally require the point estimate to be non-negative. \textbf{H3}:
+tested teacher-derived cache content provides an incremental benefit when
+introduced into an otherwise native student cache (gate: some teacher-content
+probe configuration improves over the student's own cache). H3's probe does
+not depend on training
+a translator: a positive effect would show that teacher-derived content is
+exploitable under controlled cache interventions, while a null result
+constrains the extraction paths we test without excluding every nonlinear one.
 
 \subsection{Evidence Tiers and Multiplicity}
 \label{sec:tiers}
 The audit grew during revision, and we do not let later additions inherit the
 authority of pre-specified tests. We therefore label every claim by how it
 entered the protocol. \emph{Confirmatory} claims were fixed before the runs: the
-identity gate, the non-inferiority *form* of the replacement gate and the $\epsilon$-free gain
+identity gate, the non-inferiority \emph{form} of the replacement gate and the $\epsilon$-free gain
 gate on the primary pair, and the fraction and window probes under the rule that
 exploitability is established only if some configuration's interval excludes
 zero on the positive side. \emph{Frozen-gate extensions} were added while
@@ -454,7 +481,7 @@ Keys follow the same construction on $W_K$. Every family is evaluated at
 calibration budgets 30 and 200 with disjoint evaluation samples
 ($n{=}30$ and $n{=}63$ respectively).
 
-\subsection{Oracle Probes}
+\subsection{Teacher-Content Probes}
 The probes are diagnostic interventions rather than universal upper bounds:
 they hand the student its \emph{own} cache and mix in teacher content at a
 controlled budget.
@@ -462,7 +489,8 @@ controlled budget.
 $\alpha \in \{0.25, 0.5, 0.75\}$ with $\alpha{=}0$ the student's own cache.
 \textbf{Window probe}: translated content in only the bottom, middle, or top
 third of student layers, student content elsewhere. Because every
-configuration keeps the student's own cache dominant or localized, a positive
+configuration retains a controlled fraction of the student's cache or
+localizes the intervention to selected layers, a positive
 effect would demonstrate student-readable teacher-cache content, while
 degradation constrains---but does not exclude---nonlinear or jointly
 structured extraction paths. Probes are
@@ -572,7 +600,7 @@ memory budget; the reference uses 500).}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
-Configuration & Acc / Gold / PPL & Gold CHG [95\% CI] & $n_{\mathrm{eval}}$ & Gate \\
+Configuration & Acc / Gold / PPL & Gold CHG [95\% CI] & $n_{\mathrm{eval}}$ & $\epsilon{=}0.02$ reporting gate \\
 \midrule
 Identity control (self-kv), 1.7B & 0.500 / 0.503 / 21.2 & $+0.000$ [$-0.001, +0.001$] & 30 & pass \\
 Student self-prefill, 1.7B & 0.500 / 0.503 / 25.4 & -- & 30 & -- \\
@@ -700,7 +728,7 @@ Qwen2.5-1.5B, spanning one to eight KV heads and head dimensions $64$ to
 $256$---mechanics still hold (self-kv CHG within $\pm0.001$) and translation
 never recovers the teacher's $0.691$ gold. Under the replacement gate of
 Section~\ref{sec:framework}, one of the five (Llama-3.2-1B, near chance at
-$0.300$ accuracy) is non-inferior but gains nothing, Gemma-2-2B sits at the
+$0.300$ accuracy) clears the reported $\epsilon{=}0.02$ replacement margin but gains nothing, Gemma-2-2B sits at the
 margin, and the other three fall short (CHG $-0.044$ to $-0.157$; two of them
 with an interval excluding zero). Head groups are mean-pooled and head
 dimensions projected by the rectangular mapper; because the models tokenize
@@ -762,15 +790,16 @@ fluency}: PPL drops to $23.7$, within $2.5$ of the identity control. Accuracy
 stays at $0.267$. The analytic core's min-norm pullback is harmful on real
 models, and more importantly, fluency recovery does not touch the answer
 deficit. The cache can be made to look right to the language-modeling
-objective without becoming right for the task. RAT's role in the audit is to
-rule out the objection that the failure is an artifact of insufficiently
-architecture-aware translation.
+objective without becoming right for the task. RAT tests whether one
+architecture-informed translator changes the verdict on a failure that could
+otherwise be read as an artifact of insufficiently architecture-aware
+translation.
 
 \subsection{H3: Teacher-Content Probes Do Not Improve on the Student}
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.95\textwidth]{figures/fig3_oracle_probes.pdf}
-\caption{Oracle probes on Qwen3-4B$\to$1.7B ($n{=}30$; the fraction probe is
+\caption{Teacher-content probes on Qwen3-4B$\to$1.7B ($n{=}30$; the fraction probe is
 confirmatory, the best-source replication and the octant sweep are
 frozen-gate extensions, Section~\ref{sec:tiers}). \textbf{Left}: gold-letter
 probability as translated teacher content replaces the student's own cache, for
@@ -822,7 +851,7 @@ confirmatory probe family. To state the probe result as a family-wise rather tha
 the maximum over the six confirmatory probe configurations (three mixture
 fractions and three layer windows, RAT source) and bootstrap that maximum over
 evaluation samples: the observed maximum is $-0.001$ and its $95\%$ upper bound
-is $+0.009$. The bootstrap $95\%$ upper estimate for the maximum gain across the confirmatory probe family is $+0.009$. Run over the full probe set instead---$22$ configurations, adding the
+is $+0.009$. Run over the full probe set instead---$22$ configurations, adding the
 best-translator replication and the eight-way octant sweep---the same
 computation gives $+0.075$.
 
@@ -869,8 +898,8 @@ perplexity is cheap and is often reported as a quality proxy.
 Channel ablations at $c{=}30$ rank value-only ($0.367$) above key-only
 ($0.300$) above both ($0.200$) on accuracy, while perplexity orders them in
 reverse ($88$ versus $253$ versus $1.8\times10^{7}$). Mapping keys repairs
-fluency and damages routing: the mapped keys steer attention to plausible
-but task-irrelevant positions. We report the asymmetry as a finding and
+fluency and damages routing: the observed asymmetry is consistent with
+key-side routing errors. We report the asymmetry as a finding and
 leave the mechanism open. One hypothesis consistent with the asymmetry:
 mapped keys steer attention routing while mapped values carry content, so key
 errors misroute a fluent read while value errors corrupt it audibly.
@@ -931,7 +960,7 @@ being mediated by parameter-dependent computation that raw cache transfer does
 not reproduce. FFN layers carry the model's factual
 associations~\citep{ffnmemory2021}, and the capability gap between Qwen3-4B
 and 1.7B is a gap in these parameters, which raw KV transfer does not explicitly transport. The
-oracle probes make the consequence concrete: even with the student's own
+teacher-content probes make the consequence concrete: even with the student's own
 cache holding $75\%$ of the mass, the teacher's $25\%$ contribution degrades
 the answer. MoT's own design corroborates the analysis: its reported quality
 includes a target-side correction pathway that strict zero re-prefill disallows. Under a cold
@@ -947,7 +976,7 @@ Any future cache-translation evaluation should ship three instruments:
 the full pipeline and must reproduce the student's own prefill;
 \item a \emph{gold-probability metric} with bootstrap intervals and
 permutation tests, reported as the change over the student's own prefill;
-\item \emph{oracle probes} that blend teacher-cache content into the student
+\item \emph{teacher-content probes} that blend teacher-cache content into the student
 cache at controlled fractions and layer windows, probing exploitability within
 controlled interventions and without training anything.
 \end{itemize}

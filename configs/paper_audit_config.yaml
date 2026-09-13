@@ -109,7 +109,7 @@ figure_generation:
   format: "pdf"
   dpi: 300
   style: "publication"
-  output_dir: "paper/figures"
+  output_dir: "review_results/figures"
 
 # Quality checks
 quality_checks:

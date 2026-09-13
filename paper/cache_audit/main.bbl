@@ -1,4 +1,4 @@
-\begin{thebibliography}{21}
+\begin{thebibliography}{23}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -90,6 +90,11 @@ Jin-woo Lee, Minkyung Song, Junghyun Oh, Seunghoon Han, Soyoung Park, Gwangseon
   large language models.
 \newblock \emph{arXiv preprint arXiv:2607.28979}, 2026.
 
+\bibitem[Li et~al.(2026)Li, Jiang, Zhao, and Li]{contextreuse2026}
+Yi~Li, Dongming Jiang, Yi~Zhao, and Bingzhe Li.
+\newblock A universal context-reuse layer for cross-model {KV} sharing.
+\newblock \emph{arXiv preprint arXiv:2608.30963}, 2026.
+
 \bibitem[Liu et~al.(2024)Liu, Li, Cheng, Ray, Huang, Zhang, Du, Yao, Lu,
   Ananthanarayanan, Maire, Hoffmann, Holtzman, and Jiang]{cachegen2024}
 Yuhan Liu, Hanchen Li, Yihua Cheng, Siddhant Ray, Yuyang Huang, Qizheng Zhang,
@@ -112,6 +117,11 @@ Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
 \newblock Learning to compress prompts with gist tokens.
 \newblock In \emph{NeurIPS}, 2023.
 \newblock \doi{10.48550/arxiv.2304.08467}.
+
+\bibitem[Qu et~al.(2026)Qu, Lu, Chen, Wang, and Lin]{cachebridge2026}
+Xingyu Qu, Siyuan Lu, Zhiyu Chen, Sheng Wang, and Tao Lin.
+\newblock {CacheBridge}: Efficient cross-model {KV} cache transfer.
+\newblock \emph{arXiv preprint arXiv:2609.00891}, 2026.
 
 \bibitem[Shi et~al.(2025)Shi, Chiesa, Maguire, and Kostic]{kvcomm2025}
 Xiangyu Shi, Marco Chiesa, Jr. Maguire, Gerald~Q., and Dejan Kostic.

@@ -21,7 +21,7 @@ import argparse
 class PaperAuditor:
     """Main class for paper auditing workflow."""
     
-    def __init__(self, config_path: str = "paper_audit_config.yaml"):
+    def __init__(self, config_path: str = "configs/paper_audit_config.yaml"):
         """Initialize auditor with configuration."""
         self.config_path = Path(config_path)
         self.config = self._load_config()
@@ -243,7 +243,7 @@ class PaperAuditor:
 def main():
     """Main entry point for the paper audit script."""
     parser = argparse.ArgumentParser(description='Paper Audit Workflow')
-    parser.add_argument('--config', default='paper_audit_config.yaml',
+    parser.add_argument('--config', default='configs/paper_audit_config.yaml',
                        help='Path to configuration file')
     parser.add_argument('--paper', required=True,
                        help='Path to paper file')
