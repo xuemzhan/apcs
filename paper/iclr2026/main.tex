@@ -47,17 +47,17 @@ bootstrap intervals. Mechanics passes to a numerical tolerance: every evaluated
 sample of the identity injection has logit cosine $\ge 0.9998$ against the
 student's own prefill (observed minimum $0.99986$, mean $0.99998$), with a change
 of $+0.0001$ $[-0.0006,+0.0009]$.
-No translator we test replaces the strong student's own prefill. Across the
-$133$ translation configurations recorded under the audit protocol, the largest
-point estimate on the strong pair is $-0.138$ and every strong-student interval
-lies below zero except the best one, which spans it. Controls locate the deficit:
+No translator we test replaces the strong student's own prefill. The audit
+protocol records $133$ translation configurations across all tested pairs; on
+the primary strong-student pair the largest point estimate is $-0.138$, and
+every interval there lies below zero except the best one, which spans it. Controls locate the deficit:
 calibration volume from $10$ to $500$ examples moves the result by $0.02$,
 removing the analytic anchor of our most architecture-aware translator improves
 perplexity without improving answers, and a $37$M-parameter joint MLP does not
 help. Aligning our implementation with the closest published design---concatenating
 the selected source layers and calibrating on $1{,}024$-token web-text
 passages---leaves the verdict unchanged ($-0.223$ to $-0.279$). The weak $0.6$B
-student reaches $+0.010$ $[-0.081,+0.102]$, which establishes neither
+student reaches $+0.010$ $[-0.089,+0.106]$, which establishes neither
 degradation nor the reporting margin we adopt ($\epsilon{=}0.02$).
 Teacher-content probes never produce a gain whose interval excludes zero, and the
 family-wise $95\%$ bootstrap upper estimate over the six confirmatory probe
@@ -117,9 +117,9 @@ identity paths.
 per-layer, task-aware, architecture-anchored, and gradient-trained
 translators, calibration budgets from $10$ to $500$ examples, and the closest
 published design in both its averaged and concatenated form all fail: the
-largest point estimate on the strong pair is $-0.138$ $[-0.317,+0.029]$ and
+largest point estimate on the strong pair is $-0.138$ $[-0.312,+0.037]$ and
 every other interval lies below zero. The weak $0.6$B student reaches $+0.010$
-$[-0.081,+0.102]$, which establishes neither degradation nor our reporting
+$[-0.089,+0.106]$, which establishes neither degradation nor our reporting
 margin.
 \item \textbf{No teacher-content probe establishes gain.} Mixing teacher-derived
 content into the student's own cache degrades monotonically with the teacher
@@ -203,8 +203,8 @@ one.
 \textbf{What this line does not establish.} Across these lines, no cited
 evaluation (i) separates mechanics, mapping, and exploitability, (ii) injects
 the student's own cache as an identity control, (iii) reports accuracy at
-matched perplexity, or (iv) constrains exploitability with a training-free
-probe of teacher-derived content. This audit supplies those instruments.
+matched perplexity, or (iv) constrains exploitability with a
+no-additional-training probe of teacher-derived content. This audit supplies those instruments.
 
 % EVIDENCE CHECK (§2): all statements are external citations except the
 % "published evidence now spans..." framing sentence, which is interpretive and
@@ -230,8 +230,8 @@ own tokenizer id for each letter. Only four-choice examples are retained, so a
 student with no signal sits at $0.25$. Throughout, \emph{CHG} is the change in
 $\gold$ over the student's own prefill on the same examples, with $95\%$
 bootstrap intervals. All intervals use a paired percentile bootstrap over
-evaluation examples with $10^3$ resamples; the family-wise probe bound in
-Section~\ref{sec:h3} uses $10^4$. Figure~\ref{fig:framework} summarizes the
+evaluation examples with $10^4$ resamples, including the family-wise probe
+bound in Section~\ref{sec:h3}. Figure~\ref{fig:framework} summarizes the
 setting and the three instruments.
 
 \begin{figure}[t]
@@ -286,7 +286,9 @@ single mapper.
 \label{sec:tiers}
 The audit grew while revising, so we label every claim by how it entered the
 protocol. \emph{Confirmatory} claims were fixed before the runs: the identity
-gate, the non-inferiority \emph{form} of the replacement gate and the
+gate \emph{in form} (its numerical tolerance $0.9998$ is a revision-added
+operationalization, Appendix~\ref{app:repro}), the non-inferiority
+\emph{form} of the replacement gate and the
 $\epsilon$-free gain gate on the primary pair, and the fraction and window
 probes under the rule above. \emph{Frozen-gate extensions} were added while
 revising and scored under the same gates and metrics: the residual-anchored and
@@ -373,23 +375,24 @@ the content it moves.
 \subsection{H2: no tested mapper replaces the strong student's cache}
 \label{sec:h2}
 Table~\ref{tab:main} collects the mapper ladder. Every strong-student
-translation degrades the student relative to its own prefill, with point
-estimates from $-0.138$ to $-0.392$; the best configuration (per-head affine,
-$c{=}30$) is the only one whose interval reaches zero ($-0.138$
-$[-0.317,+0.029]$), and it is classified \emph{n.e.} rather than passing.
+translation has a negative point estimate relative to the student's own
+prefill, from $-0.138$ to $-0.392$, and all but the best configuration are
+statistically degraded. The best configuration (per-head affine, $c{=}30$) is
+the only one whose interval reaches zero ($-0.138$ $[-0.312,+0.037]$), and it does not
+pass the replacement gate.
 Three controls show that this is not an artifact of our implementation choices.
 
-\emph{Calibration volume is not the lever.} On one fixed evaluation set the same
-family moves from $-0.2511$ at $c{=}10$ to $-0.2438$ at $c{=}200$ (and $-0.2438$
-at $c{=}500$), a spread of $0.02$ against intervals of width $\ge 0.2$.
+\emph{Calibration volume does not close the gap in the tested range.} On one fixed evaluation set the same
+family moves between $-0.2569$ and $-0.2378$ across the six budgets, a spread
+of $0.02$ against intervals of width $\ge 0.2$.
 
-\emph{Capacity and anchoring are not the lever.} A per-head MLP (five
+\emph{Capacity and anchoring do not close the gap in the tested range.} A per-head MLP (five
 trainings, range $-0.39$ to $-0.26$) and a $37$M-parameter joint MLP (five
 trainings, $-0.30$ to $-0.26$) sit inside the linear band; removing RAT's
 analytic anchor raises suffix perplexity from $23.7$ to $501.6$ while changing
 CHG from $-0.223$ to $-0.268$---fluency moves, the answer deficit does not.
 
-\emph{Source-layer combination is not the lever.} The closest published design
+\emph{Source-layer combination does not close the gap in the tested range.} The closest published design
 fails in both forms we can match---its source-layer combination and its
 sequence length---while differing in calibration volume and corpus
 (Appendix~\ref{app:impl}): averaging selected top-$k$ layers gives $-0.273$,
@@ -398,10 +401,10 @@ web-text calibration gives $-0.279$, $-0.223$, and $-0.254$. All six intervals
 lie below zero, and the identity control passes in all six runs.
 
 \emph{The weak student is a different story, but not a positive one.} It reaches
-$+0.010$ $[-0.081,+0.102]$, whose interval spans both zero and $-\epsilon$: we
+$+0.010$ $[-0.089,+0.106]$, whose interval spans both zero and $-\epsilon$: we
 establish neither replacement nor degradation. Two further weak-student rows
-behave the same way ($-0.023$ $[-0.104,+0.064]$ with an $8$B teacher; $-0.041$
-$[-0.120,+0.038]$ for RAT). The largest point estimate anywhere in the audit is
+behave the same way ($-0.023$ $[-0.106,+0.060]$ with an $8$B teacher; $-0.041$
+$[-0.124,+0.038]$ for RAT). The largest point estimate anywhere in the audit is
 $+0.010$, and it belongs to this pair.
 
 \begin{table}[t]
@@ -431,31 +434,31 @@ Configuration & Acc / Gold / PPL & Gold CHG [95\% CI] & $n$ & Repl. & Dir. \\
 Identity control (self-\kv), 1.7B & 0.500 / 0.503 / 21.2 & $+0.0001$ [$-0.0006, +0.0009$] & 30 & pass & neutral \\
 Student self-prefill, 1.7B & 0.500 / 0.503 / 25.4 & -- & 30 & -- & -- \\
 Teacher full prefill, 1.7B & 0.767 / 0.693 / -- & -- & 30 & -- & -- \\
-Native cache injection, 1.7B & 0.167 / 0.169 / $5.4\times10^{5}$ & $-0.334$ [$-0.508, -0.154$] & 30 & fail & degraded \\
-Ridge per-head, c30, 1.7B & 0.200 / 0.207 / 88.5 & $-0.296$ [$-0.479, -0.121$] & 30 & fail & degraded \\
-Affine per-head, c30, 1.7B & 0.367 / 0.365 / 46.1 & $-0.138$ [$-0.317, +0.029$] & 30 & fail & neutral \\
-Affine per-head, c200, 1.7B & 0.254 / 0.258 / 56.4 & $-0.239$ [$-0.354, -0.134$] & 63 & fail & degraded \\
-Affine per-layer, c200, 1.7B & 0.206 / 0.222 / $8.1\times10^{4}$ & $-0.275$ [$-0.407, -0.140$] & 63 & fail & degraded \\
-Task-aware, c200, 1.7B & 0.270 / 0.280 / 142.1 & $-0.216$ [$-0.336, -0.105$] & 63 & fail & degraded \\
-RAT, c30, 1.7B$^{\ddagger}$ & 0.233 / 0.235 / 501.6 & $-0.268$ [$-0.440, -0.092$] & 30 & fail & degraded \\
-RAT, c200, 1.7B$^{\ddagger}$ & 0.238 / 0.276 / 1008.2 & $-0.221$ [$-0.340, -0.104$] & 63 & fail & degraded \\
-RAT no-anchor rank-32, c30$^{\ddagger}$ & 0.267 / 0.280 / 23.7 & $-0.223$ [$-0.367, -0.088$] & 30 & fail & degraded \\
+Native cache injection, 1.7B & 0.167 / 0.169 / $5.4\times10^{5}$ & $-0.334$ [$-0.510, -0.149$] & 30 & fail & degraded \\
+Ridge per-head, c30, 1.7B & 0.200 / 0.207 / 88.5 & $-0.296$ [$-0.470, -0.112$] & 30 & fail & degraded \\
+Affine per-head, c30, 1.7B & 0.367 / 0.365 / 46.1 & $-0.138$ [$-0.312, +0.037$] & 30 & fail & neutral \\
+Affine per-head, c200, 1.7B & 0.254 / 0.258 / 56.4 & $-0.239$ [$-0.353, -0.122$] & 63 & fail & degraded \\
+Affine per-layer, c200, 1.7B & 0.206 / 0.222 / $8.1\times10^{4}$ & $-0.275$ [$-0.404, -0.140$] & 63 & fail & degraded \\
+Task-aware, c200, 1.7B & 0.270 / 0.280 / 142.1 & $-0.216$ [$-0.336, -0.093$] & 63 & fail & degraded \\
+RAT, c30, 1.7B$^{\ddagger}$ & 0.233 / 0.235 / 501.6 & $-0.268$ [$-0.439, -0.092$] & 30 & fail & degraded \\
+RAT, c200, 1.7B$^{\ddagger}$ & 0.238 / 0.276 / 1008.2 & $-0.221$ [$-0.342, -0.099$] & 63 & fail & degraded \\
+RAT no-anchor rank-32, c30$^{\ddagger}$ & 0.267 / 0.280 / 23.7 & $-0.223$ [$-0.369, -0.086$] & 30 & fail & degraded \\
 Per-head MLP, c30 (5 trainings)$^{\ddagger}$ & 0.133--0.267 / 0.111--0.246 / 65--96 & $-0.39$ to $-0.26$ & 30 & fail & degraded \\
 Per-head MLP, c200 (5 trainings)$^{\ddagger}$ & 0.175--0.302 / 0.241--0.271 / 109--149 & $-0.26$ to $-0.23$ & 63 & fail & degraded \\
 Joint MLP, c30 (5 trainings)$^{\ddagger}$ & 0.167--0.233 / 0.201--0.239 / 26--32 & $-0.30$ to $-0.26$ & 30 & fail & degraded \\
-Top-$k$ ridge (avg), c200, $k{=}1$$^{\ddagger}$ & 0.240 / 0.238 / 78.5 & $-0.273$ [$-0.380, -0.158$] & 100 & fail & degraded \\
-Top-$k$ ridge (avg), c200, $k{=}3$$^{\ddagger}$ & 0.190 / 0.203 / 2630 & $-0.308$ [$-0.417, -0.200$] & 100 & fail & degraded \\
-Top-$k$ ridge (avg), c200, $k{=}5$$^{\ddagger}$ & 0.210 / 0.220 / $6.9\times10^{4}$ & $-0.291$ [$-0.399, -0.192$] & 100 & fail & degraded \\
-Top-$k$ ridge (concat, web-text), $k{=}1$$^{\sharp}$ & 0.230 / 0.233 / $1.6\times10^{5}$ & $-0.279$ [$-0.410, -0.145$] & 100 & fail & degraded \\
-Top-$k$ ridge (concat, web-text), $k{=}3$$^{\sharp}$ & 0.290 / 0.289 / $4.6\times10^{4}$ & $-0.223$ [$-0.368, -0.084$] & 100 & fail & degraded \\
-Top-$k$ ridge (concat, web-text), $k{=}5$$^{\sharp}$ & 0.270 / 0.257 / 3678 & $-0.254$ [$-0.382, -0.122$] & 100 & fail & degraded \\
-Ridge per-head, c500, 8B$\to$1.7B$^{\ddagger}$ & 0.310 / 0.288 / 146.1 & $-0.224$ [$-0.320, -0.123$] & 100 & fail & degraded \\
-Affine per-head, c200, 4B$\to$0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.081, +0.102$] & 63 & fail & neutral \\
-Affine per-head, c30, 8B$\to$0.6B$^{\ddagger}$ & 0.270 / 0.269 / 99.0 & $-0.023$ [$-0.104, +0.064$] & 100 & fail & neutral \\
-RAT, c200, 4B$\to$0.6B$^{\ddagger}$ & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.120, +0.038$] & 63 & fail & neutral \\
-Affine per-head, c30, 1K retrieval$^{\ddagger}$ & 0.233 / 0.232 / 6554 & $-0.285$ [$-0.534, -0.025$] & 30 & fail & degraded \\
-Affine per-head, c10, 4K retrieval$^{\ddagger}$ & 0.200 / 0.200 / $1.6\times10^{4}$ & $-0.596$ [$-0.929, -0.170$] & 10 & fail & degraded \\
-Affine per-head, c10, 8K retrieval$^{\ddagger}$ & 0.200 / 0.203 / $2.4\times10^{4}$ & $-0.577$ [$-0.932, -0.118$] & 10 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}1$$^{\ddagger}$ & 0.240 / 0.238 / 78.5 & $-0.273$ [$-0.386, -0.159$] & 100 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}3$$^{\ddagger}$ & 0.190 / 0.203 / 2630 & $-0.308$ [$-0.414, -0.199$] & 100 & fail & degraded \\
+Top-$k$ ridge (avg), c200, $k{=}5$$^{\ddagger}$ & 0.210 / 0.220 / $6.9\times10^{4}$ & $-0.291$ [$-0.396, -0.184$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}1$$^{\sharp}$ & 0.230 / 0.233 / $1.6\times10^{5}$ & $-0.279$ [$-0.407, -0.148$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}3$$^{\sharp}$ & 0.290 / 0.289 / $4.6\times10^{4}$ & $-0.223$ [$-0.364, -0.081$] & 100 & fail & degraded \\
+Top-$k$ ridge (concat, web-text), $k{=}5$$^{\sharp}$ & 0.270 / 0.257 / 3678 & $-0.254$ [$-0.391, -0.117$] & 100 & fail & degraded \\
+Ridge per-head, c500, 8B$\to$1.7B$^{\ddagger}$ & 0.310 / 0.288 / 146.1 & $-0.224$ [$-0.327, -0.122$] & 100 & fail & degraded \\
+Affine per-head, c200, 4B$\to$0.6B & 0.302 / 0.283 / 71.8 & $+0.010$ [$-0.089, +0.106$] & 63 & fail & neutral \\
+Affine per-head, c30, 8B$\to$0.6B$^{\ddagger}$ & 0.270 / 0.269 / 99.0 & $-0.023$ [$-0.106, +0.060$] & 100 & fail & neutral \\
+RAT, c200, 4B$\to$0.6B$^{\ddagger}$ & 0.206 / 0.232 / 790.0 & $-0.041$ [$-0.124, +0.038$] & 63 & fail & neutral \\
+Affine per-head, c30, 1K retrieval$^{\ddagger}$ & 0.233 / 0.232 / 6554 & $-0.285$ [$-0.549, -0.003$] & 30 & fail & degraded \\
+Affine per-head, c10, 4K retrieval$^{\ddagger}$ & 0.200 / 0.200 / $1.6\times10^{4}$ & $-0.596$ [$-0.939, -0.135$] & 10 & fail & degraded \\
+Affine per-head, c10, 8K retrieval$^{\ddagger}$ & 0.200 / 0.203 / $2.4\times10^{4}$ & $-0.577$ [$-0.943, -0.082$] & 10 & fail & degraded \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -483,7 +486,7 @@ maximum, not a centered max-$t$ construction; we therefore read it as
 is about one gold-probability point'', and not as a simultaneous $95\%$
 exclusion statement. Under the affine replication every configuration is again
 non-positive, and a best-of-eight octant sweep reaches $+0.020$
-$[-0.011,+0.053]$, whose interval contains zero. Across all $48$ probe rows
+$[-0.012,+0.052]$, whose interval contains zero. Across all $48$ probe rows
 recorded under the protocol, none has an interval that excludes zero on the
 positive side.
 
@@ -507,8 +510,8 @@ affine mapper's $0.323$ and still produces a CHG between $-0.30$ and $-0.26$,
 inside the band of every other strong-student translator. The choice of
 source-layer combination moves reconstruction in opposite directions (averaging
 degrades it with $k$; concatenation improves it) while leaving the verdict
-unchanged. Whatever the mappers recover, it is not the part of the cache the
-student needs to answer.
+unchanged. Whatever the mappers recover does not appear to include the part of
+the cache the student needs in order to answer.
 
 \subsection{Fluency does not imply capability}
 The same pattern appears on perplexity. Our most fluent failing translator
@@ -531,20 +534,20 @@ that the observed asymmetry reflects key-side routing errors.
 
 \subsection{Context length, cross-architecture students, and replay}
 The deficit is not specific to short contexts. A four-choice retrieval task
-packed to roughly $1$K tokens gives $-0.285$ $[-0.534,-0.025]$ ($n{=}30$);
+packed to roughly $1$K tokens gives $-0.285$ $[-0.549,-0.003]$ ($n{=}30$);
 with caches stored in float16 and the fixed-tail protocol disabled, a true
-$4$K run gives $-0.596$ $[-0.929,-0.170]$ and a true $8$K run gives $-0.577$
-$[-0.932,-0.118]$ (both $n{=}10$). These two rows are a different evaluation
+$4$K run gives $-0.596$ $[-0.939,-0.135]$ and a true $8$K run gives $-0.577$
+$[-0.943,-0.082]$ (both $n{=}10$). These two rows are a different evaluation
 regime from the $1$K row, and we read them as further degradation rather than as
 a calibrated length sweep.
 
 The deficit is also not specific to one architecture family: five alternative
-students give three large deficits (Llama-3.2-3B $-0.044$, Gemma-3-1B $-0.061$,
-Qwen2.5-1.5B $-0.157$; all $n{=}100$) and two near-parity rows whose teachers
-are close to chance (Llama-3.2-1B $+0.000$, Gemma-2-2B $-0.009$), while token
+students give three negative rows (Llama-3.2-3B $-0.044$, Gemma-3-1B $-0.061$,
+Qwen2.5-1.5B $-0.157$; all $n{=}100$) and two near-parity rows on students
+close to chance (Llama-3.2-1B $+0.000$, Gemma-2-2B $-0.009$), while token
 alignment leaves the ranking unchanged (Appendix~\ref{app:extra}). A naive
 target-side re-read, which violates zero re-prefill, does not recover the
-student either ($-0.232$ $[-0.333,-0.136]$ against $-0.249$ $[-0.350,-0.149]$);
+student either ($-0.232$ $[-0.335,-0.134]$ against $-0.249$ $[-0.353,-0.149]$);
 we did not re-implement any published correction loss, so this bounds a naive
 replay rather than those systems.
 
@@ -556,7 +559,7 @@ and $0.512$, a difference of $-0.108$ ($n{=}100$).
 The recorded artifacts contain $177$ evaluation runs with metrics and $181$
 configuration rows under the audit protocol ($133$ translations, $48$ probes).
 The largest translation point estimate anywhere in the audit is $+0.010$
-$[-0.081,+0.102]$, from the weak-student pair, and no probe row has an interval
+$[-0.089,+0.106]$, from the weak-student pair, and no probe row has an interval
 that excludes zero on the positive side.
 
 % EVIDENCE CHECK (§6): 5.1-5.7, 6.1-6.4, 6.7, 1.5, 3.8 (range), 3.7.
@@ -569,10 +572,10 @@ control that injects the student's own cache through the full pipeline, because
 it separates a broken pipeline from a broken map. Report accuracy and not only
 retention or perplexity, because retention measures similarity to the receiver's
 own prefill rather than the receiver's gain over it, and because fluency and
-task quality dissociate in our runs. Report a training-free probe of
-teacher-derived content before investing in translator capacity, because in our
-audit the probes reveal no latent benefit that the end-to-end replacement score
-has hidden.
+task quality dissociate in our runs. Report a no-additional-training probe of
+teacher-derived content before investing in translator capacity: the probe takes
+its content from a fixed, already-calibrated translator and trains nothing new,
+and in our audit no probe configuration produces an interval that excludes zero.
 
 The scientific consequence is the two inequalities above: reconstruction quality
 and perplexity are not substitutes for task quality, so a translation result
@@ -633,10 +636,12 @@ negative ($-9.7$ at best).
 \section{Conclusion}
 \label{sec:conclusion}
 
-Under strict zero re-prefill, on the pairs and designs we tested, translating a
-teacher's \kv{} cache into a smaller student does not replace the student's own
-prefill. The injection pipeline itself is exact to numerical tolerance, so the
-failure is not mechanical; the deficit persists across the tested calibration
+Under strict zero re-prefill, no tested translator establishes replacement for
+our primary strong-student pair, and the only rows that clear the reporting
+replacement margin sit on near-chance alternative students and show no
+measurable gain. The injection pipeline itself is exact to numerical
+tolerance, so the failure is not mechanical: the deficit on the primary pair
+persists across the tested calibration
 budgets, translator capacities, source-layer combinations, and token-alignment
 controls; and it is not repaired by matching the closest published design's
 source-layer composition and calibration sequence length under our generated
@@ -695,24 +700,54 @@ residual source of nondeterminism has not been isolated.
 The margin sensitivity referenced in Section~\ref{sec:framework} is recorded in
 the same directory: conclusions about the strong-student pair are unchanged for
 $\epsilon\in\{0.01,0.02,0.05\}$ because their intervals lie below zero, while
-the weak-student pair is \emph{n.e.} under all three.
+the weak-student pair fails the replacement gate under all three.
+
+Intervals are recomputed from those per-sample scores with $10^4$ paired
+percentile bootstrap resamples (\texttt{scripts/bootstrap\_ci\_report.py},
+artifact \texttt{reports/bootstrap\_1e4/ci\_1e4.json}); an earlier draft's
+$10^3$-draw endpoints differ by up to $0.02$, the Monte-Carlo noise of $10^3$
+draws at these sample sizes, so the $10^4$-draw values are reported.
+The identity gate's \emph{form} was fixed before the runs, while the numerical
+tolerance $0.9998$ was introduced during revision as a reproducible
+operationalization of the original ``within numerical tolerance'' criterion;
+the recorded runs store logit cosines rather than logits, so the residual
+identity difference (minimum $0.99986$) is not decomposed further.
+
+\begin{table}[t]
+\centering
+\caption{Gradient-trained families: interval detail for the rows
+Table~\ref{tab:main} reports as training ranges ($10^4$-draw paired
+bootstrap). Every recorded training of every family has an interval upper
+bound below zero, which is what its \emph{degraded} direction label requires.}
+\label{tab:mlp-ci}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Family & Trainings & Point estimates & Largest CI upper & Per-training CI uppers \\
+\midrule
+Per-head MLP, $c{=}30$ & 5 & $-0.392$ to $-0.257$ & $-0.069$ & $-0.148 / -0.069 / -0.136 / -0.231 / -0.167$ \\
+Per-head MLP, $c{=}200$ & 5 & $-0.256$ to $-0.226$ & $-0.104$ & $-0.104 / -0.139 / -0.144 / -0.104 / -0.118$ \\
+Joint MLP, $c{=}30$ & 5 & $-0.302$ to $-0.264$ & $-0.095$ & $-0.115 / -0.095 / -0.128 / -0.120 / -0.143$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
 
 \section{Additional Measurements}
 \label{app:extra}
 
 \textbf{Cross-architecture and token-aligned rows.} Under the rectangular mapper
 (head mean-pooling plus dimension projection), $n{=}100$: Llama-3.2-1B $+0.000$
-$[-0.012,+0.012]$, Gemma-2-2B $-0.009$ $[-0.020,+0.002]$, Llama-3.2-3B $-0.044$
-$[-0.073,-0.013]$, Gemma-3-1B $-0.061$ $[-0.135,+0.008]$, Qwen2.5-1.5B
-$-0.157$ $[-0.209,-0.106]$. With character-overlap token alignment applied to
-the two tokenizers that differ most: Llama-3.2-3B $-0.024$ $[-0.047,-0.004]$,
-Gemma-3-1B $-0.073$ $[-0.134,-0.021]$, Llama-3.2-1B $-0.003$
-$[-0.011,+0.005]$, Gemma-2-2B $-0.007$ $[-0.018,+0.005]$. Alignment changes
+$[-0.012,+0.011]$, Gemma-2-2B $-0.009$ $[-0.020,+0.002]$, Llama-3.2-3B $-0.044$
+$[-0.074,-0.013]$, Gemma-3-1B $-0.061$ $[-0.132,+0.006]$, Qwen2.5-1.5B
+$-0.157$ $[-0.212,-0.106]$. With character-overlap token alignment applied to
+the two tokenizers that differ most: Llama-3.2-3B $-0.024$ $[-0.047,-0.002]$,
+Gemma-3-1B $-0.073$ $[-0.131,-0.018]$, Llama-3.2-1B $-0.003$
+$[-0.012,+0.006]$, Gemma-2-2B $-0.007$ $[-0.018,+0.004]$. Alignment changes
 neither the replacement verdict nor the absence of capability gain; for the
 shared-tokenizer student it is a no-operation by construction.
 
 \textbf{Octant sweep.} Under the affine translator at $c{=}30$, the best of
-eight layer windows reaches $+0.020$ $[-0.011,+0.053]$ ($n{=}30$); no window's
+eight layer windows reaches $+0.020$ $[-0.012,+0.052]$ ($n{=}30$); no window's
 interval excludes zero on the positive side.
 
 \begin{figure}[h]
@@ -740,7 +775,7 @@ mapper and lands in the same CHG band (Table~\ref{tab:main}).}
 \toprule
 Translator & Source-layer combination & $R^2_K$ & $R^2_V$ & Downstream CHG \\
 \midrule
-Affine per-head, $c{=}30$ & -- & 0.810 & 0.323 & $-0.138$ [$-0.317,+0.029$] \\
+Affine per-head, $c{=}30$ & -- & 0.810 & 0.323 & $-0.138$ [$-0.312,+0.037$] \\
 Joint MLP, $c{=}30$ & all layers & 0.854 (0.949) & 0.481 (0.647) & $-0.30$ to $-0.26$ \\
 Top-$k$ ridge, $k{=}1,3,5$ & averaged & 0.822 / 0.787 / 0.762 & 0.317 / 0.248 / 0.182 & $-0.273$ / $-0.308$ / $-0.291$ \\
 Top-$k$ ridge, $k{=}1,3,5$ & concatenated & 0.826 / 0.858 / 0.864 & 0.326 / 0.419 / 0.428 & $-0.279$ / $-0.223$ / $-0.254$ \\
@@ -775,12 +810,12 @@ is neutral.}
 Probe & Gold (RAT c30) & CHG (RAT c30) & Gold (affine c30) & CHG (affine c30) \\
 \midrule
 Student cache only ($\alpha{=}0$) & 0.503 & $+0.0001$ [$-0.0006, +0.0009$] & 0.503 & $+0.0001$ [$-0.0006, +0.0009$] \\
-Fraction $\alpha{=}0.25$ & 0.380 & $-0.123$ [$-0.261, +0.009$] & 0.417 & $-0.086$ [$-0.182, +0.002$] \\
-Fraction $\alpha{=}0.50$ & 0.279 & $-0.224$ [$-0.378, -0.082$] & 0.356 & $-0.147$ [$-0.336, +0.019$] \\
-Fraction $\alpha{=}0.75$ & 0.249 & $-0.254$ [$-0.421, -0.079$] & 0.292 & $-0.211$ [$-0.409, -0.022$] \\
-Window: top third & 0.502 & $-0.001$ [$-0.010, +0.010$] & 0.487 & $-0.016$ [$-0.120, +0.078$] \\
-Window: middle third & 0.265 & $-0.238$ [$-0.384, -0.111$] & 0.244 & $-0.259$ [$-0.410, -0.107$] \\
-Window: bottom third & 0.224 & $-0.279$ [$-0.447, -0.111$] & 0.321 & $-0.182$ [$-0.308, -0.076$] \\
+Fraction $\alpha{=}0.25$ & 0.380 & $-0.123$ [$-0.258, +0.009$] & 0.417 & $-0.086$ [$-0.183, +0.003$] \\
+Fraction $\alpha{=}0.50$ & 0.279 & $-0.224$ [$-0.374, -0.077$] & 0.356 & $-0.147$ [$-0.322, +0.026$] \\
+Fraction $\alpha{=}0.75$ & 0.249 & $-0.254$ [$-0.423, -0.083$] & 0.292 & $-0.211$ [$-0.400, -0.012$] \\
+Window: top third & 0.502 & $-0.001$ [$-0.010, +0.010$] & 0.487 & $-0.016$ [$-0.120, +0.080$] \\
+Window: middle third & 0.265 & $-0.238$ [$-0.383, -0.106$] & 0.244 & $-0.259$ [$-0.413, -0.112$] \\
+Window: bottom third & 0.224 & $-0.279$ [$-0.445, -0.105$] & 0.321 & $-0.182$ [$-0.306, -0.070$] \\
 \bottomrule
 \end{tabular}}
 \end{table}

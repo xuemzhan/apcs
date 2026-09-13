@@ -25,7 +25,7 @@ figures/fig4_ppl_acc_decoupling.pdf
 | Authors | Xuemin Zhang; Liangbin Hu; Kun Yi; Liheng Zhong; Junpeng Yu |
 | Abstract | 见下方纯文本 |
 | License | CC BY 4.0（或 arXiv 默认） |
-| Comments | 13 pages, 4 figures, 4 tables. Code and run artifacts included in the accompanying repository |
+| Comments | 14 pages, 4 figures, 5 tables. Code and run artifacts included in the accompanying repository |
 | Journal ref / DOI | 暂无 |
 
 ## Abstract（表单纯文本版，无 TeX 命令）
@@ -43,17 +43,17 @@ splits, and gold-letter-probability metrics with bootstrap intervals. Mechanics
 passes to a numerical tolerance: every evaluated sample of the identity
 injection has logit cosine >= 0.9998 against the student's own prefill (observed
 minimum 0.99986, mean 0.99998), with a change of +0.0001 [-0.0006,+0.0009]. No translator we test
-replaces the strong student's own prefill. Across the 133 translation
-configurations recorded under the audit protocol, the largest point estimate on
-the strong pair is -0.138 and every strong-student interval lies below zero
-except the best one, which spans it. Controls locate the deficit: calibration
+replaces the strong student's own prefill. The audit protocol records 133
+translation configurations across all tested pairs; on the primary strong-student
+pair the largest point estimate is -0.138, and every interval there lies below
+zero except the best one, which spans it. Controls locate the deficit: calibration
 volume from 10 to 500 examples moves the result by 0.02, removing the analytic
 anchor of our most architecture-aware translator improves perplexity without
 improving answers, and a 37M-parameter joint MLP does not help. Aligning our
 implementation with the closest published design--concatenating the selected
 source layers and calibrating on 1,024-token web-text passages--leaves the
 verdict unchanged (-0.223 to -0.279). The weak 0.6B student reaches +0.010
-[-0.081,+0.102], which establishes neither degradation nor the reporting margin
+[-0.089,+0.106], which establishes neither degradation nor the reporting margin
 we adopt (epsilon = 0.02). Teacher-content probes never produce a gain whose
 interval excludes zero, and the family-wise 95% bootstrap upper estimate over
 the six confirmatory probe configurations is +0.009. Two decouplings survive:
@@ -61,6 +61,21 @@ better KV reconstruction (held-out R^2 0.854 for keys, 0.481 for values) does
 not improve answers, and near-native perplexity does not either.
 
 ## 相对上一版 arXiv 包的变更
+
+- 按 audit-8 意见收口：Conclusion 首句从 "does not replace the student's own prefill"
+  收窄为 "no tested translator establishes replacement for our primary strong-student
+  pair"，并点明只有 near-chance 替代学生的行能过 reporting margin；§6.4 的
+  "whose teachers are close to chance" 事实笔误改为 "on students close to chance"；
+  §5.2 改为 "has a negative point estimate … all but the best configuration are
+  statistically degraded"；`training-free probe` 统一改为 `no-additional-training probe`；
+  Appendix B 补 identity 数值容差的 protocol-timing 说明、`0.9998` 的来源，以及
+  gradient-trained 家族的逐训练 CI 上界表（支撑 `degraded` 标签）；图 2 图注注明
+  concat Heo 变体只在表 1。
+- 普通 paired bootstrap 从 1,000 次重采样统一提升到 10,000 次
+  （`scripts/bootstrap_ci_report.py`，artifact `reports/bootstrap_1e4/ci_1e4.json`），
+  全部表格与正文区间随之重算；点估计不变，个别端点移动至多 0.02（1,000 次重采样的
+  Monte-Carlo 噪声量级）。1K retrieval 行上界由 −0.025 变为 −0.003，方向判定仍为
+  degraded。
 
 - 正文按 audit-6 审稿意见重写：标题与全文统一为 *teacher-content probes*；H3 收窄为
   "受测 teacher-derived 内容是否带来增量收益"；补入 CacheBridge 与 Universal
@@ -73,6 +88,24 @@ not improve answers, and near-native perplexity does not either.
   §5.3 标题改为 "No Teacher-Content Probe Establishes Gain"；补一句 CHG 区间为 paired percentile
   bootstrap（1,000 次重采样）。
 - 正文不含环境/资源限制类说明，也不含占位符。
-- 参考文献 25 条（`main.bbl` 已随包更新）；图 4 张、表 4 张。
+- 参考文献 25 条（`main.bbl` 已随包更新）；图 4 张、表 5 张（新增 Appendix B 的
+  gradient-trained 家族 CI 上界表）。
+
+- **投稿前 final polish（冻结版）**：① 全文删除残留的 `n.e.` 记号，改成 "does not pass
+  the replacement gate" / "fails the replacement gate"；② §5.2 三处 "is not the lever" 改为
+  "does not close the gap in the tested range"；③ §6.1 收尾句软化为 "does not appear to
+  include the part of the cache the student needs in order to answer"；④ 摘要把 133 个
+  translation configuration 的范围写清楚（全部 tested pairs），−0.138 明确限定在 primary
+  strong-student pair；⑤ §7 的 "no latent benefit hidden by the end-to-end score" 改为中性的
+  "no probe configuration produces an interval that excludes zero"，并补上 probe 为何是
+  no-additional-training（内容取自固定且已校准的 translator）；⑥ 校准阶梯那句把 "spread of
+  0.02" 的端点改正为实际 min/max（−0.2569 / −0.2378，六个预算，实测 spread 0.0191），原句
+  引用的两个端点只差 0.0073，与 0.02 不符。
+- **自动一致性检查**：`python3 scripts/paper_consistency_check.py`
+  （复算 Table 1 全部 23 行、probe 表 7 行、家族 CI 表 3 行、附录全部区间、派生算术
+  4%/2.5 PPL/23 points/0.0191 ladder spread、摘要数字、stale 端点、交叉引用与 citation key）
+  → 四份稿 **48/48 项通过，0 失败**。
+- 上一版说明里"CHG 区间为 paired percentile bootstrap（1,000 次重采样）"已被本版取代：
+  现在统一为 10,000 次重采样。
 - 编译：`pdflatex main && bibtex main && pdflatex main && pdflatex main`
   （arXiv 会直接使用随包的 `main.bbl`）。
