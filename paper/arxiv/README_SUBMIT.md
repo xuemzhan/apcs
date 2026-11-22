@@ -12,8 +12,16 @@ figures/fig3_oracle_probes.pdf
 figures/fig4_ppl_acc_decoupling.pdf
 ```
 
-打包：`tar czf cache_audit_src.tar.gz main.tex main.bbl references.bib figures/*`
-（本目录的 `arxiv_submission.zip` 已按上述清单打包，可直接上传。）
+打包（本目录已提供两种等价形式，内容均按上述清单、逐字节取自 `paper/arxiv/`）：
+
+```
+arxiv_submission.zip       # 推荐，可直接上传
+arxiv_submission.tar.gz    # 等价的 tar.gz 形式
+```
+
+两者均已实测可编译：`pdflatex + bibtex + pdflatex ×2` 退出码 0、产出 14 页、
+0 处 `not found`、0 处未定义引用；编译所得的 PDF 与 `paper/arxiv/main.pdf` 正文逐字节一致。
+（打包时务必保留 `figures/` 子目录层级，`main.tex` 以 `figures/...` 相对路径引用图片。）
 
 ## 元数据表单值
 
@@ -25,7 +33,7 @@ figures/fig4_ppl_acc_decoupling.pdf
 | Authors | Xuemin Zhang; Liangbin Hu; Kun Yi; Liheng Zhong; Junpeng Yu |
 | Abstract | 见下方纯文本 |
 | License | CC BY 4.0（或 arXiv 默认） |
-| Comments | 14 pages, 4 figures, 5 tables. Code and run artifacts included in the accompanying repository |
+| Comments | 15 pages, 4 figures, 6 tables. Code and run artifacts included in the accompanying repository |
 | Journal ref / DOI | 暂无 |
 
 ## Abstract（表单纯文本版，无 TeX 命令）
@@ -48,8 +56,9 @@ translation configurations across all tested pairs; on the primary strong-studen
 pair the largest point estimate is -0.138, and every interval there lies below
 zero except the best one, which spans it. Controls locate the deficit: calibration
 volume from 10 to 500 examples moves the result by 0.02, removing the analytic
-anchor of our most architecture-aware translator improves perplexity without
-improving answers, and a 37M-parameter joint MLP does not help. Aligning our
+anchor of our most architecture-aware translator cuts suffix perplexity from
+501.6 to 23.7 while moving the gold change by only 0.045, and a 37M-parameter
+joint MLP does not help. Aligning our
 implementation with the closest published design--concatenating the selected
 source layers and calibrating on 1,024-token web-text passages--leaves the
 verdict unchanged (-0.223 to -0.279). The weak 0.6B student reaches +0.010

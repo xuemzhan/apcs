@@ -1,4 +1,4 @@
-\begin{thebibliography}{25}
+\begin{thebibliography}{31}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -11,6 +11,14 @@ Yamini Bansal, Preetum Nakkiran, and Boaz Barak.
 \newblock In \emph{NeurIPS}, 2021.
 \newblock \doi{10.48550/arxiv.2106.07682}.
 
+\bibitem[Behnam et~al.(2026)Behnam, Sanyal, Ponnusamy, Meda~Ravi, Sastry,
+  Bandaru, Khare, Lee, and Tumanov]{bridgekv2026}
+Payman Behnam, Debopam Sanyal, Pranav Ponnusamy, Kusum Meda~Ravi, Pranav
+  Sastry, Mani~Chandana Bandaru, Alind Khare, Myungjin Lee, and Alexey Tumanov.
+\newblock {BridgeKV}: Large-model prefill and small-model decoding for {LLM}
+  inference via {KV} cache translation.
+\newblock \emph{arXiv preprint arXiv:2611.11761}, 2026.
+
 \bibitem[Belrose et~al.(2023)Belrose, Ostrovsky, McKinney, Furman, Smith,
   Halawi, Biderman, and Steinhardt]{tunedlens2023}
 Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Furman, Logan Smith, Danny
@@ -18,9 +26,16 @@ Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Furman, Logan Smith, Danny
 \newblock Eliciting latent predictions from transformers with the tuned lens.
 \newblock \emph{arXiv preprint arXiv:2303.08112}, 2023.
 
+\bibitem[Castin et~al.(2026)Castin, Sakamoto, Filippova, Monteiro, Cuturi, and
+  Ablin]{kvlingo2026}
+Val{\'e}rie Castin, Keitaro Sakamoto, Anastasiia Filippova, Jo{\~a}o Monteiro,
+  Marco Cuturi, and Pierre Ablin.
+\newblock {KV-Lingo}: Learning {KV}-cache translators with distillation.
+\newblock \emph{arXiv preprint arXiv:2609.32610}, 2026.
+
 \bibitem[Dery et~al.(2026)Dery, Yahav, Prior, Feng, Shen, and Szlam]{lsc2026}
 L.~M. Dery, Z.~Yahav, H.~Prior, Q.~Feng, J.~Shen, and A.~Szlam.
-\newblock Latent space communication via {KV} cache alignment.
+\newblock Latent space communication via {K}-{V} cache alignment.
 \newblock \emph{arXiv preprint arXiv:2601.06123}, 2026.
 
 \bibitem[Du et~al.(2025)Du, Wang, Bai, Cao, Zhu, Cheng, Zheng, Chen, and
@@ -86,9 +101,9 @@ Rishi Jha, Collin Zhang, Vitaly Shmatikov, and John~X. Morris.
 \bibitem[Lee et~al.(2026)Lee, Song, Oh, Han, Park, Jang, and Lim]{mot2026}
 Jin-woo Lee, Minkyung Song, Junghyun Oh, Seunghoon Han, Soyoung Park, Gwangseon
   Jang, and Sungsu Lim.
-\newblock Mixture-of-translators: Translating {KV} caches across heterogeneous
-  large language models.
+\newblock {KV} cache translation across heterogeneous large language models.
 \newblock \emph{arXiv preprint arXiv:2607.28979}, 2026.
+\newblock arXiv v2, 2026-10-03; v1 title: Mixture-of-Translators.
 
 \bibitem[Li et~al.(2026)Li, Jiang, Zhao, and Li]{contextreuse2026}
 Yi~Li, Dongming Jiang, Yi~Zhao, and Bingzhe Li.
@@ -105,6 +120,11 @@ Yuhan Liu, Hanchen Li, Yihua Cheng, Siddhant Ray, Yuyang Huang, Qizheng Zhang,
 \newblock In \emph{Proceedings of the ACM SIGCOMM Conference}, 2024.
 \newblock \doi{10.1145/3651890.3672274}.
 
+\bibitem[Liu et~al.(2026)Liu, Tian, and Wang]{acct2026}
+Yuzhe Liu, Haolin Tian, and Tonghan Wang.
+\newblock {ACCT}: Asymmetric cross-{LLM} context transfer.
+\newblock \emph{arXiv preprint arXiv:2610.42116}, 2026.
+
 \bibitem[Moschella et~al.(2022)Moschella, Maiorca, Fumero, Norelli, Locatello,
   and Rodol{\`a}]{relrep2022}
 Luca Moschella, Valentino Maiorca, Marco Fumero, Antonio Norelli, Francesco
@@ -118,16 +138,33 @@ Jesse Mu, Xiang~Lisa Li, and Noah~D. Goodman.
 \newblock In \emph{NeurIPS}, 2023.
 \newblock \doi{10.48550/arxiv.2304.08467}.
 
+\bibitem[Qiu et~al.(2026)Qiu, Tang, Song, Han, Qiao, and Zhang]{cachelink2026}
+Haomiao Qiu, Yining Tang, Zijia Song, Ruizi Han, Ziyue Qiao, and Miao Zhang.
+\newblock {CacheLink}: Functional {KV} transport for zero-prefill cross-model
+  context handoff.
+\newblock \emph{arXiv preprint arXiv:2610.15509}, 2026.
+
 \bibitem[Qu et~al.(2026)Qu, Lu, Chen, Wang, and Lin]{cachebridge2026}
 Xingyu Qu, Siyuan Lu, Zhiyu Chen, Sheng Wang, and Tao Lin.
-\newblock {CacheBridge}: Efficient cross-model {KV} cache transfer.
+\newblock {CacheBridge}: Efficient cross-model {KV} transfer for multi-model
+  {LLM} serving.
 \newblock \emph{arXiv preprint arXiv:2609.00891}, 2026.
+\newblock arXiv v2, 2026-11-03; v1 title: Efficient Cross-Model KV Cache
+  Transfer.
 
 \bibitem[{Qwen Team}(2025)]{qwen3}
 {Qwen Team}.
 \newblock {Qwen3} model family and technical report, 2025.
 \newblock Model card and technical documentation; Qwen3-4B/1.7B/0.6B
   configurations used in this audit.
+
+\bibitem[Sarkar et~al.(2026)Sarkar, Mitra, Huang, Kundu, and
+  Beerel]{raracache2026}
+Sreetama Sarkar, Saptarshi Mitra, Sitao Huang, Souvik Kundu, and Peter~A.
+  Beerel.
+\newblock {RaReCache}: Bridging the gap in cross-model {KV} cache reuse via
+  rank disagreement-based selective recomputation.
+\newblock \emph{arXiv preprint arXiv:2610.11358}, 2026.
 
 \bibitem[Shi et~al.(2025)Shi, Chiesa, Maguire, and Kostic]{kvcomm2025}
 Xiangyu Shi, Marco Chiesa, Jr. Maguire, Gerald~Q., and Dejan Kostic.
@@ -142,6 +179,12 @@ Alessandro Stolfo, Vidhisha Balachandran, Safoora Yousefi, Eric Horvitz, and
 \newblock Improving instruction-following in language models through activation
   steering.
 \newblock \emph{arXiv preprint arXiv:2410.12877}, 2024.
+
+\bibitem[Villani(2026)]{latentport2026}
+Simon~P. Villani.
+\newblock Beyond {KV} cache: Cross-model transfer of recurrent memory in hybrid
+  language models.
+\newblock \emph{arXiv preprint arXiv:2609.25053}, 2026.
 
 \bibitem[Xiao et~al.(2023)Xiao, Tian, Chen, Han, and Lewis]{streamingsink2023}
 Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis.

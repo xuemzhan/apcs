@@ -1,0 +1,99 @@
+% 图 1（中文版）：(a) 被审计的设定，(b) 三个带判定门的问题。
+% 与 paper/arxiv/figures/fig1_framework.tex 同构，仅文字改为中文并调整列宽。
+% 需在导言区加载：tikz（arrows.meta）、amsmath、amssymb，以及宏 \chg。
+\begin{tikzpicture}[
+  font=\scriptsize,
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
+              minimum height=8mm, font=\scriptsize},
+  tbox/.style={box, fill=blue!8, minimum width=20mm},
+  sbox/.style={box, fill=green!10, minimum width=20mm},
+  mbox/.style={box, fill=orange!14, minimum width=20mm},
+  lab/.style={font=\tiny, align=center},
+  flow/.style={-{Latex[length=2mm]}, thick, black!75},
+  block/.style={-{Latex[length=2mm]}, thick, dashed, red!75!black},
+  ref/.style={-{Latex[length=1.6mm]}, densely dotted, black!55},
+  kvk/.style={draw=black!55, fill=blue!18, minimum width=4.6mm,
+              minimum height=1.9mm, inner sep=0pt},
+  kvv/.style={draw=black!55, fill=orange!28, minimum width=4.6mm,
+              minimum height=1.9mm, inner sep=0pt},
+]
+% ---------------- 面板 (a)：被审计的设定 ----------------
+\node[lab, anchor=west] at (-6.3, 2.25) {\textbf{(a)} 被审计的设定};
+
+% 上下文、查询、模型
+\node[mbox] (X) at (-5.2, 1.55) {长上下文 $x$};
+\node[mbox] (Q) at ( 5.2,-1.45) {查询 $q$};
+\node[tbox] (T) at (-5.2, 0) {\textbf{教师} $T$\\冻结};
+\node[sbox] (S) at ( 5.2, 0) {\textbf{学生} $S$\\冻结};
+
+% 缓存：逐层的 K/V 堆叠
+\foreach \i in {0,1,2}{
+  \pgfmathsetmacro{\yy}{0.30-0.30*\i}
+  \node[kvk] at (-3.22,\yy) {};
+  \node[kvv] at (-2.72,\yy) {};
+  \node[kvk] at ( 2.72,\yy) {};
+  \node[kvv] at ( 3.22,\yy) {};
+}
+\node[lab] at (-2.97, 0.68) {$\mathbf{K}$ $\mathbf{V}$};
+\node[lab] at (-2.97,-0.80) {$C_T(x)$};
+\node[lab] at ( 2.97, 0.68) {$\mathbf{K}$ $\mathbf{V}$};
+\node[lab] at ( 2.97,-0.80) {$\hat{C}_S(x)$};
+
+% 翻译器
+\node[mbox] (g) at (0, 0) {翻译器 $g_\theta$};
+\node[lab] at (0,-0.80) {只读取 $C_T$};
+
+% 穿过缓存的流程
+\draw[flow] (T.east) -- (-3.62, 0);
+\draw[flow] (-2.32, 0) -- (g.west);
+\draw[flow] (g.east) -- (2.32, 0);
+\draw[flow] (3.62, 0) -- (S.west);
+\draw[flow] (X) -- (T);
+\draw[flow] (Q) -- (S);
+
+% 禁止路径：上下文直接进入学生
+\draw[block] (X.east) -- (5.2, 1.55) coordinate (turn);
+\draw[block] (turn) -- (S.north);
+\node[lab] at (0, 2.25)
+  {严格零 re-prefill：没有任何上下文的 token 进入学生};
+\node[lab, fill=white, inner sep=0.6pt] at (0, 1.55) {\large$\oslash$};
+
+% 参照与度量
+\node[lab] at (0,-2.15)
+  {基线：学生自 prefill $S(q\mid C_S(x))$ \qquad 参照：
+   教师全量 prefill $T(q\mid C_T(x))$};
+\node[lab] at (0,-2.85)
+  {评分：金标字母概率；\qquad
+   $\chg = \mathrm{gold}(\text{交接})-\mathrm{gold}(\text{自 prefill})$};
+\end{tikzpicture}
+
+\vspace{1.6mm}
+{\footnotesize\textbf{(b)} 三个可以独立失败的问题，每个都有自己的仪器与判定门\par}
+\vspace{1.2mm}
+{\footnotesize
+\setlength{\tabcolsep}{3pt}%
+\begin{tabular}{@{}p{0.55cm}p{2.75cm}p{3.35cm}p{3.85cm}p{4.15cm}@{}}
+\toprule
+ & \textbf{问题} & \textbf{仪器} & \textbf{判定门（固定规则）} & \textbf{结果} \\
+\midrule
+\textbf{H1} & 注入机制：缓存注入流水线能否无损地保留一份合法的学生空间缓存？
+ & 恒等对照：把学生自己的缓存走完整条流水线
+ & 每个样本的 logit 余弦 $\ge 0.9998$ $\dagger$
+ & 通过：均值 $0.99998$，最小 $0.99986$ \\
+\addlinespace[1pt]
+\textbf{H2} & 是否有翻译器达到替换级？
+ & 翻译器家族；在同一个固定评测集上校准 $10$--$500$
+ & $95\%$ CI 下界 $>-\epsilon$，$\epsilon{=}0.02^{\S}$ $\dagger\ddagger$
+ & 主配对上未达到（最好 $-0.138$）；两个接近随机的学生
+ （三个对齐/未对齐配置）越过该门但无可测增益 \\
+\addlinespace[1pt]
+\textbf{H3} & 受测的教师衍生内容是否有帮助？
+ & 教师内容探针：教师占比、层窗口、八分位；以原生内容作为对照
+ & 某个配置的区间在正侧排除 $0$ $\dagger\ddagger$
+ & 无 \\
+\bottomrule
+\end{tabular}}
+\par\vspace{1.0mm}
+{\tiny $\dagger$ 判定门的形式在运行前固定，其中数值容差在修订期引入
+（附录~\ref{app:repro}）；$\S$ $\epsilon{=}0.02$ 是判定门形式冻结之后选定的
+报告裕度；$\ddagger$ 冻结判定门扩展。\par}

@@ -24,11 +24,11 @@
 \title{Cache Translation Across Model Scale:\\
 An Audit with Identity Controls and Teacher-Content Probes}
 
-\author[1]{Xuemin Zhang\\\texttt{\small zmx0813@gmail.com}}
-\author[1]{Liangbin Hu\\\texttt{\small huliangbing@xx.com}}
-\author[1]{Kun Yi\\\texttt{\small yikun@xx.com}}
-\author[1]{Liheng Zhong\\\texttt{\small zhongliheng@xx.com}}
-\author[1]{Junpeng Yu\\\texttt{\small yujunpeng@xx.com}}
+\author[1]{Xuemin Zhang\\\texttt{\small zxm0813@gmail.com}}
+\author[1]{Liangbin Hu\\\texttt{\small huliangbing2000@163.com}}
+\author[1]{Kun Yi\\\texttt{\small yikun@bit.edu.cn}}
+\author[1]{Liheng Zhong\\\texttt{\small lihengzhong@berkeley.edu}}
+\author[1]{Junpeng Yu\\\texttt{\small yujunpeng@cetc.com.cn}}
 \affil[1]{CETC}
 \date{}
 
@@ -393,9 +393,10 @@ of $0.02$ against intervals of width $\ge 0.2$.
 
 \emph{Capacity and anchoring do not close the gap in the tested range.} A per-head MLP (five
 trainings, range $-0.39$ to $-0.26$) and a $37$M-parameter joint MLP (five
-trainings, $-0.30$ to $-0.26$) sit inside the linear band; removing RAT's
-analytic anchor raises suffix perplexity from $23.7$ to $501.6$ while changing
-CHG from $-0.223$ to $-0.268$---fluency moves, the answer deficit does not.
+trainings, $-0.30$ to $-0.26$) sit inside the linear band. Dropping RAT's
+analytic anchor improves both measurements, but unequally: suffix perplexity
+falls from $501.6$ to $23.7$, a factor of twenty-one, while CHG moves only from
+$-0.268$ to $-0.223$.
 
 \emph{Source-layer combination does not close the gap in the tested range.} The closest published design
 fails in both forms we can match---its source-layer combination and its
