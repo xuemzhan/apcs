@@ -1,18 +1,30 @@
 # APCS: Cross-Model KV Cache Runtime Capability Transfer
 
-**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文已按 audit-8 定稿并完成投稿前 final polish
-（Accept 7/10；普通 bootstrap 统一为 10⁴ 次重采样；`scripts/paper_consistency_check.py` 四份稿 48/48 通过）
+**Status**: ✅ 实验闭环（协议 v1.5）＋ 论文已按 audit-10 完成定稿后修订（2026-11-22：
+修正 §5.2 锚点消融方向、补非劣门功效说明、写死负结果作用域、更新两条 v2 引用）
+（修订前 Accept 7/10；普通 bootstrap 统一为 10⁴ 次重采样；`scripts/paper_consistency_check.py` 48/48 通过）
 
 **论文只有两个在库版本**（数字与图表同源，2026-09-13 起）：
 
 | 版本 | 位置 | 形态 |
 |---|---|---|
-| **arXiv 完整稿** | `paper/arxiv/` | 14 页（正文 9 页 + 参考文献 + 附录），署名（Xuemin Zhang、Liangbin Hu、Kun Yi、Liheng Zhong、Junpeng Yu），图 4、表 5，含 `arxiv_submission.zip` 提交包 |
+| **arXiv 完整稿** | `paper/arxiv/` | 15 页（正文 10 页 + 参考文献 + 附录），署名（Xuemin Zhang、Liangbin Hu、Kun Yi、Liheng Zhong、Junpeng Yu），图 4、表 6，含 `arxiv_submission.zip` 提交包 |
 | **ICLR 2026 投稿稿** | `paper/iclr2026/` | 正文 **9 页**（参考文献自第 10 页起），双盲匿名，ICLR 2026 样式，证据不足项已下沉到附录 |
+| **中文版** | `paper/zh/` | arXiv 完整稿的逐段中文对照翻译，15 页（正文 9 页 + 参考文献 + 附录），署名与英文版一致；图 1 为中文重绘，图 2–4 沿用英文版图像，见 `paper/zh/README.md` |
 
 其余历史版本（`cache_audit` 全量长文、匿名版、旧 ICLR 全量稿、官方模板、更早的
 prior-projection 稿与预览）统一放入 `paper/archive/`，**不入库**（本地保留，git 历史可追）。
 图表与结论的对应关系、逐轮审稿意见与修改记录见 `docs/`。
+
+作者署名与联系方式（2026-09-21 补全，四份英文稿与中文稿一致）：
+Xuemin Zhang（`zxm0813@gmail.com`）、Liangbin Hu（`huliangbing2000@163.com`）、
+Kun Yi（`yikun@bit.edu.cn`）、Liheng Zhong（`lihengzhong@berkeley.edu`）、
+Junpeng Yu（`yujunpeng@cetc.com.cn`），单位 CETC。
+
+便于直接分发的导出件放在仓库根目录（与 `paper/arxiv/main.pdf`、`paper/zh/main.pdf`
+同源）：`Cache Translation Across Model Scale_An Audit with Identity Controls and
+Teacher-Content Probes.pdf`（英文，15 页）与
+`跨模型规模的缓存翻译：一项带恒等对照与教师内容探针的审计.pdf`（中文，15 页）。
 
 另有 `paper/humanized/`：与上面两版**正文同源**的去 AI 味改写副本（同样已过 audit-8，
 arXiv 13 页 / ICLR 正文 9 页），如需启用可直接覆盖回 `paper/arxiv`、`paper/iclr2026`。
@@ -30,7 +42,7 @@ arXiv 13 页 / ICLR 正文 9 页），如需启用可直接覆盖回 `paper/arxi
 
 ---
 
-## 最终裁决（三假说框架，171 个记录在案的评测 run；计数规则见 `scripts/aggregate_claims.py`）
+## 最终裁决（三假说框架，177 个记录在案的评测 run；计数规则见 `scripts/aggregate_claims.py`）
 
 | 假说 | 判定 | 关键证据 |
 |---|---|---|
@@ -104,28 +116,36 @@ KVCache/
 ```bash
 pip install -e .
 pytest tests/ -v                      # 单元测试（133 passed, 1 skip）
-# 单次审计评测（协议 v1.5）：
+
+# 投稿前检查（纯 CPU，约 3 分钟；退出码非零即不可投）：
+python scripts/verify_submission.py
+
+# 单次审计评测（协议 v1.5，需要模型）：
 python -m apcs.cli inject-eval --config configs/v15_4b_1.7b_affine_c30_tail.yaml --new-run
-# 编译论文（两版都跑到无 "Warning: Reference" 为止）：
+
+# 编译论文（三份都跑到无 "Warning: Reference" 为止）：
 cd paper/arxiv    && pdflatex main && bibtex main && pdflatex main && pdflatex main
 cd paper/iclr2026 && pdflatex main && bibtex main && pdflatex main && pdflatex main
-# arXiv 提交包（含 main.bbl 与 figures/，可由 zip 直接上传）：
-#   paper/arxiv/arxiv_submission.zip
-# GPU 机整轮实验（Linux）：
-bash scripts/run_real_gpu.sh
+cd paper/zh       && xelatex  main && bibtex main && xelatex  main && xelatex  main
 ```
+
+`scripts/verify_submission.py` 一次查五件事：三份稿的引用与交叉引用是否闭合、ICLR 正文
+是否仍在 9 页以内（读 `main.aux`，不看 PDF 文本层）、`arxiv_submission.zip` 是否与源目录
+逐字节一致且保留 `figures/` 层级、根目录两份分发 PDF 是否与源 PDF 同哈希、以及
+`paper_consistency_check.py`（48 项数字门、10⁴ 次 bootstrap）是否通过。
 
 ## Documentation
 
-- `docs/audits/`：逐轮审稿意见（`audit1.md` … `audit7_1.md`）、`AUDIT6_GPU_CORRESPONDENCE.md`
-  （第六轮意见↔GPU 实验逐条对应）、`AUDIT6_REWRITE_COMPLIANCE.md` / `AUDIT7_REWRITE_COMPLIANCE.md`
-  （重写与两轮意见的逐条完成情况）
+- `docs/SUBMISSION_CHECKLIST.md`：投稿前逐项清单（页数、匿名、打包、数字、归档）
+- `docs/audits/`：逐轮审稿意见 `audit1.md` … `audit12.md`，以及
+  `AUDIT6/7/8/10/11_REWRITE_COMPLIANCE.md`（每轮意见的逐条落实情况）
 - `docs/protocol/PROTOCOL.md`：实验协议（§11 v1.1 / §12 v1.2-1.3 / §13 RAT 与探针）
 - `docs/protocol/EXPERIMENT_LOG.md`：历轮实验终审表（含 audit-6 勘误）
 - `docs/design/design.md`：设计规格；代码注释中的 "design.md §NN" 均指该文件
 - `docs/plans/`：各轮修改方案、补充实验计划、GPU 计划
 - `docs/paper/CLAIM_MAP.md`：写作前的 claim→证据→置信级别对照表
 - `paper/arxiv/README_SUBMIT.md`：arXiv 元数据表单值与纯文本摘要
+- `REPRODUCIBILITY.md`：材料位置、不用 GPU 就能重算的命令、必须 GPU 的步骤、已知不可复现项
 
 ---
 

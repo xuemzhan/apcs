@@ -112,8 +112,8 @@ output/pdf/*.out
 archive/
 paper/cache_audit/project_context.md
 
-# 论文只有两个在库版本：paper/arxiv（arXiv 完整稿）与 paper/iclr2026（ICLR 2026 投稿稿）。
-# 两处都只保留源文件 / main.bbl / 成品 PDF：编译中间产物不入库。
+# 论文有三个在库版本：paper/arxiv（arXiv 完整稿）、paper/iclr2026（ICLR 投稿稿）、
+# paper/zh（中文对照稿）。三处都只保留源文件 / main.bbl / 成品 PDF：编译中间产物不入库。
 paper/arxiv/*.aux
 paper/arxiv/*.blg
 paper/arxiv/*.log
@@ -127,6 +127,12 @@ paper/humanized/*/*.aux
 paper/humanized/*/*.blg
 paper/humanized/*/*.log
 paper/humanized/*/*.out
+
+# 中文对照版（paper/zh）：同样只留源文件 / main.bbl / 成品 PDF
+paper/zh/*.aux
+paper/zh/*.blg
+paper/zh/*.log
+paper/zh/*.out
 # 其余历史版本与预览（含 paper/archive/）不入库
 paper/legacy_*/*.aux
 
