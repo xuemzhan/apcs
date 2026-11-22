@@ -12,7 +12,6 @@ Teacher-Content Probes》的代码、逐样本数据与论文。**产出是一�
 | 数值门 | `scripts/paper_consistency_check.py` **48/48**（10⁴ 次 bootstrap） |
 | 提交门 | `scripts/verify_submission.py` **7/7**（页数、引用、打包、分发件、数值门） |
 | 在库稿 | 三份：`paper/arxiv`（15 页，署名）、`paper/iclr2026`（正文 9 页，双盲）、`paper/zh`（15 页） |
-| 未完成 | 见 `docs/SUBMISSION_CHECKLIST.md` 的 ⚠️：单位署名待定、中文版两处未同步、`humanized/` 未同步、`CLAIM_MAP` 未登记新增引用 |
 
 **投稿窗口**：稿件的格式合规目标是「正文 9 页 + 双盲」，当前满足；但 ICLR 2027 的
 正式投稿截止（2026-09-25）与讨论期修改窗口（2026-11-18）均已过，投递目标需另定。
